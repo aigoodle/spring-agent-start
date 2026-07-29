@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.github.aigoodle</groupId>
+        <artifactId>spring-agent-start</artifactId>
+        <version>0.1.0</version>
+    </parent>
+
+    <artifactId>spring-agent-start-web-starter</artifactId>
+    <name>spring-agent-start-web-starter</name>
+    <description>
+        Spring Boot Starter —— MVC/Tomcat 侧的 REST CRUD 层聚合。
+        引入本 starter 即等价于同时引入:
+          - spring-agent-start-web         REST CRUD 端点 (含 springdoc / swagger-webmvc)
+          - spring-agent-start-model       模型/凭证/预设 provider
+          - spring-agent-start-agent       Agent 运行时(ReAct / FunctionCalling) + 记忆 + HITL
+          - spring-agent-start-workflow    DAG 工作流引擎 + 内置节点
+          - spring-agent-start-knowledge   知识库 / RAG / 检索
+          - spring-agent-start-tools       Tool SPI + ToolRegistry
+          - spring-agent-start-trigger     触发器(定时 / 事件)
+          - spring-agent-start-observability LLM 调用 / token 消耗记录
+
+        主类保持普通 @SpringBootApplication 即可,无需 @ComponentScan / @MapperScan ——
+        各模块自己的 @AutoConfiguration 通过 META-INF/spring/*.imports 加载,并按
+        @AutoConfigureAfter 排序保证 controller 里的 @ConditionalOnBean 不踩空。
+
+        流式 chat (/chat-messages, /chat/completions/{appId}) 位于姊妹模块
+        spring-agent-start-completion-starter (WebFlux/Netty)。需要该端点的项目请再引一份。
+    </description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>spring-agent-start-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>spring-agent-start-model</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>spring-agent-start-agent</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>spring-agent-start-workflow</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>spring-agent-start-knowledge</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>spring-agent-start-tools</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>spring-agent-start-trigger</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>spring-agent-start-observability</artifactId>
+        </dependency>
+    </dependencies>
+</project>

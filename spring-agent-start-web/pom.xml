@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.github.aigoodle</groupId>
+        <artifactId>spring-agent-start</artifactId>
+        <version>0.1.0</version>
+    </parent>
+
+    <artifactId>spring-agent-start-web</artifactId>
+    <name>spring-agent-start-web</name>
+    <description>Ready-to-use REST web layer that exposes every module (model providers,
+        knowledge, workflow, agent, tools, observability) over HTTP. Built on Spring MVC
+        (servlet) for the request/response surface; token-level SSE for AI chat lives in
+        the sibling spring-agent-start-completion module (WebFlux) to keep the streaming stack
+        off Tomcat threads. Import this starter and endpoints under /api/v1/* become
+        available with CORS wide open — no login, no user model.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>spring-agent-start-model</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>spring-agent-start-knowledge</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>spring-agent-start-workflow</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>spring-agent-start-agent</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>spring-agent-start-tools</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>spring-agent-start-observability</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>spring-agent-start-trigger</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- OpenAPI 3 spec + Swagger UI (servlet flavor for Spring MVC).
+             Non-optional because spring-agent-start-web is by definition an HTTP layer —
+             every consumer gets /swagger-ui.html + /v3/api-docs for free. -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-configuration-processor</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- WebTestClient (used in WorkflowSaveHttpTest) needs the reactive client-side
+             classes even when the server under test runs on Tomcat/MVC. Pulling in
+             spring-webflux (not the starter) keeps the server stack MVC while making
+             the test client available. -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-webflux</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.projectreactor.netty</groupId>
+            <artifactId>reactor-netty-http</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <version>${h2.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

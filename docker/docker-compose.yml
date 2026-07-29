@@ -1,0 +1,68 @@
+# -----------------------------------------------------------------------------
+# One-command demo stack for spring-agent-start:
+#   docker compose up            → Postgres + backend + frontend on 3 ports
+#     - http://localhost:5666    → web-antd frontend
+#     - http://localhost:18090   → REST API
+#     - localhost:5432           → Postgres
+#
+# For a zero-database quick look, drop the postgres service and use the app
+# without the {@code postgres} profile — it will fall back to embedded H2.
+# -----------------------------------------------------------------------------
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: spring-agent-start-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: difyai123456
+      POSTGRES_DB: spring-agent-start
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d spring-agent-start"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: spring-agent-start-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/spring-agent-start?stringtype=unspecified
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: difyai123456
+      AGENT_SECRET: ${AGENT_SECRET:-demo-secret-change-me}
+    ports:
+      - "18090:18090"
+    restart: unless-stopped
+
+  frontend:
+    image: node:20-alpine
+    container_name: spring-agent-start-frontend
+    working_dir: /workspace/web/vue-vben-admin/apps/web-antd
+    volumes:
+      - ../:/workspace
+    environment:
+      # Vite dev server listens on 0.0.0.0 so the host can reach it.
+      VITE_HOST: 0.0.0.0
+    command: >
+      sh -c "cd /workspace/web/vue-vben-admin
+      && corepack enable pnpm
+      && pnpm install --frozen-lockfile
+      && cd apps/web-antd
+      && pnpm dev --host 0.0.0.0"
+    ports:
+      - "5666:5666"
+    depends_on:
+      - backend
+
+volumes:
+  postgres-data:

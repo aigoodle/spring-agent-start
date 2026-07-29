@@ -1,0 +1,56 @@
+package io.github.aigoodle.tool.builtin;
+
+import io.github.aigoodle.tool.AbstractAgentTool;
+
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+import java.util.Map;
+
+/**
+ * Performs an HTTP GET and returns the response body (truncated). Argument: {@code url}.
+ * A simple but genuinely useful connector for agents that need to read web/API data.
+ */
+public class HttpGetTool extends AbstractAgentTool {
+
+    private static final int MAX_LEN = 8_000;
+    private final HttpClient client = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10)).build();
+
+    @Override
+    public String name() {
+        return "http_get";
+    }
+
+    @Override
+    public String description() {
+        return "Fetch the contents of a URL via HTTP GET. Argument: 'url'.";
+    }
+
+    @Override
+    public String inputSchema() {
+        return "{\"type\":\"object\",\"properties\":{\"url\":{\"type\":\"string\"}},\"required\":[\"url\"]}";
+    }
+
+    @Override
+    public Object execute(Map<String, Object> args) {
+        String url = str(args, "url");
+        if (url == null || url.isBlank()) {
+            return "error: missing 'url'";
+        }
+        try {
+            HttpResponse<String> resp = client.send(
+                    HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(20)).GET().build(),
+                    HttpResponse.BodyHandlers.ofString());
+            String body = resp.body();
+            if (body != null && body.length() > MAX_LEN) {
+                body = body.substring(0, MAX_LEN) + "...[truncated]";
+            }
+            return "status=" + resp.statusCode() + "\n" + body;
+        } catch (Exception e) {
+            return "error: " + e.getMessage();
+        }
+    }
+}

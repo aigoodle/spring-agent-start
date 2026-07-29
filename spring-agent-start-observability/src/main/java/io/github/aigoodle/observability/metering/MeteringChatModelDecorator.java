@@ -1,0 +1,24 @@
+package io.github.aigoodle.observability.metering;
+
+import io.github.aigoodle.model.provider.ModelEndpoint;
+import io.github.aigoodle.model.runtime.ChatModelDecorator;
+import io.github.aigoodle.observability.service.LlmMetricsService;
+import org.springframework.ai.chat.model.ChatModel;
+
+/**
+ * Plugs metering into the model module: every chat model the factory builds is wrapped
+ * in a {@link MeteringChatModel}.
+ */
+public class MeteringChatModelDecorator implements ChatModelDecorator {
+
+    private final LlmMetricsService metrics;
+
+    public MeteringChatModelDecorator(LlmMetricsService metrics) {
+        this.metrics = metrics;
+    }
+
+    @Override
+    public ChatModel decorate(ChatModel delegate, ModelEndpoint endpoint) {
+        return new MeteringChatModel(delegate, endpoint.getProviderName(), endpoint.getModelName(), metrics);
+    }
+}

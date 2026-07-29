@@ -1,0 +1,96 @@
+server:
+  port: ${SERVER_PORT:18090}
+
+spring:
+  # -------------------------------------------------------------------------
+  # Default: H2 in-memory. Zero external dependencies so `mvn spring-boot:run`
+  # boots up straight away for evaluation. Switch to Postgres by activating the
+  # {@code postgres} profile: `--spring.profiles.active=postgres`.
+  # -------------------------------------------------------------------------
+  # Jackson tolerance for the visual workflow designer round-trip: the
+  # frontend graph uses lowercase node types (`"start"` / `"llm"`) whereas the
+  # Java NodeType enum is SNAKE_CASE — case-insensitive matching lets the same
+  # payload land on the backend without a translation layer. Unknown fields
+  # (`position`, `viewport`, per-node UI metadata) are ignored so the
+  # designer stays free to add UI-only fields without breaking save.
+  jackson:
+    mapper:
+      accept-case-insensitive-enums: true
+    deserialization:
+      fail-on-unknown-properties: false
+  datasource:
+    url: jdbc:h2:mem:spring-agent;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  sql:
+    init:
+      mode: always
+      continue-on-error: true
+      schema-locations:
+        - classpath:db/model-schema.sql
+        - classpath:db/knowledge-schema.sql
+        - classpath:db/workflow-schema.sql
+        - classpath:db/agent-schema.sql
+        - classpath:db/trigger-schema.sql
+        - classpath:db/observability-schema.sql
+  # RabbitMQ — only used when spring-agent.knowledge.async.enabled=true AND
+  # starter-amqp is on the classpath (optional transitive from the knowledge
+  # module). Boot's auto-config stands up a RabbitTemplate from these creds,
+  # which in turn flips our async queue bean from the in-memory pool to the
+  # durable AMQP-backed one.
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:admin}
+    password: ${RABBITMQ_PASSWORD:admin@rabbit}
+    listener:
+      simple:
+        prefetch: 1
+        concurrency: 2
+        max-concurrency: 8
+        # Rejections from AmqpRejectAndDontRequeueException go to the DLQ
+        # bound in the auto-config's topology, not back on the main queue.
+        default-requeue-rejected: false
+
+spring-agent:
+  web:
+    # CORS wide open by default so the local vite dev server can hit it.
+    allowed-origins: ["*"]
+  model:
+    encryption-secret: ${AGENT_SECRET:demo-secret-change-me}
+  knowledge:
+    # Persist embeddings into the same DB via the built-in JDBC vector store.
+    # Switch to pgvector / elasticsearch / milvus by adding the matching starter jar
+    # and changing this value.
+    vector-store: jdbc
+    async:
+      # Off by default so a bare `mvn spring-boot:run` doesn't require a
+      # broker. Flip to true (and configure spring.rabbitmq below) to have
+      # uploads land the file, insert a PENDING document row + push a task
+      # to kb.document.ingest, and return immediately. A @RabbitListener
+      # worker then does chunk + embedding off the HTTP thread.
+      enabled: ${KB_ASYNC_ENABLED:false}
+      # Pool size when the sync (no-broker) fallback is used.
+      worker-threads: 4
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+
+logging:
+  level:
+    io.github.aigoodle: INFO
+
+---
+# Postgres profile: matches the production setup used by spring-agent-start.
+# Activate with `-Dspring-boot.run.profiles=postgres` or `--spring.profiles.active=postgres`.
+spring:
+  config:
+    activate:
+      on-profile: postgres
+  datasource:
+    url: jdbc:postgresql://localhost:5432/spring-agent-start?currentSchema=public&reWriteBatchedInserts=true&stringtype=unspecified&ApplicationName=spring-agent-start
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:difyai123456}
+    driver-class-name: org.postgresql.Driver

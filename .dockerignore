@@ -1,0 +1,10 @@
+**/target/
+**/node_modules/
+**/dist/
+**/.git/
+**/.idea/
+**/.vscode/
+**/.DS_Store
+**/*.log
+web/vue-vben-admin/apps/*/dist-analyze/
+web/vue-vben-admin/packages/*/dist/

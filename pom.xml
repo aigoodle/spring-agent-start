@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>io.github.aigoodle</groupId>
+    <artifactId>spring-agent-start</artifactId>
+    <version>0.1.0</version>
+    <packaging>pom</packaging>
+
+    <name>spring-agent-start</name>
+    <description>Modular, Dify-inspired AI building blocks for Spring Boot: model management, knowledge base (RAG) and workflow/agent orchestration. Import only the module you need.</description>
+    <url>https://github.com/spring-agent-start/spring-agent-start</url>
+
+    <modules>
+        <module>spring-agent-start-common</module>
+        <module>spring-agent-start-model</module>
+        <module>spring-agent-start-model-provider</module>
+        <module>spring-agent-start-knowledge</module>
+        <module>spring-agent-start-knowledge-store</module>
+        <module>spring-agent-start-tools</module>
+        <module>spring-agent-start-agent</module>
+        <module>spring-agent-start-workflow</module>
+        <module>spring-agent-start-trigger</module>
+        <module>spring-agent-start-observability</module>
+        <module>spring-agent-start-web</module>
+        <module>spring-agent-start-completion</module>
+        <module>spring-agent-start-web-starter</module>
+        <module>spring-agent-start-completion-starter</module>
+        <module>spring-agent-start-server</module>
+        <module>spring-agent-start-example</module>
+    </modules>
+
+    <properties>
+        <java.version>21</java.version>
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <spring-boot.version>3.5.6</spring-boot.version>
+        <spring-ai.version>1.1.2</spring-ai.version>
+        <mybatis-plus.version>3.5.10.1</mybatis-plus.version>
+        <lombok.version>1.18.34</lombok.version>
+        <h2.version>2.3.232</h2.version>
+        <mcp.version>0.17.0</mcp.version>
+        <!-- springdoc-openapi 2.8.x is the family compatible with Spring Boot 3.5.
+             2.6.0 targets Spring Boot 3.3 and breaks classpath resolution here. -->
+        <springdoc.version>2.8.9</springdoc.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Spring Boot -->
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!-- Spring AI -->
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-bom</artifactId>
+                <version>${spring-ai.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!-- MyBatis-Plus -->
+            <dependency>
+                <groupId>com.baomidou</groupId>
+                <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+                <version>${mybatis-plus.version}</version>
+            </dependency>
+
+            <!-- springdoc OpenAPI 3 + Swagger UI. spring-agent-start-web (MVC) uses the
+                 servlet flavor; the reactive flavor is available for modules that
+                 stay on WebFlux (e.g. spring-agent-start-completion) to opt into. -->
+            <dependency>
+                <groupId>org.springdoc</groupId>
+                <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+                <version>${springdoc.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springdoc</groupId>
+                <artifactId>springdoc-openapi-starter-webflux-ui</artifactId>
+                <version>${springdoc.version}</version>
+            </dependency>
+
+            <!-- internal modules -->
+            <dependency>
+                <groupId>io.github.aigoodle</groupId>
+                <artifactId>spring-agent-start-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.aigoodle</groupId>
+                <artifactId>spring-agent-start-model</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.aigoodle</groupId>
+                <artifactId>spring-agent-start-model-provider-zhipu</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.aigoodle</groupId>
+                <artifactId>spring-agent-start-model-provider-deepseek</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.aigoodle</groupId>
+                <artifactId>spring-agent-start-model-provider-volcengine</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.aigoodle</groupId>
+                <artifactId>spring-agent-start-knowledge</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.aigoodle</groupId>
+                <artifactId>spring-agent-start-knowledge-store-pgvector</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.aigoodle</groupId>
+                <artifactId>spring-agent-start-knowledge-store-elasticsearch</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.aigoodle</groupId>
+                <artifactId>spring-agent-start-knowledge-store-milvus</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.aigoodle</groupId>
+                <artifactId>spring-agent-start-tools</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.aigoodle</groupId>
+                <artifactId>spring-agent-start-agent</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.aigoodle</groupId>
+                <artifactId>spring-agent-start-workflow</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.aigoodle</groupId>
+                <artifactId>spring-agent-start-trigger</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.aigoodle</groupId>
+                <artifactId>spring-agent-start-observability</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.aigoodle</groupId>
+                <artifactId>spring-agent-start-web</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.aigoodle</groupId>
+                <artifactId>spring-agent-start-completion</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.aigoodle</groupId>
+                <artifactId>spring-agent-start-web-starter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.aigoodle</groupId>
+                <artifactId>spring-agent-start-completion-starter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>${lombok.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <configuration>
+                        <release>${maven.compiler.release}</release>
+                        <parameters>true</parameters>
+                        <annotationProcessorPaths>
+                            <path>
+                                <groupId>org.projectlombok</groupId>
+                                <artifactId>lombok</artifactId>
+                                <version>${lombok.version}</version>
+                            </path>
+                        </annotationProcessorPaths>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+</project>
