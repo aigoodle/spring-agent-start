@@ -11,7 +11,7 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: spring-agent-start-postgres
+    container_name: agent-start-postgres
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: difyai123456
@@ -30,7 +30,7 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
-    container_name: spring-agent-start-backend
+    container_name: agent-start-backend
     depends_on:
       postgres:
         condition: service_healthy
@@ -46,7 +46,7 @@ services:
 
   frontend:
     image: node:20-alpine
-    container_name: spring-agent-start-frontend
+    container_name: agent-start-frontend
     working_dir: /workspace/web/vue-vben-admin/apps/web-antd
     volumes:
       - ../:/workspace

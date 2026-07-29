@@ -1,6 +1,6 @@
 # PostgreSQL setup
 
-Two ways to stand up a Postgres for `spring-agent-start-server`.
+Two ways to stand up a Postgres for `agent-start-server`.
 
 ## Option 1 — bare psql
 
@@ -13,7 +13,7 @@ Then just start the server — the default `application.yml` already targets
 this database:
 
 ```bash
-mvn -pl spring-agent-start-server -am spring-boot:run
+mvn -pl agent-start-server -am spring-boot:run
 ```
 
 Environment variables the app reads (all optional — defaults shown):
@@ -75,7 +75,7 @@ Then in your pom add:
 ```xml
 <dependency>
     <groupId>io.github.aigoodle</groupId>
-    <artifactId>spring-agent-start-knowledge-store-pgvector</artifactId>
+    <artifactId>agent-start-store-pgvector</artifactId>
 </dependency>
 ```
 

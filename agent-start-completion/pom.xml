@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.github.aigoodle</groupId>
+        <artifactId>agent-start</artifactId>
+        <version>0.1.0</version>
+    </parent>
+
+    <artifactId>agent-start-completion</artifactId>
+    <name>agent-start-completion</name>
+    <description>Reactive AI-chat surface: OpenAI-compatible /chat/completions plus the
+        Dify /chat-messages compatibility endpoint, both driven by the same
+        AppGenerateService facade. Built on Spring WebFlux (Netty) so token-level SSE
+        does not tie up a servlet thread per client. Depends on agent-start-web only
+        for the shared ApiResponse envelope; the module itself contains its own SSE
+        bridge, chat DTOs, and workflow/agent generators.</description>
+
+    <dependencies>
+        <!-- Shared envelope + common utilities (ApiResponse, ApiErrorCode).
+             agent-start-web ships the MVC-style CRUD surface; this module reuses
+             its shared classes rather than duplicating them. -->
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-web</artifactId>
+            <exclusions>
+                <!-- We provide our own reactive HTTP stack; don't drag Tomcat in. -->
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-web</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springdoc</groupId>
+                    <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-agent</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-workflow</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webflux</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-configuration-processor</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

@@ -6,10 +6,10 @@ version: "3.9"
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: spring-agent-start-postgres
+    container_name: agent-start-postgres
     restart: unless-stopped
     environment:
-      # Match the defaults in spring-agent-start-server/application.yml so the app can
+      # Match the defaults in agent-start-server/application.yml so the app can
       # connect without any override envs.
       POSTGRES_DB: spring-agent
       POSTGRES_USER: postgres

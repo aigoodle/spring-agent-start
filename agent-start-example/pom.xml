@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.github.aigoodle</groupId>
+        <artifactId>agent-start</artifactId>
+        <version>0.1.0</version>
+    </parent>
+
+    <artifactId>agent-start-example</artifactId>
+    <name>agent-start-example</name>
+    <description>Runnable demo wiring all modules together; also hosts cross-module integration tests.</description>
+
+    <dependencies>
+        <!-- the full stack: workflow + knowledge + agent + tools + triggers + observability.
+             spring-boot-starter-webflux comes in transitively via agent-start-web. -->
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-workflow</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-knowledge</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-agent</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-tools</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-trigger</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-observability</artifactId>
+        </dependency>
+        <!-- The REST/SSE web layer — turns the example into a runnable backend for the frontend. -->
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-web</artifactId>
+        </dependency>
+
+        <!-- Optional: swap the built-in OpenAI-compatible "zhipu"/"deepseek"/"volcengine"
+             presets for native SDK providers. Uncomment the ones you actually want.
+             Provider name stays the same, so no other change is needed. -->
+        <!--
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-provider-zhipu</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-provider-deepseek</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-provider-volcengine</artifactId>
+        </dependency>
+        -->
+
+        <!-- Optional: swap the built-in JDBC vector store for pgvector / Elasticsearch / Milvus.
+             See application.yml for the matching spring-agent.knowledge.vector-store value. -->
+        <!--
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-store-pgvector</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-store-elasticsearch</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-store-milvus</artifactId>
+        </dependency>
+        -->
+
+        <!-- H2 for the default zero-setup profile; Postgres for the {@code postgres} profile. -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <version>${h2.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>42.7.8</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <version>${spring-boot.version}</version>
+                <configuration>
+                    <mainClass>io.github.aigoodle.example.SpringAgentExampleApplication</mainClass>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

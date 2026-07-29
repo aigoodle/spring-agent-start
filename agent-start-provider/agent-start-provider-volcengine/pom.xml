@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.github.aigoodle</groupId>
+        <artifactId>agent-start-provider</artifactId>
+        <version>0.1.0</version>
+    </parent>
+
+    <artifactId>agent-start-provider-volcengine</artifactId>
+    <name>agent-start-provider-volcengine</name>
+    <description>Volcengine Ark (Doubao) model provider. Uses the OpenAI-compatible
+        REST protocol under the hood but exposes an explicit "endpointId" credential
+        field — Volcengine identifies inference endpoints by ep-xxx ids rather than
+        model names — and ships Doubao model presets.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-model</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-openai</artifactId>
+        </dependency>
+    </dependencies>
+</project>

@@ -21,30 +21,30 @@ ecosystem, so you can drop enterprise-grade agent capabilities into an existing 
 
 | Module | Coordinate | Depends on | What it gives you |
 |--------|------------|-----------|-------------------|
-| `spring-agent-start-common` | `io.github.aigoodle:spring-agent-start-common` | – | JSON, AES-GCM crypto, base entity |
-| `spring-agent-start-model` | `io.github.aigoodle:spring-agent-start-model` | common | Model providers, encrypted credentials, model instance factory, chat/embedding runtime |
-| `spring-agent-start-knowledge` | `io.github.aigoodle:spring-agent-start-knowledge` | model | Datasets, document ingestion, template chunking, vector + keyword hybrid retrieval |
-| `spring-agent-start-tools` | `io.github.aigoodle:spring-agent-start-tools` | model | Tool/connector SPI, built-in tools (calculator, time, HTTP), Spring AI `ToolCallback` adapter, **MCP client** (stdio + HTTP) |
-| `spring-agent-start-agent` | `io.github.aigoodle:spring-agent-start-agent` | model, tools, *(knowledge optional)* | Agent runtime: strategies (ReAct, function-calling, plan-execute), JDBC + semantic vector memory, multi-agent delegation, human-in-the-loop approval |
-| `spring-agent-start-trigger` | `io.github.aigoodle:spring-agent-start-trigger` | workflow | Triggers/automation: webhook, cron and event triggers driving workflows async, with invocation history + replay |
-| `spring-agent-start-observability` | `io.github.aigoodle:spring-agent-start-observability` | model | LLMOps: per-call token + cost + latency metering for every LLM call, persisted, with aggregation by model |
-| `spring-agent-start-workflow` | `io.github.aigoodle:spring-agent-start-workflow` | model, *(knowledge + tools optional)* | DAG engine, nodes (LLM, agent, tool, condition, HTTP, template, classifier, knowledge), workflow persistence |
+| `agent-start-common` | `io.github.aigoodle:agent-start-common` | – | JSON, AES-GCM crypto, base entity |
+| `agent-start-model` | `io.github.aigoodle:agent-start-model` | common | Model providers, encrypted credentials, model instance factory, chat/embedding runtime |
+| `agent-start-knowledge` | `io.github.aigoodle:agent-start-knowledge` | model | Datasets, document ingestion, template chunking, vector + keyword hybrid retrieval |
+| `agent-start-tools` | `io.github.aigoodle:agent-start-tools` | model | Tool/connector SPI, built-in tools (calculator, time, HTTP), Spring AI `ToolCallback` adapter, **MCP client** (stdio + HTTP) |
+| `agent-start-agent` | `io.github.aigoodle:agent-start-agent` | model, tools, *(knowledge optional)* | Agent runtime: strategies (ReAct, function-calling, plan-execute), JDBC + semantic vector memory, multi-agent delegation, human-in-the-loop approval |
+| `agent-start-trigger` | `io.github.aigoodle:agent-start-trigger` | workflow | Triggers/automation: webhook, cron and event triggers driving workflows async, with invocation history + replay |
+| `agent-start-observability` | `io.github.aigoodle:agent-start-observability` | model | LLMOps: per-call token + cost + latency metering for every LLM call, persisted, with aggregation by model |
+| `agent-start-workflow` | `io.github.aigoodle:agent-start-workflow` | model, *(knowledge + tools optional)* | DAG engine, nodes (LLM, agent, tool, condition, HTTP, template, classifier, knowledge), workflow persistence |
 
 ```
-        spring-agent-start-common
+        agent-start-common
                  │
-        spring-agent-start-model ───────────────┐
+        agent-start-model ───────────────┐
             │                              │
-   spring-agent-start-knowledge ──(optional)──► spring-agent-start-workflow
+   agent-start-knowledge ──(optional)──► agent-start-workflow
 ```
 
 Each functional module ships a Spring Boot auto-configuration, so adding the jar is all
-the wiring you need. Want only the knowledge base? Import `spring-agent-start-knowledge`
-(it pulls `spring-agent-start-model`). Want only orchestration? Import `spring-agent-start-workflow`.
+the wiring you need. Want only the knowledge base? Import `agent-start-knowledge`
+(it pulls `agent-start-model`). Want only orchestration? Import `agent-start-workflow`.
 
 ---
 
-## 1. Model management (`spring-agent-start-model`)
+## 1. Model management (`agent-start-model`)
 
 A provider abstraction over Spring AI. Built-in OpenAI-compatible presets (OpenAI,
 DeepSeek, Zhipu, Moonshot, Qwen, Volcengine, SiliconFlow) plus Ollama; add your own by
@@ -67,13 +67,13 @@ String answer = modelService.getChatClient(gpt.getId())
 EmbeddingModel embed = modelService.getEmbeddingModel(embeddingModelId);
 ```
 
-## 2. Knowledge base / RAG (`spring-agent-start-knowledge`)
+## 2. Knowledge base / RAG (`agent-start-knowledge`)
 
 Dataset → document → chunk pipeline with RAGFlow-inspired **template chunking**
 (`NAIVE`, `PARENT_CHILD`, `QA`, `MARKDOWN`, `ONE`) and **hybrid retrieval** that fuses
 dense vector similarity with sparse keyword overlap. Default vector store is in-memory
 (`SimpleVectorStore`); plug in pgvector / Elasticsearch / Milvus via a `VectorStoreFactory`
-bean or the matching `spring-agent-start-knowledge-store-*` starter.
+bean or the matching `agent-start-store-*` starter.
 
 Two extension SPIs let you swap the heavy lifting without touching the pipeline:
 
@@ -101,7 +101,7 @@ List<RetrievedSegment> hits = knowledgeService.retrieve(ds.getId(),
                 .method(RetrievalMethod.HYBRID).topK(5).build());
 ```
 
-## 3. Workflow & agents (`spring-agent-start-workflow`)
+## 3. Workflow & agents (`agent-start-workflow`)
 
 A DAG engine with a variable pool and `{{#node.field#}}` references. Built-in node types:
 
@@ -135,7 +135,7 @@ String answer = String.valueOf(r.output("answer"));   // a full RAG-over-workflo
 
 ---
 
-## Runnable demo (`spring-agent-start-example`)
+## Runnable demo (`agent-start-example`)
 
 A single Spring Boot app wiring **every** module on one database (PostgreSQL by default;
 set `spring-agent.knowledge.vector-store=jdbc` to keep embeddings in the same DB, no
@@ -164,13 +164,13 @@ recorded for replay) → `GET /llmops/stats` reports the 5 LLM calls and their t
 (`web/vue-vben-admin/apps/web-antd`) wired to the REST layer under `/api/v1/*`.
 Everything defaults to "just work" locally, no login, no user model.
 
-**1. Start the backend** — the runnable module `spring-agent-start-example` already
-imports `spring-agent-start-web`, so its REST endpoints come up automatically on port
+**1. Start the backend** — the runnable module `agent-start-example` already
+imports `agent-start-web`, so its REST endpoints come up automatically on port
 18090. The default profile uses embedded **H2**, so you don't need any external
 database to try it. Switch to Postgres with `--spring.profiles.active=postgres`.
 
 ```bash
-mvn -pl spring-agent-start-example -am spring-boot:run
+mvn -pl agent-start-example -am spring-boot:run
 # → http://localhost:18090/api/v1/health
 # → http://localhost:18090/api/v1/system/info   (probes which modules are loaded)
 ```
@@ -211,7 +211,7 @@ The Dockerfile (repo root) also works standalone if you only want the backend:
 
 ```bash
 mvn clean install            # build + test everything
-mvn -pl spring-agent-start-model -am test    # one module
+mvn -pl agent-start-model -am test    # one module
 ```
 
 Integration tests use an in-memory H2 database (auto-created from each module's
@@ -237,15 +237,15 @@ config, no code changes elsewhere.
 
 | SPI | Where | Purpose |
 |-----|-------|---------|
-| `ModelProvider` | `spring-agent-start-model` | Add a new LLM/embedding vendor |
-| `VectorStoreFactory` | `spring-agent-start-knowledge` | Add a new vector database |
-| `DocumentReader` | `spring-agent-start-knowledge` | Add a new file format |
-| `Chunker` | `spring-agent-start-knowledge` | Add a new chunking template |
-| `Reranker` | `spring-agent-start-knowledge` | Add a new post-retrieval scoring strategy |
-| `NodeExecutor` | `spring-agent-start-workflow` | Add a new workflow node type |
-| `AgentStrategy` | `spring-agent-start-agent` | Add a new agent reasoning loop |
-| `Tool` / `ToolProvider` | `spring-agent-start-tools` | Add a new tool or a bulk source (MCP, OpenAPI, plugin registry) |
-| `TriggerDispatcher` | `spring-agent-start-trigger` | Bind a trigger to something other than a workflow (e.g. an agent) |
+| `ModelProvider` | `agent-start-model` | Add a new LLM/embedding vendor |
+| `VectorStoreFactory` | `agent-start-knowledge` | Add a new vector database |
+| `DocumentReader` | `agent-start-knowledge` | Add a new file format |
+| `Chunker` | `agent-start-knowledge` | Add a new chunking template |
+| `Reranker` | `agent-start-knowledge` | Add a new post-retrieval scoring strategy |
+| `NodeExecutor` | `agent-start-workflow` | Add a new workflow node type |
+| `AgentStrategy` | `agent-start-agent` | Add a new agent reasoning loop |
+| `Tool` / `ToolProvider` | `agent-start-tools` | Add a new tool or a bulk source (MCP, OpenAPI, plugin registry) |
+| `TriggerDispatcher` | `agent-start-trigger` | Bind a trigger to something other than a workflow (e.g. an agent) |
 
 ## Roadmap
 

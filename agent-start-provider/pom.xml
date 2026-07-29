@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.github.aigoodle</groupId>
+        <artifactId>agent-start</artifactId>
+        <version>0.1.0</version>
+    </parent>
+
+    <artifactId>agent-start-provider</artifactId>
+    <packaging>pom</packaging>
+    <name>agent-start-provider</name>
+    <description>Aggregator for optional ModelProvider starters that plug native
+        vendor SDKs into agent-start-model. Adding a child jar (deepseek /
+        zhipu / volcengine / ...) transparently upgrades the matching built-in
+        OpenAI-compatible preset to the vendor's official client.</description>
+
+    <modules>
+        <module>agent-start-provider-zhipu</module>
+        <module>agent-start-provider-deepseek</module>
+        <module>agent-start-provider-volcengine</module>
+    </modules>
+</project>

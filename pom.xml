@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>io.github.aigoodle</groupId>
-    <artifactId>spring-agent-start</artifactId>
+    <artifactId>agent-start</artifactId>
     <version>0.1.0</version>
     <packaging>pom</packaging>
 
@@ -14,22 +14,22 @@
     <url>https://github.com/spring-agent-start/spring-agent-start</url>
 
     <modules>
-        <module>spring-agent-start-common</module>
-        <module>spring-agent-start-model</module>
-        <module>spring-agent-start-model-provider</module>
-        <module>spring-agent-start-knowledge</module>
-        <module>spring-agent-start-knowledge-store</module>
-        <module>spring-agent-start-tools</module>
-        <module>spring-agent-start-agent</module>
-        <module>spring-agent-start-workflow</module>
-        <module>spring-agent-start-trigger</module>
-        <module>spring-agent-start-observability</module>
-        <module>spring-agent-start-web</module>
-        <module>spring-agent-start-completion</module>
-        <module>spring-agent-start-web-starter</module>
-        <module>spring-agent-start-completion-starter</module>
-        <module>spring-agent-start-server</module>
-        <module>spring-agent-start-example</module>
+        <module>agent-start-common</module>
+        <module>agent-start-model</module>
+        <module>agent-start-provider</module>
+        <module>agent-start-knowledge</module>
+        <module>agent-start-store</module>
+        <module>agent-start-tools</module>
+        <module>agent-start-agent</module>
+        <module>agent-start-workflow</module>
+        <module>agent-start-trigger</module>
+        <module>agent-start-observability</module>
+        <module>agent-start-web</module>
+        <module>agent-start-completion</module>
+        <module>agent-start-web-spring-starter</module>
+        <module>agent-start-completion-spring-starter</module>
+        <module>agent-start-server</module>
+        <module>agent-start-example</module>
     </modules>
 
     <properties>
@@ -73,9 +73,9 @@
                 <version>${mybatis-plus.version}</version>
             </dependency>
 
-            <!-- springdoc OpenAPI 3 + Swagger UI. spring-agent-start-web (MVC) uses the
+            <!-- springdoc OpenAPI 3 + Swagger UI. agent-start-web (MVC) uses the
                  servlet flavor; the reactive flavor is available for modules that
-                 stay on WebFlux (e.g. spring-agent-start-completion) to opt into. -->
+                 stay on WebFlux (e.g. agent-start-completion) to opt into. -->
             <dependency>
                 <groupId>org.springdoc</groupId>
                 <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
@@ -90,92 +90,92 @@
             <!-- internal modules -->
             <dependency>
                 <groupId>io.github.aigoodle</groupId>
-                <artifactId>spring-agent-start-common</artifactId>
+                <artifactId>agent-start-common</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.github.aigoodle</groupId>
-                <artifactId>spring-agent-start-model</artifactId>
+                <artifactId>agent-start-model</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.github.aigoodle</groupId>
-                <artifactId>spring-agent-start-model-provider-zhipu</artifactId>
+                <artifactId>agent-start-provider-zhipu</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.github.aigoodle</groupId>
-                <artifactId>spring-agent-start-model-provider-deepseek</artifactId>
+                <artifactId>agent-start-provider-deepseek</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.github.aigoodle</groupId>
-                <artifactId>spring-agent-start-model-provider-volcengine</artifactId>
+                <artifactId>agent-start-provider-volcengine</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.github.aigoodle</groupId>
-                <artifactId>spring-agent-start-knowledge</artifactId>
+                <artifactId>agent-start-knowledge</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.github.aigoodle</groupId>
-                <artifactId>spring-agent-start-knowledge-store-pgvector</artifactId>
+                <artifactId>agent-start-store-pgvector</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.github.aigoodle</groupId>
-                <artifactId>spring-agent-start-knowledge-store-elasticsearch</artifactId>
+                <artifactId>agent-start-store-elasticsearch</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.github.aigoodle</groupId>
-                <artifactId>spring-agent-start-knowledge-store-milvus</artifactId>
+                <artifactId>agent-start-store-milvus</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.github.aigoodle</groupId>
-                <artifactId>spring-agent-start-tools</artifactId>
+                <artifactId>agent-start-tools</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.github.aigoodle</groupId>
-                <artifactId>spring-agent-start-agent</artifactId>
+                <artifactId>agent-start-agent</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.github.aigoodle</groupId>
-                <artifactId>spring-agent-start-workflow</artifactId>
+                <artifactId>agent-start-workflow</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.github.aigoodle</groupId>
-                <artifactId>spring-agent-start-trigger</artifactId>
+                <artifactId>agent-start-trigger</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.github.aigoodle</groupId>
-                <artifactId>spring-agent-start-observability</artifactId>
+                <artifactId>agent-start-observability</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.github.aigoodle</groupId>
-                <artifactId>spring-agent-start-web</artifactId>
+                <artifactId>agent-start-web</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.github.aigoodle</groupId>
-                <artifactId>spring-agent-start-completion</artifactId>
+                <artifactId>agent-start-completion</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.github.aigoodle</groupId>
-                <artifactId>spring-agent-start-web-starter</artifactId>
+                <artifactId>agent-start-web-spring-starter</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.github.aigoodle</groupId>
-                <artifactId>spring-agent-start-completion-starter</artifactId>
+                <artifactId>agent-start-completion-spring-starter</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>

@@ -12,7 +12,7 @@
 --     Mount this file as /docker-entrypoint-initdb.d/init.sql on the postgres
 --     service — docker/postgres/docker-compose.yml does this.
 --
--- Usage (spring-agent-start-server postgres profile):
+-- Usage (agent-start-server postgres profile):
 --     The Spring Boot app itself also runs each module's classpath schema.sql,
 --     but that path is portable H2/MySQL. Prefer this file when standing up a
 --     fresh PostgreSQL for production, then start the app with:
@@ -577,7 +577,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_call_created  ON llm_calls (created_at);
 -- ============================================================================
 --  Done. If you want pgvector for embeddings instead of the built-in JDBC store:
 --    1. CREATE EXTENSION IF NOT EXISTS vector;
---    2. Add spring-agent-start-knowledge-store-pgvector to your pom.
+--    2. Add agent-start-store-pgvector to your pom.
 --    3. Set spring-agent.knowledge.vector-store=pgvector.
 --    Each dataset then gets its own {dataset_id}-scoped pgvector table.
 -- ============================================================================

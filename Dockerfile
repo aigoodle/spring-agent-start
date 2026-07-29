@@ -1,5 +1,5 @@
 # -----------------------------------------------------------------------------
-# spring-agent-start: multi-stage build → runnable spring-agent-start-example jar.
+# spring-agent-start: multi-stage build → runnable agent-start-example jar.
 #
 # Build once from the repo root:
 #   docker build -t spring-agent-start:0.1.0 .
@@ -18,33 +18,33 @@ WORKDIR /workspace
 
 # 复制 pom 先，用 Maven 缓存加速：源码变更时依赖不重下
 COPY pom.xml ./
-COPY spring-agent-start-common/pom.xml               spring-agent-start-common/
-COPY spring-agent-start-model/pom.xml                spring-agent-start-model/
-COPY spring-agent-start-model-provider/pom.xml       spring-agent-start-model-provider/
-COPY spring-agent-start-model-provider/spring-agent-start-model-provider-zhipu/pom.xml       spring-agent-start-model-provider/spring-agent-start-model-provider-zhipu/
-COPY spring-agent-start-model-provider/spring-agent-start-model-provider-deepseek/pom.xml    spring-agent-start-model-provider/spring-agent-start-model-provider-deepseek/
-COPY spring-agent-start-model-provider/spring-agent-start-model-provider-volcengine/pom.xml  spring-agent-start-model-provider/spring-agent-start-model-provider-volcengine/
-COPY spring-agent-start-knowledge/pom.xml            spring-agent-start-knowledge/
-COPY spring-agent-start-knowledge-store/pom.xml      spring-agent-start-knowledge-store/
-COPY spring-agent-start-knowledge-store/spring-agent-start-knowledge-store-pgvector/pom.xml       spring-agent-start-knowledge-store/spring-agent-start-knowledge-store-pgvector/
-COPY spring-agent-start-knowledge-store/spring-agent-start-knowledge-store-elasticsearch/pom.xml  spring-agent-start-knowledge-store/spring-agent-start-knowledge-store-elasticsearch/
-COPY spring-agent-start-knowledge-store/spring-agent-start-knowledge-store-milvus/pom.xml         spring-agent-start-knowledge-store/spring-agent-start-knowledge-store-milvus/
-COPY spring-agent-start-tools/pom.xml                spring-agent-start-tools/
-COPY spring-agent-start-agent/pom.xml                spring-agent-start-agent/
-COPY spring-agent-start-workflow/pom.xml             spring-agent-start-workflow/
-COPY spring-agent-start-trigger/pom.xml              spring-agent-start-trigger/
-COPY spring-agent-start-observability/pom.xml        spring-agent-start-observability/
-COPY spring-agent-start-web/pom.xml                  spring-agent-start-web/
-COPY spring-agent-start-example/pom.xml              spring-agent-start-example/
-RUN --mount=type=cache,target=/root/.m2 mvn -q -B -pl spring-agent-start-example -am dependency:go-offline -DskipTests || true
+COPY agent-start-common/pom.xml               agent-start-common/
+COPY agent-start-model/pom.xml                agent-start-model/
+COPY agent-start-provider/pom.xml       agent-start-provider/
+COPY agent-start-provider/agent-start-provider-zhipu/pom.xml       agent-start-provider/agent-start-provider-zhipu/
+COPY agent-start-provider/agent-start-provider-deepseek/pom.xml    agent-start-provider/agent-start-provider-deepseek/
+COPY agent-start-provider/agent-start-provider-volcengine/pom.xml  agent-start-provider/agent-start-provider-volcengine/
+COPY agent-start-knowledge/pom.xml            agent-start-knowledge/
+COPY agent-start-store/pom.xml      agent-start-store/
+COPY agent-start-store/agent-start-store-pgvector/pom.xml       agent-start-store/agent-start-store-pgvector/
+COPY agent-start-store/agent-start-store-elasticsearch/pom.xml  agent-start-store/agent-start-store-elasticsearch/
+COPY agent-start-store/agent-start-store-milvus/pom.xml         agent-start-store/agent-start-store-milvus/
+COPY agent-start-tools/pom.xml                agent-start-tools/
+COPY agent-start-agent/pom.xml                agent-start-agent/
+COPY agent-start-workflow/pom.xml             agent-start-workflow/
+COPY agent-start-trigger/pom.xml              agent-start-trigger/
+COPY agent-start-observability/pom.xml        agent-start-observability/
+COPY agent-start-web/pom.xml                  agent-start-web/
+COPY agent-start-example/pom.xml              agent-start-example/
+RUN --mount=type=cache,target=/root/.m2 mvn -q -B -pl agent-start-example -am dependency:go-offline -DskipTests || true
 
 COPY . .
-RUN --mount=type=cache,target=/root/.m2 mvn -q -B -pl spring-agent-start-example -am -DskipTests package
+RUN --mount=type=cache,target=/root/.m2 mvn -q -B -pl agent-start-example -am -DskipTests package
 
 # -----------------------------------------------------------------------------
 FROM eclipse-temurin:21-jre-alpine AS runtime
 WORKDIR /app
-COPY --from=build /workspace/spring-agent-start-example/target/spring-agent-start-example-*.jar app.jar
+COPY --from=build /workspace/agent-start-example/target/agent-start-example-*.jar app.jar
 
 ENV JAVA_OPTS="-XX:MaxRAMPercentage=75 -XX:+UseZGC"
 EXPOSE 18090
