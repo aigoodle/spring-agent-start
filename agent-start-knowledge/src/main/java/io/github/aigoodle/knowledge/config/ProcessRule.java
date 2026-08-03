@@ -27,6 +27,12 @@ public class ProcessRule {
     /** Overlap in tokens between adjacent chunks (NAIVE template). */
     private int overlapTokens = 50;
 
+    /** Keep Markdown tables and fenced code blocks intact when structure-aware chunking is used. */
+    private boolean protectStructuredBlocks = true;
+
+    /** Prefix the active heading path to chunk text so embeddings retain section context. */
+    private boolean includeHeadingContext = true;
+
     /** For PARENT_CHILD: parent chunk target size in tokens (only used when {@link #parentMode} = PARAGRAPH). */
     private int parentChunkTokens = 1024;
 

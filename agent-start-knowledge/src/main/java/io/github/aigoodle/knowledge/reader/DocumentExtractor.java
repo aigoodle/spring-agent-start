@@ -1,5 +1,9 @@
 package io.github.aigoodle.knowledge.reader;
 
+import io.github.aigoodle.knowledge.reader.model.BlockType;
+import io.github.aigoodle.knowledge.reader.model.DocumentBlock;
+import io.github.aigoodle.knowledge.reader.model.ParsedDocument;
+
 import java.util.List;
 
 /**
@@ -11,18 +15,30 @@ import java.util.List;
 public class DocumentExtractor {
 
     private final DocumentReaderRegistry registry;
+    private final List<DocumentEnricher> enrichers;
 
     public DocumentExtractor() {
         this(new DocumentReaderRegistry(List.of(
                 new TextDocumentReader(),
                 new MarkdownDocumentReader(),
                 new HtmlDocumentReader(),
+                new DocxDocumentReader(),
+                new PdfDocumentReader(),
+                new PresentationDocumentReader(),
+                new SpreadsheetDocumentReader(),
+                new CsvDocumentReader(),
                 new TikaDocumentReader()
-        )));
+        )), List.of());
     }
 
     public DocumentExtractor(DocumentReaderRegistry registry) {
+        this(registry, List.of());
+    }
+
+    public DocumentExtractor(DocumentReaderRegistry registry, List<DocumentEnricher> enrichers) {
         this.registry = registry;
+        this.enrichers = enrichers == null ? List.of() : enrichers.stream()
+                .sorted(java.util.Comparator.comparingInt(DocumentEnricher::order)).toList();
     }
 
     public String extractText(String text) {
@@ -39,11 +55,22 @@ public class DocumentExtractor {
      * {@link DocumentReaderRegistry#pick(String)} — extension first, Tika fallback.
      */
     public String extractFile(byte[] bytes, String filename) {
+        return parseFile(bytes, filename).text();
+    }
+
+    public ParsedDocument parseFile(byte[] bytes, String filename) {
         DocumentReader reader = registry.pick(filename);
         if (reader == null) {
-            return bytes == null ? "" : new String(bytes);
+            String text = bytes == null ? "" : new String(bytes);
+            return ParsedDocument.builder().filename(filename).parser("fallback").blocks(
+                    text.isBlank() ? List.of() : List.of(DocumentBlock.builder()
+                            .index(0).type(BlockType.PARAGRAPH).text(text).build())).build();
         }
-        return reader.read(bytes, filename);
+        ParsedDocument parsed = reader.parse(bytes, filename);
+        for (DocumentEnricher enricher : enrichers) {
+            if (enricher.supports(parsed)) parsed = enricher.enrich(parsed, bytes);
+        }
+        return parsed;
     }
 
     /** Extract using an explicitly named reader — useful for URL/HTML sources etc. */
@@ -53,6 +80,11 @@ public class DocumentExtractor {
             return extractFile(bytes, filename);
         }
         return reader.read(bytes, filename);
+    }
+
+    public ParsedDocument parse(String readerName, byte[] bytes, String filename) {
+        DocumentReader reader = registry.byName(readerName);
+        return reader == null ? parseFile(bytes, filename) : reader.parse(bytes, filename);
     }
 
     public DocumentReaderRegistry registry() {

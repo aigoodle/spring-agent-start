@@ -1,6 +1,7 @@
 package io.github.aigoodle.knowledge.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.TableField;
 import io.github.aigoodle.common.persistence.BaseEntity;
 import io.github.aigoodle.knowledge.enums.DocumentStatus;
 import lombok.Data;
@@ -28,6 +29,19 @@ public class KnowledgeDocumentEntity extends BaseEntity {
     private Integer wordCount;
 
     private Integer segmentCount;
+
+    private String parserName;
+    private String mediaType;
+    private Integer pageCount;
+    private Integer blockCount;
+    private String parseWarningsJson;
+    @TableField(select = false)
+    private String parsedDocumentJson;
+
+    @TableField(select = false)
+    private String sourceDataBase64;
+    private Long fileSize;
+    private String sourceChecksum;
 
     private Boolean enabled;
 }

@@ -4,6 +4,7 @@ import io.github.aigoodle.common.util.JsonUtils;
 import io.github.aigoodle.knowledge.config.ProcessRule;
 import io.github.aigoodle.knowledge.entity.KnowledgeDocumentEntity;
 import io.github.aigoodle.knowledge.service.KnowledgeService;
+import io.github.aigoodle.knowledge.reader.model.ParsedDocument;
 import io.github.aigoodle.web.common.ApiResponse;
 import io.github.aigoodle.web.support.UploadedDocument;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -46,6 +47,15 @@ public class DatasetDocumentController {
         return document == null
                 ? ApiResponse.error("document_not_found", "Document not found: " + documentId)
                 : ApiResponse.ok(document);
+    }
+
+    @GetMapping("/{id}/documents/{documentId}/parsed")
+    public ApiResponse<ParsedDocument> getParsedDocument(
+            @PathVariable String id, @PathVariable String documentId) {
+        ParsedDocument parsed = knowledgeService.getParsedDocument(documentId);
+        return parsed == null
+                ? ApiResponse.error("parsed_document_not_found", "Parsed document not found: " + documentId)
+                : ApiResponse.ok(parsed);
     }
 
     @PostMapping("/{id}/documents/text")
@@ -102,6 +112,15 @@ public class DatasetDocumentController {
             @PathVariable String id, @PathVariable String documentId) {
         int segmentCount = knowledgeService.reindexDocument(id, documentId);
         return ApiResponse.ok(Map.of("segmentCount", segmentCount));
+    }
+
+    @PostMapping("/{id}/documents/{documentId}/reparse")
+    public ApiResponse<KnowledgeDocumentEntity> reparse(
+            @PathVariable String id, @PathVariable String documentId) {
+        KnowledgeDocumentEntity document = knowledgeService.reparseDocument(id, documentId);
+        return document == null
+                ? ApiResponse.error("source_not_available", "Original source is not available for reparsing")
+                : ApiResponse.ok(document);
     }
 
     private static ProcessRule parseProcessRule(String ruleJson) {

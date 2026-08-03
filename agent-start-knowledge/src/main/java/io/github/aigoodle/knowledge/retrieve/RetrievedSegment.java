@@ -23,6 +23,9 @@ public class RetrievedSegment {
     /** Larger parent context for PARENT_CHILD chunks; null otherwise. */
     private String parentContent;
 
+    /** Context assembled from adjacent chunks without changing the ranked hit itself. */
+    private String expandedContext;
+
     private double score;
     private double vectorScore;
     private double keywordScore;
@@ -31,6 +34,7 @@ public class RetrievedSegment {
 
     /** Best text to feed an LLM: the parent context when available, else the chunk. */
     public String contextText() {
+        if (expandedContext != null && !expandedContext.isBlank()) return expandedContext;
         return parentContent != null && !parentContent.isBlank() ? parentContent : content;
     }
 }

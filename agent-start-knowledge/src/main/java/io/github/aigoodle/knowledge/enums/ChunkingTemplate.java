@@ -18,6 +18,9 @@ public enum ChunkingTemplate {
     /** Splits on Markdown headings, preserving the heading hierarchy as metadata. */
     MARKDOWN,
 
+    /** Auto-detects headings, lists, tables and fenced code, preserving structural context. */
+    STRUCTURE_AWARE,
+
     /** The whole document becomes a single chunk (good for very short docs). */
     ONE
 }

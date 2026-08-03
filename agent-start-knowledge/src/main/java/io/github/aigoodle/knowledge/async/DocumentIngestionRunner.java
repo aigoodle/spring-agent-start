@@ -3,6 +3,8 @@ package io.github.aigoodle.knowledge.async;
 import io.github.aigoodle.knowledge.chunk.Chunk;
 import io.github.aigoodle.knowledge.chunk.ChunkerRegistry;
 import io.github.aigoodle.knowledge.chunk.TextCleaner;
+import io.github.aigoodle.knowledge.chunk.StructuredDocumentChunker;
+import io.github.aigoodle.common.util.JsonUtils;
 import io.github.aigoodle.knowledge.config.ProcessRule;
 import io.github.aigoodle.knowledge.entity.DatasetEntity;
 import io.github.aigoodle.knowledge.entity.KnowledgeDocumentEntity;
@@ -12,6 +14,7 @@ import io.github.aigoodle.knowledge.mapper.DocumentIngestQueueMapper;
 import io.github.aigoodle.knowledge.mapper.KnowledgeDocumentMapper;
 import io.github.aigoodle.knowledge.service.DatasetCountChange;
 import io.github.aigoodle.knowledge.service.DatasetService;
+import io.github.aigoodle.knowledge.reader.model.ParsedDocument;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,6 +41,7 @@ public class DocumentIngestionRunner {
     private final DocumentIngestQueueMapper queueMapper;
     private final ChunkerRegistry chunkerRegistry;
     private final IndexingService indexingService;
+    private final StructuredDocumentChunker structuredChunker;
 
     public DocumentIngestionRunner(DatasetService datasetService,
                                    KnowledgeDocumentMapper documentMapper,
@@ -49,6 +53,7 @@ public class DocumentIngestionRunner {
         this.queueMapper = queueMapper;
         this.chunkerRegistry = chunkerRegistry;
         this.indexingService = indexingService;
+        this.structuredChunker = new StructuredDocumentChunker(chunkerRegistry);
     }
 
     /**
@@ -85,7 +90,6 @@ public class DocumentIngestionRunner {
 
         try {
             ProcessRule rule = datasetService.processRule(dataset);
-            String cleaned = TextCleaner.clean(task.getRawText(), rule);
 
             doc.setStatus(DocumentStatus.CHUNKING);
             documentMapper.updateById(doc);
@@ -93,7 +97,11 @@ public class DocumentIngestionRunner {
             Map<String, Object> baseMetadata = new HashMap<>();
             baseMetadata.put("documentName", doc.getName());
             baseMetadata.put("source", task.getSourceType());
-            List<Chunk> chunks = chunkerRegistry.get(rule.getTemplate()).chunk(cleaned, rule, baseMetadata);
+            ParsedDocument parsed = task.getParsedDocumentJson() == null
+                    ? null : JsonUtils.parse(task.getParsedDocumentJson(), ParsedDocument.class);
+            List<Chunk> chunks = parsed == null
+                    ? chunkerRegistry.get(rule.getTemplate()).chunk(TextCleaner.clean(task.getRawText(), rule), rule, baseMetadata)
+                    : structuredChunker.chunk(parsed, rule, baseMetadata);
 
             doc.setStatus(DocumentStatus.INDEXING);
             documentMapper.updateById(doc);

@@ -6,6 +6,8 @@ import io.github.aigoodle.knowledge.async.DocumentIngestionTask;
 import io.github.aigoodle.knowledge.chunk.Chunk;
 import io.github.aigoodle.knowledge.chunk.ChunkerRegistry;
 import io.github.aigoodle.knowledge.chunk.TextCleaner;
+import io.github.aigoodle.knowledge.chunk.StructuredDocumentChunker;
+import io.github.aigoodle.common.util.JsonUtils;
 import io.github.aigoodle.knowledge.config.ProcessRule;
 import io.github.aigoodle.knowledge.entity.DatasetEntity;
 import io.github.aigoodle.knowledge.entity.KnowledgeDocumentEntity;
@@ -14,6 +16,9 @@ import io.github.aigoodle.knowledge.index.IndexingService;
 import io.github.aigoodle.knowledge.mapper.DocumentIngestQueueMapper;
 import io.github.aigoodle.knowledge.mapper.KnowledgeDocumentMapper;
 import io.github.aigoodle.knowledge.reader.DocumentExtractor;
+import io.github.aigoodle.knowledge.reader.model.BlockType;
+import io.github.aigoodle.knowledge.reader.model.DocumentBlock;
+import io.github.aigoodle.knowledge.reader.model.ParsedDocument;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,6 +27,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Base64;
+import java.security.MessageDigest;
 
 /** Coordinates extraction, chunking, indexing and document status transitions. */
 final class DocumentIngestionService {
@@ -35,6 +42,7 @@ final class DocumentIngestionService {
     private final ChunkerRegistry chunkerRegistry;
     private final IndexingService indexingService;
     private final DocumentExtractor extractor;
+    private final StructuredDocumentChunker structuredChunker;
 
     private DocumentIngestionQueue ingestionQueue;
     private DocumentIngestQueueMapper queueMapper;
@@ -49,6 +57,7 @@ final class DocumentIngestionService {
         this.chunkerRegistry = chunkerRegistry;
         this.indexingService = indexingService;
         this.extractor = extractor;
+        this.structuredChunker = new StructuredDocumentChunker(chunkerRegistry);
     }
 
     void configureQueue(DocumentIngestionQueue ingestionQueue,
@@ -66,7 +75,12 @@ final class DocumentIngestionService {
     }
 
     KnowledgeDocumentEntity addFile(String datasetId, String filename, byte[] bytes) {
-        return submit(datasetId, filename, "file", extractor.extractFile(bytes, filename));
+        KnowledgeDocumentEntity document = submit(datasetId, filename, "file", extractor.parseFile(bytes, filename));
+        document.setSourceDataBase64(Base64.getEncoder().encodeToString(bytes == null ? new byte[0] : bytes));
+        document.setFileSize(bytes == null ? 0L : (long) bytes.length);
+        document.setSourceChecksum(sha256(bytes));
+        documentMapper.updateById(document);
+        return document;
     }
 
     KnowledgeService.ChunkPreview preview(byte[] bytes, String filename,
@@ -74,14 +88,12 @@ final class DocumentIngestionService {
         ProcessRule effectiveRule = processRule == null ? ProcessRule.naive() : processRule;
         int previewLimit = limit <= 0
                 ? DEFAULT_PREVIEW_LIMIT : Math.min(limit, MAX_PREVIEW_LIMIT);
-        String extractedText = extractor.extractFile(bytes, filename);
-        String cleanedText = TextCleaner.clean(extractedText, effectiveRule);
+        ParsedDocument parsed = extractor.parseFile(bytes, filename);
 
         Map<String, Object> metadata = new HashMap<>();
         metadata.put("documentName", filename);
         metadata.put("source", "preview");
-        List<Chunk> chunks = chunkerRegistry.get(effectiveRule.getTemplate())
-                .chunk(cleanedText, effectiveRule, metadata);
+        List<Chunk> chunks = structuredChunker.chunk(parsed, effectiveRule, metadata);
 
         List<KnowledgeService.ChunkPreview.ChunkView> preview =
                 new ArrayList<>(Math.min(chunks.size(), previewLimit));
@@ -89,27 +101,34 @@ final class DocumentIngestionService {
             Chunk chunk = chunks.get(index);
             String content = chunk.getContent() == null ? "" : chunk.getContent();
             preview.add(new KnowledgeService.ChunkPreview.ChunkView(
-                    index + 1, content, chunk.tokenCount()));
+                    index + 1, content, chunk.tokenCount(), chunk.getMetadata()));
         }
-        return new KnowledgeService.ChunkPreview(chunks.size(), preview);
+        return new KnowledgeService.ChunkPreview(parsed.getParser(), parsed.getMediaType(),
+                parsed.pageCount(), parsed.getBlocks().size(), parsed.getWarnings(), chunks.size(), preview);
     }
 
     KnowledgeDocumentEntity ingest(String datasetId, String name,
                                     String sourceType, String extractedText) {
+        return ingest(datasetId, name, sourceType, plainDocument(name, sourceType, extractedText));
+    }
+
+    KnowledgeDocumentEntity ingest(String datasetId, String name,
+                                    String sourceType, ParsedDocument parsedDocument) {
         DatasetEntity dataset = datasetService.require(datasetId);
+        String extractedText = parsedDocument == null ? "" : parsedDocument.text();
         KnowledgeDocumentEntity document = createDocument(
                 dataset, name, sourceType, extractedText, DocumentStatus.PARSING);
+        applyParseDiagnostics(document, parsedDocument);
+        documentMapper.updateById(document);
 
         try {
             ProcessRule processRule = datasetService.processRule(dataset);
-            String cleanedText = TextCleaner.clean(extractedText, processRule);
             updateStatus(document, DocumentStatus.CHUNKING);
 
             Map<String, Object> metadata = new HashMap<>();
             metadata.put("documentName", name);
             metadata.put("source", sourceType);
-            List<Chunk> chunks = chunkerRegistry.get(processRule.getTemplate())
-                    .chunk(cleanedText, processRule, metadata);
+            List<Chunk> chunks = structuredChunker.chunk(parsedDocument, processRule, metadata);
             updateStatus(document, DocumentStatus.INDEXING);
 
             int segmentCount = indexingService.index(dataset, document, chunks);
@@ -131,17 +150,30 @@ final class DocumentIngestionService {
 
     private KnowledgeDocumentEntity submit(String datasetId, String name,
                                             String sourceType, String extractedText) {
+        return submit(datasetId, name, sourceType, plainDocument(name, sourceType, extractedText));
+    }
+
+    private KnowledgeDocumentEntity submit(String datasetId, String name,
+                                            String sourceType, ParsedDocument parsedDocument) {
         if (ingestionQueue != null && queueMapper != null) {
-            return enqueue(datasetId, name, sourceType, extractedText);
+            return enqueue(datasetId, name, sourceType, parsedDocument);
         }
-        return ingest(datasetId, name, sourceType, extractedText);
+        return ingest(datasetId, name, sourceType, parsedDocument);
     }
 
     private KnowledgeDocumentEntity enqueue(String datasetId, String name,
                                              String sourceType, String extractedText) {
+        return enqueue(datasetId, name, sourceType, plainDocument(name, sourceType, extractedText));
+    }
+
+    private KnowledgeDocumentEntity enqueue(String datasetId, String name,
+                                             String sourceType, ParsedDocument parsedDocument) {
         DatasetEntity dataset = datasetService.require(datasetId);
+        String extractedText = parsedDocument == null ? "" : parsedDocument.text();
         KnowledgeDocumentEntity document = createDocument(
                 dataset, name, sourceType, extractedText, DocumentStatus.PENDING);
+        applyParseDiagnostics(document, parsedDocument);
+        documentMapper.updateById(document);
 
         DocumentIngestQueueEntity queuedDocument = new DocumentIngestQueueEntity();
         queuedDocument.setDocumentId(document.getId());
@@ -150,6 +182,7 @@ final class DocumentIngestionService {
         queuedDocument.setFilename(name);
         queuedDocument.setSourceType(sourceType);
         queuedDocument.setRawText(extractedText);
+        queuedDocument.setParsedDocumentJson(JsonUtils.toJson(parsedDocument));
         queuedDocument.setRetryCount(0);
         LocalDateTime now = LocalDateTime.now();
         queuedDocument.setCreatedAt(now);
@@ -160,6 +193,12 @@ final class DocumentIngestionService {
         log.info("Queued async ingestion for document '{}' (id={}) into dataset {}",
                 name, document.getId(), datasetId);
         return document;
+    }
+
+    private static ParsedDocument plainDocument(String name, String parser, String text) {
+        String value = text == null ? "" : text;
+        return ParsedDocument.builder().filename(name).parser(parser).blocks(value.isBlank() ? List.of() : List.of(
+                DocumentBlock.builder().index(0).type(BlockType.PARAGRAPH).text(value).build())).build();
     }
 
     private KnowledgeDocumentEntity createDocument(DatasetEntity dataset, String name,
@@ -180,5 +219,43 @@ final class DocumentIngestionService {
     private void updateStatus(KnowledgeDocumentEntity document, DocumentStatus status) {
         document.setStatus(status);
         documentMapper.updateById(document);
+    }
+
+    private static void applyParseDiagnostics(KnowledgeDocumentEntity document, ParsedDocument parsed) {
+        if (parsed == null) return;
+        document.setParserName(parsed.getParser());
+        document.setMediaType(parsed.getMediaType());
+        document.setPageCount(parsed.pageCount());
+        document.setBlockCount(parsed.getBlocks() == null ? 0 : parsed.getBlocks().size());
+        document.setParseWarningsJson(JsonUtils.toJson(parsed.getWarnings()));
+        document.setParsedDocumentJson(JsonUtils.toJson(parsed));
+    }
+
+    KnowledgeDocumentEntity reparse(String datasetId, String documentId, byte[] sourceBytes) {
+        DatasetEntity dataset = datasetService.require(datasetId);
+        KnowledgeDocumentEntity document = documentMapper.selectById(documentId);
+        if (document == null) return null;
+        int oldCount = document.getSegmentCount() == null ? 0 : document.getSegmentCount();
+        updateStatus(document, DocumentStatus.PARSING);
+        ParsedDocument parsed = extractor.parseFile(sourceBytes, document.getName());
+        applyParseDiagnostics(document, parsed);
+        ProcessRule rule = datasetService.processRule(dataset);
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("documentName", document.getName()); metadata.put("source", document.getSourceType());
+        List<Chunk> chunks = structuredChunker.chunk(parsed, rule, metadata);
+        indexingService.removeDocument(dataset, documentId);
+        updateStatus(document, DocumentStatus.INDEXING);
+        int count = indexingService.index(dataset, document, chunks);
+        document.setSegmentCount(count); document.setStatus(DocumentStatus.COMPLETED);
+        documentMapper.updateById(document);
+        datasetService.applyCountChange(dataset, new DatasetCountChange(0, count - oldCount));
+        return document;
+    }
+
+    private static String sha256(byte[] bytes) {
+        try {
+            return java.util.HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(bytes == null ? new byte[0] : bytes));
+        } catch (Exception e) { throw new IllegalStateException(e); }
     }
 }

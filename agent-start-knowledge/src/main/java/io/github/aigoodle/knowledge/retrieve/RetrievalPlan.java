@@ -10,7 +10,10 @@ record RetrievalPlan(
         int recallLimit,
         double scoreThreshold,
         double vectorWeight,
-        double keywordWeight) {
+        double keywordWeight,
+        RetrievalConfig.FusionMethod fusionMethod,
+        int rrfK,
+        int maxChunksPerDocument) {
 
     static RetrievalPlan resolve(RetrievalConfig config,
                                  RetrievalRequest request,
@@ -23,7 +26,7 @@ record RetrievalPlan(
         int topK = request.getTopK() != null ? request.getTopK() : config.getTopK();
         int recallLimit = config.isRerankEnabled()
                 ? Math.max(topK, config.getRerankPoolSize())
-                : Math.max(topK * 4, topK);
+                : Math.max(topK * Math.max(1, config.getRecallMultiplier()), topK);
         double vectorWeight = request.getVectorWeight() != null
                 ? request.getVectorWeight()
                 : config.getVectorWeight();
@@ -36,7 +39,11 @@ record RetrievalPlan(
                         ? request.getScoreThreshold()
                         : config.getScoreThreshold(),
                 vectorWeight,
-                Math.max(0.0, 1.0 - vectorWeight));
+                Math.max(0.0, 1.0 - vectorWeight),
+                config.getFusionMethod() == null
+                        ? RetrievalConfig.FusionMethod.RECIPROCAL_RANK : config.getFusionMethod(),
+                Math.max(1, config.getRrfK()),
+                Math.max(0, config.getMaxChunksPerDocument()));
     }
 
     boolean usesVectors(boolean vectorIndexAvailable) {
@@ -53,5 +60,15 @@ record RetrievalPlan(
             case FULL_TEXT -> keywordScore;
             case HYBRID -> vectorWeight * vectorScore + keywordWeight * keywordScore;
         };
+    }
+
+    double fusedScore(double vectorScore, double keywordScore, int vectorRank, int keywordRank) {
+        if (method != RetrievalMethod.HYBRID
+                || fusionMethod == RetrievalConfig.FusionMethod.WEIGHTED_SCORE) {
+            return fusedScore(vectorScore, keywordScore);
+        }
+        double vectorRrf = vectorRank <= 0 ? 0.0 : (double) (rrfK + 1) / (rrfK + vectorRank);
+        double keywordRrf = keywordRank <= 0 ? 0.0 : (double) (rrfK + 1) / (rrfK + keywordRank);
+        return vectorWeight * vectorRrf + keywordWeight * keywordRrf;
     }
 }

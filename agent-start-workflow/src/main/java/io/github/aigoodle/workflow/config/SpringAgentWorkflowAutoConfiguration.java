@@ -136,9 +136,8 @@ public class SpringAgentWorkflowAutoConfiguration {
     }
 
     @Bean
-    public AgentNodeExecutor agentNodeExecutor(ModelService modelService,
-                                               ObjectProvider<ToolCallback> toolCallbacks) {
-        return new AgentNodeExecutor(modelService, toolCallbacks.orderedStream().toList());
+    public AgentNodeExecutor agentNodeExecutor(io.github.aigoodle.agent.service.AgentService agentService) {
+        return new AgentNodeExecutor(agentService);
     }
 
     // ---- optional: knowledge-based nodes ----

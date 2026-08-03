@@ -43,6 +43,7 @@
         <module>agent-start-knowledge</module>
         <module>agent-start-store</module>
         <module>agent-start-tools</module>
+        <module>agent-start-memory</module>
         <module>agent-start-agent</module>
         <module>agent-start-workflow</module>
         <module>agent-start-trigger</module>
@@ -159,6 +160,11 @@
             <dependency>
                 <groupId>io.github.aigoodle</groupId>
                 <artifactId>agent-start-tools</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.aigoodle</groupId>
+                <artifactId>agent-start-memory</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

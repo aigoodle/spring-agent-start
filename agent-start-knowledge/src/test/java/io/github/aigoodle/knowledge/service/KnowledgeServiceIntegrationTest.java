@@ -147,4 +147,19 @@ class KnowledgeServiceIntegrationTest {
         assertTrue(knowledgeService.retrieve(ds.getId(), "python").isEmpty(),
                 "after deletion nothing should be retrievable");
     }
+
+    @Test
+    void retrievalCanExpandAdjacentChunkContext() {
+        DatasetEntity ds = highQualityDataset(ChunkingTemplate.NAIVE);
+        RetrievalConfig config = RetrievalConfig.hybrid();
+        config.setNeighborWindow(1);
+        UpdateDatasetRequest patch = new UpdateDatasetRequest();
+        patch.setRetrievalConfig(config);
+        datasetService.update(ds.getId(), patch);
+        knowledgeService.addText(ds.getId(), "animals.txt", DOC);
+
+        RetrievedSegment hit = knowledgeService.retrieve(ds.getId(), "dogs loyal fetch").get(0);
+        assertNotNull(hit.getExpandedContext());
+        assertTrue(hit.contextText().length() >= hit.getContent().length());
+    }
 }

@@ -36,6 +36,7 @@ spring:
         - classpath:db/knowledge-schema.sql
         - classpath:db/workflow-schema.sql
         - classpath:db/agent-schema.sql
+        - classpath:db/memory-schema.sql
         - classpath:db/trigger-schema.sql
         - classpath:db/observability-schema.sql
 

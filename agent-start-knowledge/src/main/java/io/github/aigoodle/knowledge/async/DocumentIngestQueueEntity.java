@@ -47,6 +47,9 @@ public class DocumentIngestQueueEntity {
      */
     private String rawText;
 
+    /** JSON serialized ParsedDocument, preserving blocks/pages/tables for async chunking. */
+    private String parsedDocumentJson;
+
     /** Number of times a worker tried and failed. 0 = fresh. */
     private Integer retryCount;
 

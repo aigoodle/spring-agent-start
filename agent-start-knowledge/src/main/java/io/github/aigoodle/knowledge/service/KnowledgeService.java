@@ -13,6 +13,7 @@ import io.github.aigoodle.knowledge.mapper.DocumentIngestQueueMapper;
 import io.github.aigoodle.knowledge.mapper.HitTestingLogMapper;
 import io.github.aigoodle.knowledge.mapper.KnowledgeDocumentMapper;
 import io.github.aigoodle.knowledge.reader.DocumentExtractor;
+import io.github.aigoodle.knowledge.reader.model.ParsedDocument;
 import io.github.aigoodle.knowledge.retrieve.HybridRetriever;
 import io.github.aigoodle.knowledge.retrieve.RetrievalRequest;
 import io.github.aigoodle.knowledge.retrieve.RetrievedSegment;
@@ -25,6 +26,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Base64;
 
 /**
  * Public facade for document ingestion, segment management and knowledge retrieval.
@@ -78,9 +80,10 @@ public class KnowledgeService {
         return ingestionService.addFile(datasetId, filename, bytes);
     }
 
-    public record ChunkPreview(int totalChunks, List<ChunkView> chunks) {
+    public record ChunkPreview(String parser, String mediaType, int pageCount, int blockCount,
+                               List<String> warnings, int totalChunks, List<ChunkView> chunks) {
 
-        public record ChunkView(int index, String text, int tokens) {
+        public record ChunkView(int index, String text, int tokens, Map<String, Object> metadata) {
         }
     }
 
@@ -113,6 +116,16 @@ public class KnowledgeService {
 
     public KnowledgeDocumentEntity getDocument(String documentId) {
         return documentMapper.selectById(documentId);
+    }
+
+    public ParsedDocument getParsedDocument(String documentId) {
+        return JsonUtils.parse(documentMapper.selectParsedDocumentJson(documentId), ParsedDocument.class);
+    }
+
+    public KnowledgeDocumentEntity reparseDocument(String datasetId, String documentId) {
+        String encoded = documentMapper.selectSourceDataBase64(documentId);
+        if (encoded == null || encoded.isBlank()) return null;
+        return ingestionService.reparse(datasetId, documentId, Base64.getDecoder().decode(encoded));
     }
 
     public List<SegmentEntity> listSegments(String documentId, int page, int pageSize) {

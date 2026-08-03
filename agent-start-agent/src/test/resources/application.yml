@@ -11,6 +11,7 @@ spring:
         - classpath:db/model-schema.sql
         - classpath:db/knowledge-schema.sql
         - classpath:db/agent-schema.sql
+        - classpath:db/memory-schema.sql
 
 spring-agent:
   model:

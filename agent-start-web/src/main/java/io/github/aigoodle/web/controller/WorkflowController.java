@@ -2,7 +2,6 @@ package io.github.aigoodle.web.controller;
 
 import io.github.aigoodle.agent.service.AgentService;
 import io.github.aigoodle.web.common.ApiResponse;
-import io.github.aigoodle.web.common.SseEmitterBridge;
 import io.github.aigoodle.web.dto.WorkflowRunRequest;
 import io.github.aigoodle.web.dto.WorkflowSaveRequest;
 import io.github.aigoodle.web.service.WorkflowDraftCoordinator;
@@ -16,7 +15,6 @@ import io.github.aigoodle.workflow.service.WorkflowService;
 import lombok.Data;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
-import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -26,13 +24,16 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/** HTTP facade for workflow definitions, drafts, execution and palette metadata. */
+/**
+ * HTTP facade for workflow definitions, drafts, execution and palette metadata.
+ * The SSE streaming run endpoints live in {@link WorkflowStreamController} —
+ * they are servlet-only and skipped on reactive hosts.
+ */
 @RestController
 @ConditionalOnBean(WorkflowService.class)
 @RequestMapping("${spring-agent.web.base-path:}")
@@ -137,33 +138,6 @@ public class WorkflowController {
                 request.getGraph(), inputsOf(request), request.getConversationId()));
     }
 
-    @PostMapping(value = "/workflows/run-graph/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter runGraphStream(@RequestBody WorkflowRunRequest request) {
-        return SseEmitterBridge.stream(emitter -> {
-            emitter.event("run-start", Map.of(
-                    "conversationId", emptyIfNull(request.getConversationId())));
-            WorkflowRunResult result = request.getGraph() != null
-                    ? workflowService.runGraph(
-                            request.getGraph(), inputsOf(request), request.getConversationId(),
-                            step -> emitter.event("step", step))
-                    : workflowService.run(
-                            request.getWorkflowId(), inputsOf(request), request.getConversationId(),
-                            step -> emitter.event("step", step));
-            emitter.event("result", result);
-        });
-    }
-
-    @PostMapping(value = "/workflows/{id}/run/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter runStream(@PathVariable String id, @RequestBody WorkflowRunRequest request) {
-        return SseEmitterBridge.stream(emitter -> {
-            emitter.event("run-start", Map.of("workflowId", id));
-            WorkflowRunResult result = workflowService.run(
-                    id, inputsOf(request), request.getConversationId(),
-                    step -> emitter.event("step", step));
-            emitter.event("result", result);
-        });
-    }
-
     @GetMapping("/node-types")
     public ApiResponse<List<Map<String, Object>>> nodeTypes() {
         return ApiResponse.ok(WorkflowNodeCatalog.entries());
@@ -176,10 +150,6 @@ public class WorkflowController {
 
     private static Map<String, Object> inputsOf(WorkflowRunRequest request) {
         return request.getInputs() == null ? new HashMap<>() : request.getInputs();
-    }
-
-    private static String emptyIfNull(String value) {
-        return value == null ? "" : value;
     }
 
     @Data

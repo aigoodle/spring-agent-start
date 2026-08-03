@@ -79,4 +79,18 @@ class ChunkerTest {
             assertTrue(c.getParentContent().length() >= c.getContent().length());
         }
     }
+
+    @Test
+    void structureAwareChunkerPreservesHeadingAndCodeBlock() {
+        ProcessRule rule = new ProcessRule();
+        rule.setChunkTokens(40);
+        String text = "# Guide\n## Install\nRun this command:\n\n```bash\nmvn clean install\n```\n";
+
+        List<Chunk> chunks = registry.get(ChunkingTemplate.STRUCTURE_AWARE)
+                .chunk(text, rule, Map.of("documentName", "guide.md"));
+
+        assertTrue(chunks.stream().anyMatch(c -> "code".equals(c.getMetadata().get("blockType"))));
+        assertTrue(chunks.stream().anyMatch(c -> c.getContent().contains("Guide > Install")));
+        assertTrue(chunks.stream().anyMatch(c -> c.getContent().contains("mvn clean install")));
+    }
 }

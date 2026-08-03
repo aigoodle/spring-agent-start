@@ -19,6 +19,12 @@ import io.github.aigoodle.knowledge.mapper.SegmentMapper;
 import io.github.aigoodle.knowledge.reader.DocumentExtractor;
 import io.github.aigoodle.knowledge.reader.DocumentReader;
 import io.github.aigoodle.knowledge.reader.DocumentReaderRegistry;
+import io.github.aigoodle.knowledge.reader.DocumentEnricher;
+import io.github.aigoodle.knowledge.reader.DocxDocumentReader;
+import io.github.aigoodle.knowledge.reader.PdfDocumentReader;
+import io.github.aigoodle.knowledge.reader.PresentationDocumentReader;
+import io.github.aigoodle.knowledge.reader.SpreadsheetDocumentReader;
+import io.github.aigoodle.knowledge.reader.CsvDocumentReader;
 import io.github.aigoodle.knowledge.reader.HtmlDocumentReader;
 import io.github.aigoodle.knowledge.reader.MarkdownDocumentReader;
 import io.github.aigoodle.knowledge.reader.TextDocumentReader;
@@ -30,6 +36,8 @@ import io.github.aigoodle.knowledge.rerank.RerankerRegistry;
 import io.github.aigoodle.knowledge.rerank.WeightedReranker;
 import io.github.aigoodle.knowledge.rerank.WeightedRerankerSettings;
 import io.github.aigoodle.knowledge.retrieve.HybridRetriever;
+import io.github.aigoodle.knowledge.retrieve.DefaultQueryTransformer;
+import io.github.aigoodle.knowledge.retrieve.QueryTransformer;
 import io.github.aigoodle.knowledge.service.DatasetService;
 import io.github.aigoodle.knowledge.service.KnowledgeService;
 import io.github.aigoodle.model.config.SpringAgentModelAutoConfiguration;
@@ -84,6 +92,26 @@ public class SpringAgentKnowledgeAutoConfiguration {
     }
 
     @Bean
+    @ConditionalOnMissingBean(name = "docxDocumentReader")
+    public DocxDocumentReader docxDocumentReader() { return new DocxDocumentReader(); }
+
+    @Bean
+    @ConditionalOnMissingBean(name = "pdfDocumentReader")
+    public PdfDocumentReader pdfDocumentReader() { return new PdfDocumentReader(); }
+
+    @Bean
+    @ConditionalOnMissingBean(name = "presentationDocumentReader")
+    public PresentationDocumentReader presentationDocumentReader() { return new PresentationDocumentReader(); }
+
+    @Bean
+    @ConditionalOnMissingBean(name = "spreadsheetDocumentReader")
+    public SpreadsheetDocumentReader spreadsheetDocumentReader() { return new SpreadsheetDocumentReader(); }
+
+    @Bean
+    @ConditionalOnMissingBean(name = "csvDocumentReader")
+    public CsvDocumentReader csvDocumentReader() { return new CsvDocumentReader(); }
+
+    @Bean
     @ConditionalOnMissingBean(name = "tikaDocumentReader")
     public TikaDocumentReader tikaDocumentReader() {
         return new TikaDocumentReader();
@@ -104,8 +132,9 @@ public class SpringAgentKnowledgeAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public DocumentExtractor documentExtractor(DocumentReaderRegistry registry) {
-        return new DocumentExtractor(registry);
+    public DocumentExtractor documentExtractor(DocumentReaderRegistry registry,
+                                               ObjectProvider<DocumentEnricher> enrichers) {
+        return new DocumentExtractor(registry, enrichers.orderedStream().toList());
     }
 
     // ------------------------------------------------------------- rerankers
@@ -165,6 +194,12 @@ public class SpringAgentKnowledgeAutoConfiguration {
     // ------------------------------------------------------------- pipeline
 
     @Bean
+    @ConditionalOnMissingBean(name = "defaultQueryTransformer")
+    public DefaultQueryTransformer defaultQueryTransformer() {
+        return new DefaultQueryTransformer();
+    }
+
+    @Bean
     @ConditionalOnMissingBean
     public IndexingService indexingService(SegmentMapper segmentMapper, VectorStoreManager vectorStoreManager) {
         return new IndexingService(segmentMapper, vectorStoreManager);
@@ -173,8 +208,10 @@ public class SpringAgentKnowledgeAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public HybridRetriever hybridRetriever(SegmentMapper segmentMapper, VectorStoreManager vectorStoreManager,
-                                           RerankerRegistry rerankerRegistry) {
-        return new HybridRetriever(segmentMapper, vectorStoreManager, rerankerRegistry);
+                                           RerankerRegistry rerankerRegistry,
+                                           ObjectProvider<QueryTransformer> queryTransformers) {
+        return new HybridRetriever(segmentMapper, vectorStoreManager, rerankerRegistry,
+                queryTransformers.orderedStream().toList());
     }
 
     @Bean

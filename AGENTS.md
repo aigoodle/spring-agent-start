@@ -39,9 +39,14 @@ mvn -pl agent-start-agent  -am -Dtest=AgentRuntimeTest#methodName test   # singl
   endpoints, and its `AgentTriggerDispatcher` (~20 lines) demonstrates the `TriggerDispatcher` SPI.
 - `server` is the standalone production-shaped backend. It pulls `agent-start-web` **with
   `spring-boot-starter-web` excluded** — generic `@RestController` methods still route under the
-  reactive dispatcher, but servlet-only types (`MultipartFile`, `SseEmitter`) fail at runtime there;
-  streaming chat comes from `agent-start-completion` instead. When adding endpoints used by
-  both apps, keep them servlet-agnostic or provide a reactive counterpart in `completion`.
+  reactive dispatcher (`/agent-start` path prefix + CORS come from the `WebFluxConfigurer` mirror
+  in `SpringAgentWebAutoConfiguration.ReactiveSupport`); the servlet-only SSE controllers
+  (`WorkflowStreamController` / `AgentChatStreamController`, `SseEmitter` signatures) are skipped
+  there via `@ConditionalOnClass(SseEmitter)` and streaming comes from `agent-start-completion`
+  instead; `MultipartFile` endpoints still fail at runtime. When adding endpoints used by both
+  apps, keep them servlet-agnostic or provide a reactive counterpart in `completion` — and never
+  put servlet-only types in signatures of unguarded classes: WebFlux introspects every
+  registered controller/config bean method at startup and dies on the missing class.
 - `docker/docker-compose.yml` brings up the full demo (Postgres + backend + frontend); the root
   `Dockerfile` builds the backend standalone.
 
@@ -68,7 +73,7 @@ common → model → { knowledge, tools } → agent → workflow → { trigger, 
 | `agent-start-workflow` | DAG `WorkflowEngine`, `NodeExecutor` nodes, workflow persistence |
 | `agent-start-trigger` | Webhook / cron / event triggers → async dispatch via `TriggerDispatcher` SPI (built-in: `WorkflowTriggerDispatcher`), invocation history + replay |
 | `agent-start-observability` | LLMOps: `MeteringChatModelDecorator` (a `ChatModelDecorator`) records per-call token/cost/latency into `LlmCallRecord`; `LlmMetricsService` aggregates per model |
-| `agent-start-web` | **MVC** REST admin layer: Dify-style controllers (models, datasets, workflows, agents, triggers, conversations, prompt templates, tags, tools, llmops…), `ApiResponse`/`PageResult` envelopes, `SseEmitter` streaming, springdoc webmvc |
+| `agent-start-web` | **MVC** REST admin layer: Dify-style controllers (models, datasets, workflows, agents, triggers, conversations, prompt templates, tags, tools, llmops…), `ApiResponse`/`PageResult` envelopes, `SseEmitter` streaming (MVC-only controllers, class-gated for reactive hosts), springdoc webmvc |
 | `agent-start-completion` | **WebFlux** reactive chat surface: OpenAI-compatible `/chat/completions` + Dify `/chat-messages` (streaming and blocking) via `AgentChatGenerator`/`WorkflowChatGenerator` |
 | `agent-start-web-spring-starter`, `agent-start-completion-spring-starter` | Pom-only aggregators: MVC/Tomcat stack vs WebFlux/Netty stack. No code. |
 | `agent-start-server` | Standalone reactive server bundling every module (see above) |

@@ -14,6 +14,7 @@ import io.github.aigoodle.agent.mapper.TagBindingMapper;
 import io.github.aigoodle.agent.mapper.TagMapper;
 import io.github.aigoodle.agent.memory.AgentMemory;
 import io.github.aigoodle.agent.memory.JdbcAgentMemory;
+import io.github.aigoodle.agent.memory.LayeredAgentMemory;
 import io.github.aigoodle.agent.memory.VectorAgentMemory;
 import io.github.aigoodle.agent.service.AgentService;
 import io.github.aigoodle.agent.service.ApiTokenService;
@@ -34,6 +35,8 @@ import io.github.aigoodle.knowledge.service.DatasetService;
 import io.github.aigoodle.knowledge.service.KnowledgeService;
 import io.github.aigoodle.model.config.SpringAgentModelAutoConfiguration;
 import io.github.aigoodle.model.service.ModelService;
+import io.github.aigoodle.memory.MemoryManager;
+import io.github.aigoodle.memory.config.SpringAgentMemoryAutoConfiguration;
 import io.github.aigoodle.tool.ToolRegistry;
 import io.github.aigoodle.tool.config.SpringAgentToolsAutoConfiguration;
 import org.mybatis.spring.annotation.MapperScan;
@@ -52,7 +55,8 @@ import java.util.List;
  * Auto-configuration for the enterprise agent runtime: strategies, memory, the
  * approval gate and the {@link AgentService}.
  */
-@AutoConfiguration(after = {SpringAgentModelAutoConfiguration.class, SpringAgentToolsAutoConfiguration.class})
+@AutoConfiguration(after = {SpringAgentModelAutoConfiguration.class, SpringAgentToolsAutoConfiguration.class,
+        SpringAgentMemoryAutoConfiguration.class})
 @EnableConfigurationProperties(AgentProperties.class)
 @MapperScan("io.github.aigoodle.agent.mapper")
 public class SpringAgentAgentAutoConfiguration {
@@ -80,9 +84,8 @@ public class SpringAgentAgentAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(AgentMemory.class)
-    @ConditionalOnProperty(prefix = "spring-agent.agent", name = "memory", havingValue = "jdbc", matchIfMissing = true)
-    public AgentMemory agentMemory(AgentMessageMapper mapper) {
-        return new JdbcAgentMemory(mapper);
+    public AgentMemory agentMemory(MemoryManager manager, AgentMessageMapper mapper) {
+        return new LayeredAgentMemory(manager, new JdbcAgentMemory(mapper));
     }
 
     /** Semantic long-term memory, active with {@code spring-agent.agent.memory=vector} and the knowledge module. */

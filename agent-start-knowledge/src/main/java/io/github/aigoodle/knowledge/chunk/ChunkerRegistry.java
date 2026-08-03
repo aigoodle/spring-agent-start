@@ -5,6 +5,7 @@ import io.github.aigoodle.knowledge.chunk.template.NaiveChunker;
 import io.github.aigoodle.knowledge.chunk.template.OneChunker;
 import io.github.aigoodle.knowledge.chunk.template.ParentChildChunker;
 import io.github.aigoodle.knowledge.chunk.template.QaChunker;
+import io.github.aigoodle.knowledge.chunk.template.StructureAwareChunker;
 import io.github.aigoodle.knowledge.enums.ChunkingTemplate;
 
 import java.util.EnumMap;
@@ -25,6 +26,7 @@ public class ChunkerRegistry {
         chunkers.put(ChunkingTemplate.MARKDOWN, new MarkdownChunker());
         chunkers.put(ChunkingTemplate.QA, new QaChunker());
         chunkers.put(ChunkingTemplate.PARENT_CHILD, new ParentChildChunker());
+        chunkers.put(ChunkingTemplate.STRUCTURE_AWARE, new StructureAwareChunker());
         if (custom != null) {
             for (Chunker c : custom) {
                 chunkers.put(c.template(), c);

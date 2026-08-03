@@ -40,4 +40,17 @@ class RetrievalPlanTest {
         assertThat(plan.usesKeywords()).isTrue();
         assertThat(plan.usesVectors(false)).isFalse();
     }
+
+    @Test
+    void reciprocalRankFusionRewardsAgreementAcrossRecallChannels() {
+        RetrievalConfig config = RetrievalConfig.hybrid();
+        config.setVectorWeight(0.5);
+        config.setFusionMethod(RetrievalConfig.FusionMethod.RECIPROCAL_RANK);
+        RetrievalPlan plan = RetrievalPlan.resolve(config, RetrievalRequest.builder().query("rag").build(), true);
+
+        double foundByBoth = plan.fusedScore(0.2, 0.2, 2, 2);
+        double vectorOnly = plan.fusedScore(0.99, 0.0, 1, 0);
+
+        assertThat(foundByBoth).isGreaterThan(vectorOnly);
+    }
 }

@@ -33,11 +33,29 @@ CREATE TABLE IF NOT EXISTS documents (
     error_message TEXT,
     word_count    INT,
     segment_count INT,
+    parser_name   VARCHAR(64),
+    media_type    VARCHAR(255),
+    page_count    INT,
+    block_count   INT,
+    parse_warnings_json TEXT,
+    parsed_document_json TEXT,
+    source_data_base64 TEXT,
+    file_size BIGINT,
+    source_checksum VARCHAR(64),
     enabled       BOOLEAN DEFAULT TRUE,
     created_at    TIMESTAMP,
     updated_at    TIMESTAMP,
     PRIMARY KEY (id)
 );
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS parser_name VARCHAR(64);
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS media_type VARCHAR(255);
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS page_count INT;
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS block_count INT;
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS parse_warnings_json TEXT;
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS parsed_document_json TEXT;
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS source_data_base64 TEXT;
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS file_size BIGINT;
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS source_checksum VARCHAR(64);
 
 -- Sidecar table for the async ingestion queue. Presence of a row means the
 -- corresponding document is still "in flight" (PARSING / PENDING / CHUNKING /
@@ -51,12 +69,14 @@ CREATE TABLE IF NOT EXISTS document_ingest_queue (
     filename    VARCHAR(512),
     source_type VARCHAR(32),
     raw_text    TEXT,
+    parsed_document_json TEXT,
     retry_count INT DEFAULT 0,
     created_at  TIMESTAMP,
     updated_at  TIMESTAMP,
     PRIMARY KEY (document_id)
 );
 CREATE INDEX IF NOT EXISTS idx_ingest_queue_dataset ON document_ingest_queue (dataset_id);
+ALTER TABLE document_ingest_queue ADD COLUMN IF NOT EXISTS parsed_document_json TEXT;
 
 CREATE TABLE IF NOT EXISTS document_segments (
     id            VARCHAR(64)  NOT NULL,

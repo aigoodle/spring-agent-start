@@ -28,7 +28,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -221,6 +220,11 @@ public class ModelController {
                                              @RequestParam ModelType modelType,
                                              @RequestParam(required = false) String tenantId) {
         settingsService.setDefault(tenantId, name, modelName, modelType);
+        // A tenant default must be invocable — make sure its enable switch is ON.
+        // The dropdown only offers switched-on models, so for UI-driven calls this
+        // is a no-op; it protects API callers that set a default on a model whose
+        // switch was never flipped.
+        settingsService.setEnabled(tenantId, name, modelName, modelType, true);
         return ApiResponse.ok();
     }
 
@@ -237,9 +241,10 @@ public class ModelController {
     /**
      * Save (or rotate) the tenant's primary credential for {@code name}. When the
      * provider supports remote listing, the vendor is called BEFORE the credential is
-     * persisted — a bad api key throws {@code 400} and no state changes. On success the
-     * catalog is seeded as {@code agent_model} rows with {@code enabled=false}, so the
-     * UI can immediately show every available model and let the user toggle switches.
+     * persisted — a bad api key throws {@code 400} and no state changes. Dify-parity
+     * <em>no auto-enable</em>: no {@code agent_model} / setting rows are created
+     * here; the user switches on individual models from the catalog popover, which
+     * is also the gate for the default-model dropdown.
      */
     @PutMapping("/model-providers/{name}/credential")
     public ApiResponse<Map<String, Object>> upsertProviderCredential(
@@ -395,10 +400,15 @@ public class ModelController {
 
     /**
      * Enabled models grouped by {@link ModelType}, then by provider — the shape
-     * the "系统默认模型" panel binds its per-type &lt;a-select&gt; against
+     * the "系统默认模型" panel (and the shared model picker) binds against
      * (opt-groups per provider, options are individual models). Only providers
-     * with saved credentials + enabled models participate; disabled entries are
-     * filtered out so the dropdown only offers actually-usable candidates.
+     * with saved credentials participate, and a model is listed <b>only when its
+     * switch is ON</b> — predefined rows via {@code agent_provider_model_setting},
+     * custom {@code agent_model} rows via their {@code enabled} column. This is
+     * the "拉取模型之后只有开关打开的才允许在默认模型下拉中选择" rule that keeps
+     * the dropdown from flooding with the provider's whole catalog. Duplicates
+     * are impossible: a materialized {@code agent_model} copy of a predefined
+     * model is skipped (see {@code ModelCatalogQueryService#groupedModelsByType}).
      *
      * <p>Response shape:
      * <pre>{
@@ -423,57 +433,6 @@ public class ModelController {
     @GetMapping("/models/grouped-by-type")
     public ApiResponse<Map<String, List<Map<String, Object>>>> listModelsGroupedByType(
             @RequestParam(required = false) String tenantId) {
-        Map<String, List<Map<String, Object>>> providersByModelType = new LinkedHashMap<>();
-        // Seed empty buckets so the UI can render every supported type even when
-        // there are no candidates yet (keeps the shape stable).
-        for (ModelType modelType : ModelType.values()) {
-            providersByModelType.put(modelType.name(), new ArrayList<>());
-        }
-
-        for (ProviderDefinitionEntity definition : definitionService.list(tenantId)) {
-            // A provider only surfaces in the default picker once its credential
-            // has been saved — the model behind it wouldn't be invocable otherwise.
-            // We intentionally do NOT require the per-model "enabled" toggle here:
-            // the default picker's job is "which model do I use by default",
-            // which is a strictly larger question than the catalog's opt-in enable
-            // gate. Requiring both would force users to click "enable" in the
-            // popover before they can even pick a default — which is what the
-            // user hit ("配置了模型之后…下拉选择默认模型无法加载"). Downstream
-            // usability is guaranteed by {@link #setModelDefault} which flips
-            // the enabled flag as a side effect of choosing a default.
-            ProviderCredentialEntity credential =
-                    credentialService.findPrimary(tenantId, definition.getName());
-            if (credential == null) {
-                continue;
-            }
-
-            // Bucket every predefined model (shipped by the provider) by type.
-            Map<ModelType, List<Map<String, Object>>> modelsByType = new LinkedHashMap<>();
-            for (PredefinedModelEntity predefinedModel
-                    : definitionService.listPredefined(definition.getName())) {
-                modelsByType.computeIfAbsent(
-                                predefinedModel.getModelType(), ignored -> new ArrayList<>())
-                        .add(ModelViewMapper.toGroupedModelView(
-                                definition.getName(), predefinedModel.getModel(),
-                                predefinedModel.getModelType()));
-            }
-            // Bucket every custom-registered model too — user-added rows are
-            // implicitly "configured" by virtue of existing in agent_model.
-            for (ModelEntity customModel
-                    : modelService.listByProvider(tenantId, definition.getName())) {
-                modelsByType.computeIfAbsent(
-                                customModel.getModelType(), ignored -> new ArrayList<>())
-                        .add(ModelViewMapper.toGroupedModelView(
-                                definition.getName(), customModel.getModelName(),
-                                customModel.getModelType()));
-            }
-
-            // Publish one provider entry per model type with a non-empty bucket.
-            for (Map.Entry<ModelType, List<Map<String, Object>>> models : modelsByType.entrySet()) {
-                providersByModelType.get(models.getKey().name()).add(
-                        ModelViewMapper.toGroupedProviderView(definition, models.getValue()));
-            }
-        }
-        return ApiResponse.ok(providersByModelType);
+        return ApiResponse.ok(catalogQueries.groupedModelsByType(tenantId));
     }
 }

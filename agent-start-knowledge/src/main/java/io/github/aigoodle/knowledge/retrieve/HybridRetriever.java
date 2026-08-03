@@ -35,6 +35,7 @@ public class HybridRetriever {
     private final SegmentMapper segmentMapper;
     private final VectorStoreManager vectorStoreManager;
     private final RerankerRegistry rerankerRegistry;
+    private final List<QueryTransformer> queryTransformers;
 
     public HybridRetriever(SegmentMapper segmentMapper, VectorStoreManager vectorStoreManager) {
         this(segmentMapper, vectorStoreManager, new RerankerRegistry(List.of(), new NoopReranker()));
@@ -42,9 +43,15 @@ public class HybridRetriever {
 
     public HybridRetriever(SegmentMapper segmentMapper, VectorStoreManager vectorStoreManager,
                            RerankerRegistry rerankerRegistry) {
+        this(segmentMapper, vectorStoreManager, rerankerRegistry, List.of(new DefaultQueryTransformer()));
+    }
+
+    public HybridRetriever(SegmentMapper segmentMapper, VectorStoreManager vectorStoreManager,
+                           RerankerRegistry rerankerRegistry, List<QueryTransformer> queryTransformers) {
         this.segmentMapper = segmentMapper;
         this.vectorStoreManager = vectorStoreManager;
         this.rerankerRegistry = rerankerRegistry;
+        this.queryTransformers = queryTransformers == null ? List.of() : queryTransformers;
     }
 
     public List<RetrievedSegment> retrieve(DatasetEntity dataset,
@@ -52,9 +59,15 @@ public class HybridRetriever {
                                            RetrievalRequest request) {
         boolean vectorIndexAvailable = vectorStoreManager.hasVectorIndex(dataset);
         RetrievalPlan plan = RetrievalPlan.resolve(config, request, vectorIndexAvailable);
-        Map<String, Double> vectorScores = recallVectorScores(
-                dataset, request.getQuery(), plan, vectorIndexAvailable);
-        Map<String, Double> keywordScores = recallKeywordScores(dataset, request.getQuery(), plan);
+        List<String> queries = queryVariants(request.getQuery(), config);
+        Map<String, Double> vectorScores = new HashMap<>();
+        Map<String, Double> keywordScores = new HashMap<>();
+        for (String query : queries) {
+            mergeMaximum(vectorScores, recallVectorScores(dataset, query, plan, vectorIndexAvailable));
+            mergeMaximum(keywordScores, recallKeywordScores(dataset, query, plan));
+        }
+        Map<String, Integer> vectorRanks = ranks(vectorScores);
+        Map<String, Integer> keywordRanks = ranks(keywordScores);
 
         Set<String> candidateIds = new HashSet<>();
         candidateIds.addAll(vectorScores.keySet());
@@ -90,7 +103,9 @@ public class HybridRetriever {
                     .parentContent(parentContent == null ? null : String.valueOf(parentContent))
                     .vectorScore(vectorScore)
                     .keywordScore(keywordScore)
-                    .score(plan.fusedScore(vectorScore, keywordScore))
+                    .score(plan.fusedScore(vectorScore, keywordScore,
+                            vectorRanks.getOrDefault(candidateId, 0),
+                            keywordRanks.getOrDefault(candidateId, 0)))
                     .metadata(metadata)
                     .build());
         }
@@ -105,16 +120,58 @@ public class HybridRetriever {
         }
 
         List<RetrievedSegment> selectedResults = new ArrayList<>();
+        Map<String, Integer> perDocument = new HashMap<>();
         for (RetrievedSegment result : results) {
             if (result.getScore() < plan.scoreThreshold()) {
                 continue;
             }
+            if (plan.maxChunksPerDocument() > 0
+                    && perDocument.getOrDefault(result.getDocumentId(), 0) >= plan.maxChunksPerDocument()) {
+                continue;
+            }
             selectedResults.add(result);
+            perDocument.merge(result.getDocumentId(), 1, Integer::sum);
             if (selectedResults.size() >= plan.topK()) {
                 break;
             }
         }
+        expandAdjacentContext(selectedResults, config.getNeighborWindow());
         return selectedResults;
+    }
+
+    private List<String> queryVariants(String query, RetrievalConfig config) {
+        if (!config.isQueryExpansionEnabled()) return List.of(query);
+        Set<String> variants = new LinkedHashSet<>();
+        variants.add(query);
+        String current = query;
+        for (QueryTransformer transformer : queryTransformers.stream()
+                .sorted(Comparator.comparingInt(QueryTransformer::getOrder)).toList()) {
+            for (String candidate : transformer.transform(current)) {
+                if (candidate != null && !candidate.isBlank()) variants.add(candidate);
+            }
+        }
+        return variants.stream().limit(Math.max(1, config.getMaxQueryVariants())).toList();
+    }
+
+    private static void mergeMaximum(Map<String, Double> target, Map<String, Double> source) {
+        source.forEach((id, score) -> target.merge(id, score, Math::max));
+    }
+
+    private void expandAdjacentContext(List<RetrievedSegment> results, int window) {
+        if (window <= 0) return;
+        for (RetrievedSegment result : results) {
+            int position = result.getPosition() == null ? 0 : result.getPosition();
+            List<SegmentEntity> neighbors = segmentMapper.selectList(new LambdaQueryWrapper<SegmentEntity>()
+                    .eq(SegmentEntity::getDocumentId, result.getDocumentId())
+                    .eq(SegmentEntity::getEnabled, true)
+                    .between(SegmentEntity::getPosition, Math.max(0, position - window), position + window)
+                    .orderByAsc(SegmentEntity::getPosition));
+            if (neighbors.size() > 1) {
+                result.setExpandedContext(neighbors.stream().map(SegmentEntity::getContent)
+                        .filter(content -> content != null && !content.isBlank())
+                        .reduce((left, right) -> left + "\n\n" + right).orElse(result.contextText()));
+            }
+        }
     }
 
     private Map<String, Double> recallVectorScores(DatasetEntity dataset,
@@ -157,8 +214,10 @@ public class HybridRetriever {
         List<SegmentEntity> segments = segmentMapper.selectList(new LambdaQueryWrapper<SegmentEntity>()
                 .eq(SegmentEntity::getDatasetId, dataset.getId())
                 .eq(SegmentEntity::getEnabled, true));
+        Map<String, Integer> documentFrequency = documentFrequency(segments);
         for (SegmentEntity segment : segments) {
-            double score = keywordScore(queryTokens, segment.getKeywords());
+            Map<String, Object> metadata = JsonUtils.parseMap(segment.getMetadataJson());
+            double score = keywordScore(queryTokens, segment, metadata, documentFrequency, segments.size());
             if (score > 0) {
                 scores.put(segment.getId(), score);
             }
@@ -178,18 +237,46 @@ public class HybridRetriever {
         return rerankerRegistry.get(name);
     }
 
-    private static double keywordScore(Set<String> queryTokens, String segmentKeywords) {
-        if (segmentKeywords == null || segmentKeywords.isBlank()) {
+    private static double keywordScore(Set<String> queryTokens, SegmentEntity segment,
+                                       Map<String, Object> metadata,
+                                       Map<String, Integer> documentFrequency, int corpusSize) {
+        if (segment.getKeywords() == null || segment.getKeywords().isBlank()) {
             return 0.0;
         }
-        Set<String> segmentTokens = new HashSet<>(List.of(segmentKeywords.split(" ")));
-        int matched = 0;
+        Set<String> segmentTokens = new HashSet<>(List.of(segment.getKeywords().split(" ")));
+        Set<String> headingTokens = KeywordTokenizer.tokenSet(String.valueOf(metadata.getOrDefault("heading", "")));
+        Set<String> titleTokens = KeywordTokenizer.tokenSet(String.valueOf(metadata.getOrDefault("documentName", "")));
+        double matched = 0.0;
+        double possible = 0.0;
         for (String token : queryTokens) {
-            if (segmentTokens.contains(token)) {
-                matched++;
+            double idf = Math.log(1.0 + (double) (corpusSize + 1)
+                    / (documentFrequency.getOrDefault(token, 0) + 1));
+            possible += idf;
+            double fieldBoost = titleTokens.contains(token) ? 1.5
+                    : headingTokens.contains(token) ? 1.3
+                    : segmentTokens.contains(token) ? 1.0 : 0.0;
+            matched += idf * fieldBoost;
+        }
+        return possible == 0.0 ? 0.0 : Math.min(1.0, matched / possible);
+    }
+
+    private static Map<String, Integer> documentFrequency(List<SegmentEntity> segments) {
+        Map<String, Integer> frequencies = new HashMap<>();
+        for (SegmentEntity segment : segments) {
+            if (segment.getKeywords() == null) continue;
+            for (String token : new HashSet<>(List.of(segment.getKeywords().split(" ")))) {
+                frequencies.merge(token, 1, Integer::sum);
             }
         }
-        return queryTokens.isEmpty() ? 0.0 : (double) matched / queryTokens.size();
+        return frequencies;
+    }
+
+    private static Map<String, Integer> ranks(Map<String, Double> scores) {
+        List<Map.Entry<String, Double>> ordered = new ArrayList<>(scores.entrySet());
+        ordered.sort(Map.Entry.<String, Double>comparingByValue().reversed());
+        Map<String, Integer> ranks = new HashMap<>();
+        for (int i = 0; i < ordered.size(); i++) ranks.put(ordered.get(i).getKey(), i + 1);
+        return ranks;
     }
 
     private static boolean matchesFilter(Map<String, Object> metadata, Map<String, Object> filter) {

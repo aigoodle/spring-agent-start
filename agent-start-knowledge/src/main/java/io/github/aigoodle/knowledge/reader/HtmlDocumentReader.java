@@ -44,4 +44,13 @@ public class HtmlDocumentReader implements DocumentReader {
                 .replaceAll("&#39;", "'");
         return cleaned.replaceAll("\\s+", " ").trim();
     }
+
+    @Override
+    public io.github.aigoodle.knowledge.reader.model.ParsedDocument parse(byte[] bytes, String filename) {
+        // Tika's HTML parser normalizes malformed HTML to safe XHTML; reuse the
+        // same semantic block conversion while retaining this format-specific name.
+        var parsed = new TikaDocumentReader().parse(bytes, filename);
+        parsed.setParser(NAME);
+        return parsed;
+    }
 }
