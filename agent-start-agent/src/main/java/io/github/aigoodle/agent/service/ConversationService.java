@@ -1,6 +1,7 @@
 package io.github.aigoodle.agent.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import io.github.aigoodle.agent.entity.AgentMessageEntity;
 import io.github.aigoodle.agent.entity.ConversationEntity;
 import io.github.aigoodle.agent.mapper.AgentMessageMapper;
 import io.github.aigoodle.agent.mapper.ConversationMapper;
@@ -17,6 +18,9 @@ import java.util.List;
  */
 public class ConversationService {
 
+    private static final String DEFAULT_TENANT_ID = "default";
+    private static final int GENERATED_NAME_MAX_LENGTH = 60;
+
     private final ConversationMapper conversationMapper;
     private final AgentMessageMapper messageMapper;
 
@@ -32,12 +36,13 @@ public class ConversationService {
                 .orderByDesc(ConversationEntity::getUpdatedAt));
     }
 
-    public ConversationEntity require(String id) {
-        ConversationEntity e = conversationMapper.selectById(id);
-        if (e == null) {
-            throw new AgentException("conversation_not_found", "Conversation not found: " + id, null);
+    public ConversationEntity require(String conversationId) {
+        ConversationEntity conversation = conversationMapper.selectById(conversationId);
+        if (conversation == null) {
+            throw new AgentException("conversation_not_found",
+                    "Conversation not found: " + conversationId, null);
         }
-        return e;
+        return conversation;
     }
 
     /**
@@ -45,35 +50,39 @@ public class ConversationService {
      * conversation id is seen. Never overwrites an existing row's name.
      */
     @Transactional
-    public ConversationEntity ensure(String conversationId, String appId, String tenantId, String firstMessage) {
-        ConversationEntity existing = conversationMapper.selectById(conversationId);
-        if (existing != null) return existing;
-        ConversationEntity fresh = new ConversationEntity();
-        fresh.setId(conversationId);
-        fresh.setAppId(appId);
-        fresh.setTenantId(tenantId == null ? "default" : tenantId);
-        fresh.setName(truncate(firstMessage, 60));
-        fresh.setStatus("normal");
-        fresh.setPinned(false);
-        fresh.setFromSource("web");
-        conversationMapper.insert(fresh);
-        return fresh;
+    public ConversationEntity ensure(String conversationId, String appId,
+                                     String tenantId, String firstMessage) {
+        ConversationEntity existingConversation = conversationMapper.selectById(conversationId);
+        if (existingConversation != null) {
+            return existingConversation;
+        }
+
+        ConversationEntity newConversation = new ConversationEntity();
+        newConversation.setId(conversationId);
+        newConversation.setAppId(appId);
+        newConversation.setTenantId(resolveTenantId(tenantId));
+        newConversation.setName(truncate(firstMessage, GENERATED_NAME_MAX_LENGTH));
+        newConversation.setStatus("normal");
+        newConversation.setPinned(false);
+        newConversation.setFromSource("web");
+        conversationMapper.insert(newConversation);
+        return newConversation;
     }
 
     @Transactional
-    public ConversationEntity rename(String id, String name) {
-        ConversationEntity e = require(id);
-        e.setName(name);
-        conversationMapper.updateById(e);
-        return e;
+    public ConversationEntity rename(String conversationId, String name) {
+        ConversationEntity conversation = require(conversationId);
+        conversation.setName(name);
+        conversationMapper.updateById(conversation);
+        return conversation;
     }
 
     @Transactional
-    public ConversationEntity togglePinned(String id, boolean pinned) {
-        ConversationEntity e = require(id);
-        e.setPinned(pinned);
-        conversationMapper.updateById(e);
-        return e;
+    public ConversationEntity togglePinned(String conversationId, boolean pinned) {
+        ConversationEntity conversation = require(conversationId);
+        conversation.setPinned(pinned);
+        conversationMapper.updateById(conversation);
+        return conversation;
     }
 
     /**
@@ -81,14 +90,20 @@ public class ConversationService {
      * per-app metrics stay honest.
      */
     @Transactional
-    public void delete(String id) {
-        conversationMapper.deleteById(id);
-        messageMapper.delete(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<io.github.aigoodle.agent.entity.AgentMessageEntity>()
-                .eq(io.github.aigoodle.agent.entity.AgentMessageEntity::getConversationId, id));
+    public void delete(String conversationId) {
+        conversationMapper.deleteById(conversationId);
+        messageMapper.delete(new LambdaQueryWrapper<AgentMessageEntity>()
+                .eq(AgentMessageEntity::getConversationId, conversationId));
     }
 
-    private static String truncate(String s, int max) {
-        if (s == null) return null;
-        return s.length() > max ? s.substring(0, max) + "…" : s;
+    private static String resolveTenantId(String tenantId) {
+        return tenantId == null || tenantId.isBlank() ? DEFAULT_TENANT_ID : tenantId;
+    }
+
+    private static String truncate(String text, int maximumLength) {
+        if (text == null || text.length() <= maximumLength) {
+            return text;
+        }
+        return text.substring(0, maximumLength - 1) + "…";
     }
 }

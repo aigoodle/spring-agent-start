@@ -2,6 +2,7 @@ package io.github.aigoodle.tool.builtin;
 
 import io.github.aigoodle.tool.AbstractAgentTool;
 
+import java.time.DateTimeException;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -29,13 +30,13 @@ public class CurrentTimeTool extends AbstractAgentTool {
     }
 
     @Override
-    public Object execute(Map<String, Object> args) {
-        String zone = str(args, "zone", "UTC");
+    public Object execute(Map<String, Object> arguments) {
+        String zoneId = stringArgument(arguments, "zone", "UTC");
         try {
-            ZonedDateTime now = ZonedDateTime.now(ZoneId.of(zone));
-            return now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss z"));
-        } catch (Exception e) {
-            return "error: invalid zone '" + zone + "'";
+            ZonedDateTime currentTime = ZonedDateTime.now(ZoneId.of(zoneId));
+            return currentTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss z"));
+        } catch (DateTimeException invalidZone) {
+            return "error: invalid zone '" + zoneId + "'";
         }
     }
 }

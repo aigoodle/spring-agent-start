@@ -7,10 +7,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.OptionalDouble;
 
 /**
  * Reranker that delegates to an LLM: asks the model to score each candidate for
@@ -24,8 +22,7 @@ import java.util.regex.Pattern;
 public class ModelReranker implements Reranker {
 
     public static final String NAME = "model";
-    private static final Logger log = LoggerFactory.getLogger(ModelReranker.class);
-    private static final Pattern SCORE_LINE = Pattern.compile("\\[?(\\d+)]?\\s*[:=\\-)]\\s*([0-9]*\\.?[0-9]+)");
+    private static final Logger logger = LoggerFactory.getLogger(ModelReranker.class);
 
     private final ModelService modelService;
     private final String defaultModelId;
@@ -49,68 +46,28 @@ public class ModelReranker implements Reranker {
             return candidates;
         }
         try {
-            ChatClient client = modelService.getChatClient(defaultModelId);
-            String prompt = buildPrompt(query, candidates);
-            String reply = client.prompt()
-                    .system("You are a strict relevance scorer. Only output the requested lines.")
-                    .user(prompt).call().content();
-            double[] scores = parseScores(reply, candidates.size());
-            List<RetrievedSegment> rescored = new ArrayList<>(candidates.size());
-            for (int i = 0; i < candidates.size(); i++) {
-                RetrievedSegment s = candidates.get(i);
-                if (!Double.isNaN(scores[i])) {
-                    s.setScore(scores[i]);
+            ChatClient chatClient = modelService.getChatClient(defaultModelId);
+            String modelResponse = chatClient.prompt()
+                    .system(ModelRerankPrompt.SYSTEM_MESSAGE)
+                    .user(ModelRerankPrompt.render(query, candidates))
+                    .call()
+                    .content();
+            ModelRelevanceScores relevanceScores = ModelRelevanceScoreParser.parse(
+                    modelResponse, candidates.size());
+            List<RetrievedSegment> rescoredCandidates = new ArrayList<>(candidates.size());
+            for (int index = 0; index < candidates.size(); index++) {
+                RetrievedSegment candidate = candidates.get(index);
+                OptionalDouble modelScore = relevanceScores.scoreAt(index);
+                if (modelScore.isPresent()) {
+                    candidate.setScore(modelScore.getAsDouble());
                 }
-                rescored.add(s);
+                rescoredCandidates.add(candidate);
             }
-            rescored.sort(Comparator.comparingDouble(RetrievedSegment::getScore).reversed());
-            if (topN > 0 && rescored.size() > topN) {
-                return rescored.subList(0, topN);
-            }
-            return rescored;
-        } catch (Exception e) {
-            log.warn("Model reranker failed, keeping hybrid order: {}", e.getMessage());
+            return RankedSegments.highestScoring(rescoredCandidates, topN);
+        } catch (Exception exception) {
+            logger.warn("Model reranker failed, keeping hybrid order: {}",
+                    exception.getMessage(), exception);
             return candidates;
         }
-    }
-
-    private static String buildPrompt(String query, List<RetrievedSegment> candidates) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("Query: ").append(query).append("\n\n");
-        sb.append("Score each passage from 0.0 (irrelevant) to 1.0 (highly relevant). ")
-                .append("Reply with exactly one line per passage in the format `index: score`.\n\n");
-        for (int i = 0; i < candidates.size(); i++) {
-            String content = candidates.get(i).getContent();
-            if (content == null) {
-                content = "";
-            }
-            if (content.length() > 600) {
-                content = content.substring(0, 600) + "…";
-            }
-            sb.append('[').append(i).append("] ").append(content).append("\n\n");
-        }
-        return sb.toString();
-    }
-
-    private static double[] parseScores(String reply, int expected) {
-        double[] scores = new double[expected];
-        for (int i = 0; i < expected; i++) {
-            scores[i] = Double.NaN;
-        }
-        if (reply == null) {
-            return scores;
-        }
-        Matcher m = SCORE_LINE.matcher(reply);
-        while (m.find()) {
-            try {
-                int idx = Integer.parseInt(m.group(1));
-                double score = Double.parseDouble(m.group(2));
-                if (idx >= 0 && idx < expected) {
-                    scores[idx] = Math.max(0.0, Math.min(1.0, score));
-                }
-            } catch (NumberFormatException ignored) {
-            }
-        }
-        return scores;
     }
 }

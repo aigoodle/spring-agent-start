@@ -9,10 +9,12 @@ import java.util.regex.Pattern;
  */
 public final class TextCleaner {
 
-    private static final Pattern MULTI_WS = Pattern.compile("[ \\t\\x0B\\f]+");
-    private static final Pattern MULTI_NL = Pattern.compile("\\n{3,}");
+    private static final Pattern REPEATED_HORIZONTAL_WHITESPACE =
+            Pattern.compile("[ \\t\\x0B\\f]+");
+    private static final Pattern EXCESSIVE_NEWLINES = Pattern.compile("\\n{3,}");
     private static final Pattern URL = Pattern.compile("https?://\\S+");
-    private static final Pattern EMAIL = Pattern.compile("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}");
+    private static final Pattern EMAIL_ADDRESS =
+            Pattern.compile("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}");
 
     private TextCleaner() {
     }
@@ -21,15 +23,15 @@ public final class TextCleaner {
         if (text == null) {
             return "";
         }
-        String out = text.replace("\r\n", "\n").replace("\r", "\n");
+        String cleanedText = text.replace("\r\n", "\n").replace("\r", "\n");
         if (rule.isRemoveUrlsEmails()) {
-            out = URL.matcher(out).replaceAll(" ");
-            out = EMAIL.matcher(out).replaceAll(" ");
+            cleanedText = URL.matcher(cleanedText).replaceAll(" ");
+            cleanedText = EMAIL_ADDRESS.matcher(cleanedText).replaceAll(" ");
         }
         if (rule.isRemoveExtraWhitespace()) {
-            out = MULTI_WS.matcher(out).replaceAll(" ");
-            out = MULTI_NL.matcher(out).replaceAll("\n\n");
+            cleanedText = REPEATED_HORIZONTAL_WHITESPACE.matcher(cleanedText).replaceAll(" ");
+            cleanedText = EXCESSIVE_NEWLINES.matcher(cleanedText).replaceAll("\n\n");
         }
-        return out.strip();
+        return cleanedText.strip();
     }
 }

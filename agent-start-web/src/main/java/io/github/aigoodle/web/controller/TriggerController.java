@@ -4,6 +4,7 @@ import io.github.aigoodle.trigger.dispatch.DispatchResult;
 import io.github.aigoodle.trigger.entity.TriggerEntity;
 import io.github.aigoodle.trigger.entity.TriggerInvocationEntity;
 import io.github.aigoodle.trigger.service.CreateTriggerRequest;
+import io.github.aigoodle.trigger.service.TriggerInvocationRequest;
 import io.github.aigoodle.trigger.service.TriggerService;
 import io.github.aigoodle.web.common.ApiResponse;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -49,8 +50,8 @@ public class TriggerController {
     }
 
     @PostMapping("/triggers")
-    public ApiResponse<TriggerEntity> create(@RequestBody CreateTriggerRequest req) {
-        return ApiResponse.ok(triggerService.create(req));
+    public ApiResponse<TriggerEntity> create(@RequestBody CreateTriggerRequest request) {
+        return ApiResponse.ok(triggerService.create(request));
     }
 
     @PutMapping("/triggers/{id}/enabled")
@@ -74,7 +75,8 @@ public class TriggerController {
     @PostMapping("/triggers/{id}/fire")
     public ApiResponse<DispatchResult> fire(@PathVariable String id,
                                             @RequestBody(required = false) Map<String, Object> payload) {
-        return ApiResponse.ok(triggerService.fireSync(id, payload == null ? Map.of() : payload, "manual"));
+        return ApiResponse.ok(triggerService.fireSynchronously(
+                TriggerInvocationRequest.manual(id, payload)));
     }
 
     // -------------------------------------------------------- invocations

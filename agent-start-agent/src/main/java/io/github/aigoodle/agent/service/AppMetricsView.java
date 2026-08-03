@@ -3,19 +3,19 @@ package io.github.aigoodle.agent.service;
 import lombok.Builder;
 import lombok.Data;
 
-/** Compact per-app metrics view returned by {@link AppMetricsService#compute}. */
+/** Read-only summary of conversation activity for one application. */
 @Data
 @Builder
 public class AppMetricsView {
     private String appId;
-    /** Distinct conversation ids seen for this app. */
+    /** Number of distinct conversations with persisted messages. */
     private int totalConversations;
-    /** Total messages (both roles) recorded for this app. */
+    /** Total number of messages, including roles outside user and assistant. */
     private int totalMessages;
     private int userMessages;
     private int assistantMessages;
-    /** userMessages / totalConversations, rounded to 2 decimals. */
+    /** Average number of user turns per conversation, rounded to two decimals. */
     private double avgInteractionsPerConversation;
-    /** ISO-8601 of the most recent message; {@code null} when the app has none. */
+    /** ISO-8601 time of the most recent message, or {@code null} when empty. */
     private String lastActivityAt;
 }

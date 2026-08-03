@@ -29,15 +29,16 @@ public class VariablePool {
             // so dropping the write preserves the observable behaviour of "read returns null".
             return;
         }
-        store.computeIfAbsent(namespace, k -> new ConcurrentHashMap<>()).put(key, value);
+        store.computeIfAbsent(namespace, ignored -> new ConcurrentHashMap<>()).put(key, value);
     }
 
     public void putAll(String namespace, Map<String, Object> values) {
         if (values != null && !values.isEmpty()) {
-            Map<String, Object> ns = store.computeIfAbsent(namespace, k -> new ConcurrentHashMap<>());
-            values.forEach((k, v) -> {
-                if (v != null) {
-                    ns.put(k, v);
+            Map<String, Object> namespaceValues =
+                    store.computeIfAbsent(namespace, ignored -> new ConcurrentHashMap<>());
+            values.forEach((key, value) -> {
+                if (value != null) {
+                    namespaceValues.put(key, value);
                 }
             });
         }
@@ -56,26 +57,26 @@ public class VariablePool {
         if (parts.length < 2) {
             return null;
         }
-        Map<String, Object> ns = store.get(parts[0]);
-        if (ns == null) {
+        Map<String, Object> namespaceValues = store.get(parts[0]);
+        if (namespaceValues == null) {
             return null;
         }
         String rest = parts[1];
-        if (ns.containsKey(rest)) {
-            return ns.get(rest);
+        if (namespaceValues.containsKey(rest)) {
+            return namespaceValues.get(rest);
         }
         // descend into nested maps for "field.sub"
-        String[] segs = rest.split("\\.");
-        Object current = ns.get(segs[0]);
-        for (int i = 1; i < segs.length && current instanceof Map<?, ?> m; i++) {
-            current = m.get(segs[i]);
+        String[] segments = rest.split("\\.");
+        Object current = namespaceValues.get(segments[0]);
+        for (int index = 1; index < segments.length && current instanceof Map<?, ?> nestedMap; index++) {
+            current = nestedMap.get(segments[index]);
         }
         return current;
     }
 
     public String getString(String path) {
-        Object v = get(path);
-        return v == null ? null : String.valueOf(v);
+        Object value = get(path);
+        return value == null ? null : String.valueOf(value);
     }
 
     public Map<String, Map<String, Object>> snapshot() {

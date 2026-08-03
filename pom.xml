@@ -11,7 +11,30 @@
 
     <name>spring-agent-start</name>
     <description>Modular, Dify-inspired AI building blocks for Spring Boot: model management, knowledge base (RAG) and workflow/agent orchestration. Import only the module you need.</description>
-    <url>https://github.com/spring-agent-start/spring-agent-start</url>
+    <url>https://github.com/aigoodle/spring-agent-start</url>
+
+    <licenses>
+        <license>
+            <name>The Apache Software License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <id>aigoodle</id>
+            <name>aigoodle</name>
+            <url>https://github.com/aigoodle</url>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:https://github.com/aigoodle/spring-agent-start.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/aigoodle/spring-agent-start.git</developerConnection>
+        <url>https://github.com/aigoodle/spring-agent-start</url>
+        <tag>HEAD</tag>
+    </scm>
 
     <modules>
         <module>agent-start-common</module>
@@ -216,4 +239,68 @@
             </plugins>
         </pluginManagement>
     </build>
+
+    <!-- Keep local builds lightweight; enable these Central-required artifacts only for releases. -->
+    <profiles>
+        <profile>
+            <id>central-release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <version>3.3.1</version>
+                        <executions>
+                            <execution>
+                                <id>attach-sources</id>
+                                <goals>
+                                    <goal>jar-no-fork</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>3.11.2</version>
+                        <configuration>
+                            <doclint>none</doclint>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <goals>
+                                    <goal>jar</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>3.2.7</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>0.9.0</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <autoPublish>false</autoPublish>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

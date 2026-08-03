@@ -17,8 +17,8 @@ public class RerankerRegistry {
     public RerankerRegistry(List<Reranker> rerankerBeans, Reranker fallback) {
         this.fallback = fallback == null ? new NoopReranker() : fallback;
         if (rerankerBeans != null) {
-            for (Reranker r : rerankerBeans) {
-                rerankers.putIfAbsent(r.getName().toLowerCase(), r);
+            for (Reranker reranker : rerankerBeans) {
+                rerankers.putIfAbsent(reranker.getName().toLowerCase(), reranker);
             }
         }
         rerankers.putIfAbsent(this.fallback.getName().toLowerCase(), this.fallback);

@@ -28,27 +28,36 @@ public class OpenAIChatResponse {
     private OpenAIUsage usage;
 
     public static OpenAIChatResponse completion(String model, String answer) {
-        OpenAIChatResponse resp = new OpenAIChatResponse();
-        resp.setId("chatcmpl-" + UUID.randomUUID().toString().replace("-", ""));
-        resp.setObject(OBJECT_COMPLETION);
-        resp.setCreated(Instant.now().getEpochSecond());
-        resp.setModel(model == null ? "spring-agent" : model);
-        resp.getChoices().add(OpenAIChoice.message(0, OpenAIMessage.assistant(answer), "stop"));
-        resp.setUsage(new OpenAIUsage());
-        return resp;
+        OpenAIChatResponse response = new OpenAIChatResponse();
+        response.setId("chatcmpl-" + UUID.randomUUID().toString().replace("-", ""));
+        response.setObject(OBJECT_COMPLETION);
+        response.setCreated(Instant.now().getEpochSecond());
+        response.setModel(resolveModelName(model));
+        response.getChoices().add(
+                OpenAIChoice.message(0, OpenAIMessage.assistant(answer), "stop"));
+        response.setUsage(new OpenAIUsage());
+        return response;
     }
 
     public static OpenAIChatResponse chunk(String id, String model, String role,
                                            String contentDelta, String finishReason) {
-        OpenAIChatResponse resp = new OpenAIChatResponse();
-        resp.setId(id);
-        resp.setObject(OBJECT_CHUNK);
-        resp.setCreated(Instant.now().getEpochSecond());
-        resp.setModel(model == null ? "spring-agent" : model);
+        OpenAIChatResponse responseChunk = new OpenAIChatResponse();
+        responseChunk.setId(id);
+        responseChunk.setObject(OBJECT_CHUNK);
+        responseChunk.setCreated(Instant.now().getEpochSecond());
+        responseChunk.setModel(resolveModelName(model));
         OpenAIDelta delta = new OpenAIDelta();
-        if (role != null) delta.setRole(role);
-        if (contentDelta != null) delta.setContent(contentDelta);
-        resp.getChoices().add(OpenAIChoice.delta(0, delta, finishReason));
-        return resp;
+        if (role != null) {
+            delta.setRole(role);
+        }
+        if (contentDelta != null) {
+            delta.setContent(contentDelta);
+        }
+        responseChunk.getChoices().add(OpenAIChoice.delta(0, delta, finishReason));
+        return responseChunk;
+    }
+
+    private static String resolveModelName(String model) {
+        return model == null ? "spring-agent" : model;
     }
 }

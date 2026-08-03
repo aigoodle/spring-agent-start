@@ -23,9 +23,6 @@ import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -39,12 +36,13 @@ import java.util.Set;
  */
 public class OpenAiCompatibleModelProvider extends AbstractModelProvider {
 
-    private static final Logger log = LoggerFactory.getLogger(OpenAiCompatibleModelProvider.class);
+    private static final Logger logger = LoggerFactory.getLogger(OpenAiCompatibleModelProvider.class);
 
     private final String name;
     private final String label;
     private final String defaultBaseUrl;
     private final List<PredefinedModel> predefinedModels;
+    private final RemoteModelCatalogMapper remoteModelCatalogMapper;
 
     public OpenAiCompatibleModelProvider(String name, String label, String defaultBaseUrl,
                                          List<PredefinedModel> predefinedModels) {
@@ -52,6 +50,7 @@ public class OpenAiCompatibleModelProvider extends AbstractModelProvider {
         this.label = label;
         this.defaultBaseUrl = defaultBaseUrl;
         this.predefinedModels = predefinedModels == null ? List.of() : List.copyOf(predefinedModels);
+        this.remoteModelCatalogMapper = new RemoteModelCatalogMapper(this.predefinedModels);
     }
 
     public OpenAiCompatibleModelProvider(String name, String label, String defaultBaseUrl) {
@@ -90,9 +89,7 @@ public class OpenAiCompatibleModelProvider extends AbstractModelProvider {
 
     private OpenAiApi buildApi(ModelEndpoint endpoint) {
         requireApiKey(endpoint);
-        String baseUrl = endpoint.propertyOrDefault("baseUrl",
-                endpoint.getBaseUrl() != null && !endpoint.getBaseUrl().isBlank()
-                        ? endpoint.getBaseUrl() : defaultBaseUrl);
+        String baseUrl = endpoint.resolveBaseUrl(defaultBaseUrl);
         // Boot 3.5's default RestClient picks up ReactorClientHttpRequestFactory
         // (reactor-netty is on the classpath via spring-boot-starter-webflux) and
         // that factory hard-codes {@code responseTimeout(Duration.ofSeconds(10))}
@@ -160,29 +157,17 @@ public class OpenAiCompatibleModelProvider extends AbstractModelProvider {
 
     /** Pull optional model parameters from the DB-stored config (temperature, etc.). */
     private void applyParameters(ModelEndpoint endpoint, OpenAiChatOptions.Builder options) {
-        Double temperature = doubleProperty(endpoint, "temperature");
+        Double temperature = endpoint.decimalProperty("temperature");
         if (temperature != null) {
             options.temperature(temperature);
         }
-        Double topP = doubleProperty(endpoint, "topP");
+        Double topP = endpoint.decimalProperty("topP");
         if (topP != null) {
             options.topP(topP);
         }
         Integer maxTokens = endpoint.intProperty("maxTokens");
         if (maxTokens != null) {
             options.maxTokens(maxTokens);
-        }
-    }
-
-    private static Double doubleProperty(ModelEndpoint endpoint, String key) {
-        String v = endpoint.property(key);
-        if (v == null || v.isBlank()) {
-            return null;
-        }
-        try {
-            return Double.valueOf(v);
-        } catch (NumberFormatException e) {
-            return null;
         }
     }
 
@@ -215,13 +200,11 @@ public class OpenAiCompatibleModelProvider extends AbstractModelProvider {
     @Override
     public List<RemoteModel> listRemoteModels(ModelEndpoint endpoint) {
         requireApiKey(endpoint);
-        String baseUrl = endpoint.propertyOrDefault("baseUrl",
-                endpoint.getBaseUrl() != null && !endpoint.getBaseUrl().isBlank()
-                        ? endpoint.getBaseUrl() : defaultBaseUrl);
+        String baseUrl = endpoint.resolveBaseUrl(defaultBaseUrl);
         if (baseUrl == null || baseUrl.isBlank()) {
             throw new IllegalStateException("Provider '" + name + "' has no base url");
         }
-        String url = resolveModelsUrl(baseUrl);
+        String modelsUrl = resolveModelsUrl(baseUrl, endpoint.property("modelsPath"));
 
         RestClient client = RestClient.builder()
                 .requestFactory(newRequestFactory())
@@ -231,60 +214,17 @@ public class OpenAiCompatibleModelProvider extends AbstractModelProvider {
         Map<String, Object> body;
         try {
             body = client.get()
-                    .uri(url)
+                    .uri(modelsUrl)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + endpoint.getApiKey())
                     .retrieve()
                     .body(new ParameterizedTypeReference<>() {});
-        } catch (Exception e) {
-            log.warn("Remote model listing failed for provider={} url={}: {}", name, url, e.getMessage());
-            throw new IllegalStateException("Failed to list models from " + url + ": " + e.getMessage(), e);
+        } catch (Exception exception) {
+            logger.warn("Remote model listing failed for provider={} url={}: {}",
+                    name, modelsUrl, exception.getMessage());
+            throw new IllegalStateException(
+                    "Failed to list models from " + modelsUrl + ": " + exception.getMessage(), exception);
         }
-        if (body == null) {
-            return List.of();
-        }
-
-        Object data = body.get("data");
-        List<Map<String, Object>> raw;
-        if (data instanceof List<?> list) {
-            raw = new ArrayList<>();
-            for (Object o : list) {
-                if (o instanceof Map<?, ?> m) {
-                    Map<String, Object> typed = new LinkedHashMap<>();
-                    for (Map.Entry<?, ?> e : m.entrySet()) {
-                        typed.put(String.valueOf(e.getKey()), e.getValue());
-                    }
-                    raw.add(typed);
-                }
-            }
-        } else {
-            return List.of();
-        }
-
-        Map<String, PredefinedModel> presetIndex = new HashMap<>();
-        for (PredefinedModel p : predefinedModels) {
-            presetIndex.put(p.getModel(), p);
-        }
-
-        List<RemoteModel> out = new ArrayList<>(raw.size());
-        for (Map<String, Object> item : raw) {
-            String id = str(item.get("id"));
-            if (id == null || id.isBlank()) {
-                continue;
-            }
-            String ownedBy = str(item.get("owned_by"));
-            PredefinedModel preset = presetIndex.get(id);
-            if (preset != null) {
-                RemoteModel rm = RemoteModel.fromPredefined(preset);
-                rm.setOwnedBy(ownedBy);
-                out.add(rm);
-            } else {
-                ModelType type = RemoteModel.inferModelType(id);
-                out.add(RemoteModel.builder()
-                        .modelId(id).label(id).modelType(type)
-                        .ownedBy(ownedBy).typeInferred(true).build());
-            }
-        }
-        return out;
+        return remoteModelCatalogMapper.fromResponse(body);
     }
 
     /**
@@ -293,8 +233,12 @@ public class OpenAiCompatibleModelProvider extends AbstractModelProvider {
      * listing at {@code {base}/models}, but some (Ollama, ZhipuAI's official SDK) use
      * different paths — support a {@code modelsPath} property for those edge cases.
      */
-    private static String resolveModelsUrl(String baseUrl) {
+    static String resolveModelsUrl(String baseUrl, String configuredPath) {
         String trimmed = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+        if (configuredPath != null && !configuredPath.isBlank()) {
+            String normalizedPath = configuredPath.startsWith("/") ? configuredPath : "/" + configuredPath;
+            return trimmed + normalizedPath;
+        }
         // OpenAI's official base is https://api.openai.com — no /v1 — normalise both.
         if (!trimmed.contains("/v")) {
             return trimmed + "/v1/models";
@@ -303,11 +247,11 @@ public class OpenAiCompatibleModelProvider extends AbstractModelProvider {
     }
 
     private static org.springframework.http.client.SimpleClientHttpRequestFactory newRequestFactory() {
-        org.springframework.http.client.SimpleClientHttpRequestFactory f =
+        org.springframework.http.client.SimpleClientHttpRequestFactory requestFactory =
                 new org.springframework.http.client.SimpleClientHttpRequestFactory();
-        f.setConnectTimeout((int) Duration.ofSeconds(10).toMillis());
-        f.setReadTimeout((int) Duration.ofSeconds(20).toMillis());
-        return f;
+        requestFactory.setConnectTimeout((int) Duration.ofSeconds(10).toMillis());
+        requestFactory.setReadTimeout((int) Duration.ofSeconds(20).toMillis());
+        return requestFactory;
     }
 
     /**
@@ -320,15 +264,12 @@ public class OpenAiCompatibleModelProvider extends AbstractModelProvider {
      */
     private static org.springframework.http.client.ClientHttpRequestFactory chatRequestFactory(
             ModelEndpoint endpoint) {
-        Integer configured = endpoint.intProperty("readTimeoutSeconds");
-        Duration readTimeout = Duration.ofSeconds(configured != null && configured > 0 ? configured : 300);
-        org.springframework.http.client.JdkClientHttpRequestFactory f =
+        Integer configuredSeconds = endpoint.intProperty("readTimeoutSeconds");
+        Duration readTimeout = Duration.ofSeconds(
+                configuredSeconds != null && configuredSeconds > 0 ? configuredSeconds : 300);
+        org.springframework.http.client.JdkClientHttpRequestFactory requestFactory =
                 new org.springframework.http.client.JdkClientHttpRequestFactory();
-        f.setReadTimeout(readTimeout);
-        return f;
-    }
-
-    private static String str(Object v) {
-        return v == null ? null : String.valueOf(v);
+        requestFactory.setReadTimeout(readTimeout);
+        return requestFactory;
     }
 }

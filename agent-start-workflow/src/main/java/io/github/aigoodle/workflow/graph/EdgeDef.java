@@ -15,15 +15,15 @@ public class EdgeDef {
     private String sourceHandle;
 
     public static EdgeDef of(String source, String target) {
-        EdgeDef e = new EdgeDef();
-        e.setSource(source);
-        e.setTarget(target);
-        return e;
+        EdgeDef edge = new EdgeDef();
+        edge.setSource(source);
+        edge.setTarget(target);
+        return edge;
     }
 
     public static EdgeDef of(String source, String target, String sourceHandle) {
-        EdgeDef e = of(source, target);
-        e.setSourceHandle(sourceHandle);
-        return e;
+        EdgeDef edge = of(source, target);
+        edge.setSourceHandle(sourceHandle);
+        return edge;
     }
 }

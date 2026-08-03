@@ -1,6 +1,7 @@
 package io.github.aigoodle.observability.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import io.github.aigoodle.observability.api.LlmCallMeasurement;
 import io.github.aigoodle.observability.api.LlmUsageStats;
 import io.github.aigoodle.observability.api.TokenUsage;
 import io.github.aigoodle.observability.config.ObservabilityProperties;
@@ -20,42 +21,46 @@ import java.util.Map;
  */
 public class LlmMetricsService {
 
-    private static final Logger log = LoggerFactory.getLogger(LlmMetricsService.class);
+    private static final Logger logger = LoggerFactory.getLogger(LlmMetricsService.class);
 
-    private final LlmCallRecordMapper mapper;
-    private final ObservabilityProperties properties;
+    private final LlmCallRecordMapper callRecordMapper;
+    private final ObservabilityProperties observabilityProperties;
+    private final LlmCallRecordFactory recordFactory;
+    private final LlmUsageAggregator usageAggregator = new LlmUsageAggregator();
 
-    public LlmMetricsService(LlmCallRecordMapper mapper, ObservabilityProperties properties) {
-        this.mapper = mapper;
-        this.properties = properties;
+    public LlmMetricsService(LlmCallRecordMapper callRecordMapper,
+                             ObservabilityProperties observabilityProperties) {
+        this.callRecordMapper = callRecordMapper;
+        this.observabilityProperties = observabilityProperties;
+        this.recordFactory = new LlmCallRecordFactory(this::costMicros);
     }
 
+    public LlmCallRecord record(LlmCallMeasurement measurement) {
+        LlmCallRecord record = recordFactory.create(measurement);
+        persistWithoutDisruptingModelCall(record);
+        return record;
+    }
+
+    /** @deprecated use {@link #record(LlmCallMeasurement)} to avoid positional parameter mistakes. */
+    @Deprecated
     public LlmCallRecord record(String provider, String model, String tenantId, TokenUsage usage,
                                 long latencyMs, boolean success, String errorType) {
-        TokenUsage u = usage == null ? TokenUsage.ZERO : usage;
-        LlmCallRecord rec = new LlmCallRecord();
-        rec.setTenantId(tenantId);
-        rec.setProvider(provider);
-        rec.setModel(model);
-        rec.setPromptTokens(u.promptTokens());
-        rec.setCompletionTokens(u.completionTokens());
-        rec.setTotalTokens(u.totalTokens());
-        rec.setCostMicros(costMicros(model, u));
-        rec.setLatencyMs(latencyMs);
-        rec.setSuccess(success);
-        rec.setErrorType(errorType);
+        return record(new LlmCallMeasurement(
+                provider, model, tenantId, usage, latencyMs, success, errorType));
+    }
+
+    private void persistWithoutDisruptingModelCall(LlmCallRecord record) {
         try {
-            mapper.insert(rec);
-        } catch (Exception e) {
+            callRecordMapper.insert(record);
+        } catch (RuntimeException persistenceFailure) {
             // metering must never break the actual model call
-            log.warn("Failed to persist LLM call record: {}", e.getMessage());
+            logger.warn("Failed to persist LLM call record: {}", persistenceFailure.getMessage());
         }
-        return rec;
     }
 
     /** Cost in micro-currency units, from the configured pricing table (0 if unknown). */
     public long costMicros(String model, TokenUsage usage) {
-        ObservabilityProperties.ModelPrice price = properties.getPricing().get(model);
+        ObservabilityProperties.ModelPrice price = observabilityProperties.getPricing().get(model);
         if (price == null || usage == null) {
             return 0L;
         }
@@ -66,54 +71,29 @@ public class LlmMetricsService {
 
     public List<LlmUsageStats> statsByModel(String tenantId) {
         Map<String, List<LlmCallRecord>> byModel = new LinkedHashMap<>();
-        for (LlmCallRecord r : load(tenantId)) {
-            byModel.computeIfAbsent(r.getModel(), k -> new ArrayList<>()).add(r);
+        for (LlmCallRecord record : load(tenantId)) {
+            byModel.computeIfAbsent(record.getModel(), ignored -> new ArrayList<>()).add(record);
         }
-        List<LlmUsageStats> stats = new ArrayList<>();
-        byModel.forEach((model, records) -> stats.add(aggregate(model, records)));
-        return stats;
+        return byModel.entrySet().stream()
+                .map(entry -> usageAggregator.aggregate(entry.getKey(), entry.getValue()))
+                .toList();
     }
 
     public LlmUsageStats total(String tenantId) {
-        return aggregate("*", load(tenantId));
+        return usageAggregator.aggregate("*", load(tenantId));
     }
 
     public List<LlmCallRecord> recentCalls(int limit) {
-        return mapper.selectList(new LambdaQueryWrapper<LlmCallRecord>()
+        return callRecordMapper.selectList(new LambdaQueryWrapper<LlmCallRecord>()
                 .orderByDesc(LlmCallRecord::getCreatedAt)
                 .last("limit " + Math.max(1, limit)));
     }
 
     private List<LlmCallRecord> load(String tenantId) {
-        LambdaQueryWrapper<LlmCallRecord> q = new LambdaQueryWrapper<>();
+        LambdaQueryWrapper<LlmCallRecord> query = new LambdaQueryWrapper<>();
         if (tenantId != null) {
-            q.eq(LlmCallRecord::getTenantId, tenantId);
+            query.eq(LlmCallRecord::getTenantId, tenantId);
         }
-        return mapper.selectList(q);
-    }
-
-    private LlmUsageStats aggregate(String model, List<LlmCallRecord> records) {
-        long calls = records.size();
-        long errors = 0, prompt = 0, completion = 0, total = 0, cost = 0, latency = 0;
-        for (LlmCallRecord r : records) {
-            if (!Boolean.TRUE.equals(r.getSuccess())) {
-                errors++;
-            }
-            prompt += nz(r.getPromptTokens());
-            completion += nz(r.getCompletionTokens());
-            total += nz(r.getTotalTokens());
-            cost += r.getCostMicros() == null ? 0 : r.getCostMicros();
-            latency += r.getLatencyMs() == null ? 0 : r.getLatencyMs();
-        }
-        return LlmUsageStats.builder()
-                .model(model).calls(calls).errors(errors)
-                .promptTokens(prompt).completionTokens(completion).totalTokens(total)
-                .costMicros(cost)
-                .avgLatencyMs(calls == 0 ? 0.0 : (double) latency / calls)
-                .build();
-    }
-
-    private static long nz(Integer i) {
-        return i == null ? 0 : i;
+        return callRecordMapper.selectList(query);
     }
 }

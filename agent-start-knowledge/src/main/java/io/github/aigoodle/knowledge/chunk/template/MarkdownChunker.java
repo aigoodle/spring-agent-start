@@ -3,6 +3,7 @@ package io.github.aigoodle.knowledge.chunk.template;
 import io.github.aigoodle.knowledge.chunk.Chunk;
 import io.github.aigoodle.knowledge.chunk.Chunker;
 import io.github.aigoodle.knowledge.chunk.RecursiveSplitter;
+import io.github.aigoodle.knowledge.chunk.TextSplitSettings;
 import io.github.aigoodle.knowledge.config.ProcessRule;
 import io.github.aigoodle.knowledge.enums.ChunkingTemplate;
 
@@ -29,61 +30,75 @@ public class MarkdownChunker implements Chunker {
         String[] lines = text.split("\n");
         String[] headingPath = new String[7]; // index = heading level 1..6
         StringBuilder body = new StringBuilder();
-        int[] pos = {0};
+        int nextPosition = 0;
 
         for (String line : lines) {
             int level = headingLevel(line);
             if (level > 0) {
-                flush(body, headingPath, rule, baseMetadata, chunks, pos);
-                for (int i = level + 1; i < headingPath.length; i++) {
-                    headingPath[i] = null;
+                nextPosition = appendSectionChunks(
+                        body, headingPath, rule, baseMetadata, chunks, nextPosition);
+                for (int deeperLevel = level + 1;
+                     deeperLevel < headingPath.length;
+                     deeperLevel++) {
+                    headingPath[deeperLevel] = null;
                 }
                 headingPath[level] = line.replaceFirst("^#{1,6}\\s*", "").strip();
             } else {
                 body.append(line).append("\n");
             }
         }
-        flush(body, headingPath, rule, baseMetadata, chunks, pos);
+        appendSectionChunks(body, headingPath, rule, baseMetadata, chunks, nextPosition);
         return chunks;
     }
 
-    private void flush(StringBuilder body, String[] headingPath, ProcessRule rule,
-                       Map<String, Object> baseMetadata, List<Chunk> chunks, int[] pos) {
-        String content = body.toString().strip();
-        body.setLength(0);
-        if (content.isBlank()) {
-            return;
+    private int appendSectionChunks(StringBuilder sectionBody,
+                                    String[] headingPath,
+                                    ProcessRule rule,
+                                    Map<String, Object> baseMetadata,
+                                    List<Chunk> chunks,
+                                    int nextPosition) {
+        String sectionContent = sectionBody.toString().strip();
+        sectionBody.setLength(0);
+        if (sectionContent.isBlank()) {
+            return nextPosition;
         }
-        String path = headingPath(headingPath);
-        String prefix = path.isEmpty() ? "" : path + "\n";
-        for (String piece : RecursiveSplitter.split(content, rule.getSeparators(),
-                rule.getChunkTokens(), rule.getOverlapTokens())) {
-            Map<String, Object> md = new HashMap<>(baseMetadata);
-            if (!path.isEmpty()) {
-                md.put("heading", path);
+        String heading = joinHeadingPath(headingPath);
+        String headingPrefix = heading.isEmpty() ? "" : heading + "\n";
+        TextSplitSettings splitSettings = new TextSplitSettings(
+                rule.getSeparators(), rule.getChunkTokens(), rule.getOverlapTokens());
+        for (String piece : RecursiveSplitter.split(sectionContent, splitSettings)) {
+            Map<String, Object> metadata = new HashMap<>(baseMetadata);
+            if (!heading.isEmpty()) {
+                metadata.put("heading", heading);
             }
-            chunks.add(new Chunk(prefix + piece, pos[0]++, md));
+            chunks.add(new Chunk(headingPrefix + piece, nextPosition++, metadata));
         }
+        return nextPosition;
     }
 
     private static int headingLevel(String line) {
-        int i = 0;
-        while (i < line.length() && line.charAt(i) == '#') {
-            i++;
+        int headingMarkerCount = 0;
+        while (headingMarkerCount < line.length()
+                && line.charAt(headingMarkerCount) == '#') {
+            headingMarkerCount++;
         }
-        return (i >= 1 && i <= 6 && i < line.length() && line.charAt(i) == ' ') ? i : 0;
+        boolean validHeading = headingMarkerCount >= 1
+                && headingMarkerCount <= 6
+                && headingMarkerCount < line.length()
+                && line.charAt(headingMarkerCount) == ' ';
+        return validHeading ? headingMarkerCount : 0;
     }
 
-    private static String headingPath(String[] headingPath) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 1; i < headingPath.length; i++) {
-            if (headingPath[i] != null && !headingPath[i].isBlank()) {
-                if (sb.length() > 0) {
-                    sb.append(" > ");
+    private static String joinHeadingPath(String[] headingPath) {
+        StringBuilder joinedPath = new StringBuilder();
+        for (int level = 1; level < headingPath.length; level++) {
+            if (headingPath[level] != null && !headingPath[level].isBlank()) {
+                if (joinedPath.length() > 0) {
+                    joinedPath.append(" > ");
                 }
-                sb.append(headingPath[i]);
+                joinedPath.append(headingPath[level]);
             }
         }
-        return sb.toString();
+        return joinedPath.toString();
     }
 }

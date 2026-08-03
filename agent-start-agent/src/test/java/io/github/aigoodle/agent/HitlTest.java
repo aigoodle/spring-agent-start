@@ -65,4 +65,12 @@ class HitlTest {
         assertEquals(AgentResponse.Status.COMPLETED, r.getStatus());
         assertTrue(r.getText().contains("4"), "approved calc should yield 4, was: " + r.getText());
     }
+
+    @Test
+    void missingApprovalDecisionFailsClosed() {
+        AgentResponse response = new ReActStrategy().run(context(toolCall -> null));
+
+        assertEquals(AgentResponse.Status.COMPLETED, response.getStatus());
+        assertTrue(response.getText().toLowerCase().contains("denied"));
+    }
 }

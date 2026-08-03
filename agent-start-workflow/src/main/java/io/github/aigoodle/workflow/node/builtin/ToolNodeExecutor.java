@@ -31,21 +31,23 @@ public class ToolNodeExecutor implements NodeExecutor {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    public NodeResult execute(NodeDef node, ExecutionContext ctx) {
+    public NodeResult execute(NodeDef node, ExecutionContext context) {
         String toolName = node.getString("tool");
         if (toolName == null) {
             return NodeResult.failure("Tool node requires a 'tool' name");
         }
-        Map<String, Object> args = new HashMap<>();
-        Object rawArgs = node.get("args");
-        if (rawArgs instanceof Map<?, ?> map) {
-            for (Map.Entry<String, Object> e : ((Map<String, Object>) map).entrySet()) {
-                Object v = e.getValue();
-                args.put(e.getKey(), v instanceof String s ? VariableResolver.render(s, ctx.getPool()) : v);
+        Map<String, Object> resolvedArguments = new HashMap<>();
+        Object configuredArguments = node.get("args");
+        if (configuredArguments instanceof Map<?, ?> arguments) {
+            for (Map.Entry<?, ?> argument : arguments.entrySet()) {
+                Object configuredValue = argument.getValue();
+                Object resolvedValue = configuredValue instanceof String template
+                        ? VariableResolver.render(template, context.getPool())
+                        : configuredValue;
+                resolvedArguments.put(String.valueOf(argument.getKey()), resolvedValue);
             }
         }
-        Object result = toolRegistry.execute(toolName, args);
-        return NodeResult.of(node.getString("outputKey", "result"), result);
+        Object toolResult = toolRegistry.execute(toolName, resolvedArguments);
+        return NodeResult.of(node.getString("outputKey", "result"), toolResult);
     }
 }

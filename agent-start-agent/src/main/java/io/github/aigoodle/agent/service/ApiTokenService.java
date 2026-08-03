@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.github.aigoodle.agent.entity.ApiTokenEntity;
 import io.github.aigoodle.agent.mapper.ApiTokenMapper;
 import io.github.aigoodle.common.exception.AgentException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
@@ -17,27 +19,32 @@ import java.util.List;
  */
 public class ApiTokenService {
 
-    private static final SecureRandom RNG = new SecureRandom();
+    private static final Logger logger = LoggerFactory.getLogger(ApiTokenService.class);
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final String TOKEN_PREFIX = "app-";
+    private static final String DEFAULT_TENANT_ID = "default";
+    private static final String DEFAULT_TOKEN_NAME = "default";
+    private static final String DEFAULT_TOKEN_TYPE = "app";
 
-    private final ApiTokenMapper mapper;
+    private final ApiTokenMapper tokenMapper;
 
-    public ApiTokenService(ApiTokenMapper mapper) {
-        this.mapper = mapper;
+    public ApiTokenService(ApiTokenMapper tokenMapper) {
+        this.tokenMapper = tokenMapper;
     }
 
     public List<ApiTokenEntity> listByApp(String appId) {
-        return mapper.selectList(new LambdaQueryWrapper<ApiTokenEntity>()
+        return tokenMapper.selectList(new LambdaQueryWrapper<ApiTokenEntity>()
                 .eq(ApiTokenEntity::getAppId, appId)
                 .orderByDesc(ApiTokenEntity::getCreatedAt));
     }
 
-    public ApiTokenEntity require(String id) {
-        ApiTokenEntity e = mapper.selectById(id);
-        if (e == null) {
-            throw new AgentException("api_token_not_found", "API token not found: " + id, null);
+    public ApiTokenEntity require(String tokenId) {
+        ApiTokenEntity apiToken = tokenMapper.selectById(tokenId);
+        if (apiToken == null) {
+            throw new AgentException("api_token_not_found",
+                    "API token not found: " + tokenId, null);
         }
-        return e;
+        return apiToken;
     }
 
     /**
@@ -46,8 +53,10 @@ public class ApiTokenService {
      * Backed by {@code idx_api_token_value} so lookup is O(log n).
      */
     public ApiTokenEntity findByToken(String token) {
-        if (token == null || token.isBlank()) return null;
-        return mapper.selectOne(new LambdaQueryWrapper<ApiTokenEntity>()
+        if (token == null || token.isBlank()) {
+            return null;
+        }
+        return tokenMapper.selectOne(new LambdaQueryWrapper<ApiTokenEntity>()
                 .eq(ApiTokenEntity::getToken, token.trim())
                 .last("LIMIT 1"));
     }
@@ -58,45 +67,54 @@ public class ApiTokenService {
      * Deliberately non-transactional and swallows failures — a hiccup here must
      * not fail the enclosing chat call.
      */
-    public void touchLastUsed(String id) {
+    public void touchLastUsed(String tokenId) {
         try {
-            ApiTokenEntity patch = new ApiTokenEntity();
-            patch.setId(id);
-            patch.setLastUsedAt(LocalDateTime.now());
-            mapper.updateById(patch);
-        } catch (Exception ignore) {
-            // best-effort — chat flow continues even if the bump fails
+            ApiTokenEntity usageUpdate = new ApiTokenEntity();
+            usageUpdate.setId(tokenId);
+            usageUpdate.setLastUsedAt(LocalDateTime.now());
+            tokenMapper.updateById(usageUpdate);
+        } catch (RuntimeException updateFailure) {
+            // Best effort: chat continues even when usage metadata cannot be updated.
+            logger.debug("Unable to update last-used time for API token {}: {}",
+                    tokenId, updateFailure.getMessage());
         }
     }
 
     @Transactional
     public ApiTokenEntity create(String appId, String tenantId, String name, String type) {
-        ApiTokenEntity e = new ApiTokenEntity();
-        e.setAppId(appId);
-        e.setTenantId(tenantId == null ? "default" : tenantId);
-        e.setName(name == null || name.isBlank() ? "default" : name);
-        e.setType(type == null || type.isBlank() ? "app" : type);
-        e.setToken(generate());
-        mapper.insert(e);
-        return e;
+        ApiTokenEntity apiToken = new ApiTokenEntity();
+        apiToken.setAppId(appId);
+        apiToken.setTenantId(valueOrDefault(tenantId, DEFAULT_TENANT_ID));
+        apiToken.setName(valueOrDefault(name, DEFAULT_TOKEN_NAME));
+        apiToken.setType(valueOrDefault(type, DEFAULT_TOKEN_TYPE));
+        apiToken.setToken(generateToken());
+        tokenMapper.insert(apiToken);
+        return apiToken;
     }
 
     @Transactional
-    public ApiTokenEntity rename(String id, String name) {
-        ApiTokenEntity e = require(id);
-        if (name != null) e.setName(name);
-        mapper.updateById(e);
-        return e;
+    public ApiTokenEntity rename(String tokenId, String name) {
+        ApiTokenEntity apiToken = require(tokenId);
+        if (name != null) {
+            apiToken.setName(name);
+        }
+        tokenMapper.updateById(apiToken);
+        return apiToken;
     }
 
     @Transactional
-    public void delete(String id) {
-        mapper.deleteById(id);
+    public void delete(String tokenId) {
+        tokenMapper.deleteById(tokenId);
     }
 
-    private static String generate() {
-        byte[] bytes = new byte[24];
-        RNG.nextBytes(bytes);
-        return TOKEN_PREFIX + Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    private static String generateToken() {
+        byte[] randomBytes = new byte[24];
+        SECURE_RANDOM.nextBytes(randomBytes);
+        return TOKEN_PREFIX
+                + Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
+    }
+
+    private static String valueOrDefault(String value, String defaultValue) {
+        return value == null || value.isBlank() ? defaultValue : value;
     }
 }

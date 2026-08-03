@@ -11,7 +11,6 @@ import io.github.aigoodle.workflow.node.NodeExecutor;
 import io.github.aigoodle.workflow.node.NodeResult;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -47,49 +46,55 @@ public class IterationNodeExecutor implements NodeExecutor {
     }
 
     @Override
-    public NodeResult execute(NodeDef node, ExecutionContext ctx) {
-        String inputRef = node.getString("inputList");
-        Object listObj = inputRef == null ? null : ctx.getPool().get(inputRef);
-        if (!(listObj instanceof List<?> list)) {
+    public NodeResult execute(NodeDef node, ExecutionContext context) {
+        Object inputValue = resolveInputValue(node, context);
+        if (!(inputValue instanceof List<?> items)) {
             return NodeResult.failure("Iteration 'inputList' must resolve to a list");
         }
-        Object graphObj = node.get("subGraph");
-        WorkflowGraph subGraph = parseSubGraph(graphObj);
+
+        WorkflowGraph subGraph = parseSubGraph(node.get("subGraph"));
         if (subGraph == null || subGraph.getNodes().isEmpty()) {
             return NodeResult.failure("Iteration requires a non-empty 'subGraph'");
         }
-        String itemKey = node.getString("itemKey", "item");
-        String indexKey = node.getString("indexKey", "index");
-        boolean continueOnError = "true".equalsIgnoreCase(node.getString("continueOnError", "false"));
 
-        WorkflowEngine engine = engineSupplier.get();
-        List<Object> aggregated = new ArrayList<>(list.size());
-        for (int i = 0; i < list.size(); i++) {
-            Map<String, Object> inputs = new HashMap<>();
-            inputs.put(itemKey, list.get(i));
-            inputs.put(indexKey, i);
-            WorkflowRunResult r = engine.run(subGraph, inputs, ctx.getConversationId());
-            if (r.isSuccess()) {
-                aggregated.add(r.getOutputs());
-            } else if (continueOnError) {
-                aggregated.add(null);
-            } else {
-                return NodeResult.failure("Iteration failed at index " + i + ": " + r.getError());
+        IterationConfiguration configuration = IterationConfiguration.from(node);
+        WorkflowEngine workflowEngine = engineSupplier.get();
+        List<Object> collectedOutputs = new ArrayList<>(items.size());
+        for (int index = 0; index < items.size(); index++) {
+            Map<String, Object> iterationInputs = configuration.inputsFor(items.get(index), index);
+            WorkflowRunResult iterationResult = workflowEngine.run(
+                    subGraph, iterationInputs, context.getConversationId());
+            if (iterationResult.isSuccess()) {
+                collectedOutputs.add(iterationResult.getOutputs());
+                continue;
             }
+            if (configuration.continueOnError()) {
+                collectedOutputs.add(null);
+                continue;
+            }
+            return NodeResult.failure(
+                    "Iteration failed at index " + index + ": " + iterationResult.getError());
         }
-        return NodeResult.of(node.getString("outputKey", "output"), aggregated);
+        return NodeResult.of(configuration.outputVariable(), collectedOutputs);
     }
 
-    @SuppressWarnings("unchecked")
-    private static WorkflowGraph parseSubGraph(Object raw) {
-        if (raw == null) {
+    private static Object resolveInputValue(NodeDef node, ExecutionContext context) {
+        String inputReference = node.getString("inputList");
+        return inputReference == null ? null : context.getPool().get(inputReference);
+    }
+
+    private static WorkflowGraph parseSubGraph(Object configuredGraph) {
+        if (configuredGraph == null) {
             return null;
         }
-        if (raw instanceof WorkflowGraph g) {
-            return g;
+        if (configuredGraph instanceof WorkflowGraph graph) {
+            return graph;
         }
         // Config maps come from JSON, so round-trip through JsonUtils to bind the shape.
-        String json = raw instanceof String s ? s : JsonUtils.toJson(raw);
-        return JsonUtils.parse(json, WorkflowGraph.class);
+        String graphJson = configuredGraph instanceof String json
+                ? json
+                : JsonUtils.toJson(configuredGraph);
+        return JsonUtils.parse(graphJson, WorkflowGraph.class);
     }
+
 }

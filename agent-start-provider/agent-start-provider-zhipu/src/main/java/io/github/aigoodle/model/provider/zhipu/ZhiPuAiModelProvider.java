@@ -76,11 +76,11 @@ public class ZhiPuAiModelProvider extends AbstractModelProvider {
         requireApiKey(endpoint);
         ZhiPuAiApi api = buildApi(endpoint);
         ZhiPuAiChatOptions.Builder options = ZhiPuAiChatOptions.builder().model(endpoint.getModelName());
-        Double temperature = doubleProperty(endpoint, "temperature");
+        Double temperature = endpoint.decimalProperty("temperature");
         if (temperature != null) {
             options.temperature(temperature);
         }
-        Double topP = doubleProperty(endpoint, "topP");
+        Double topP = endpoint.decimalProperty("topP");
         if (topP != null) {
             options.topP(topP);
         }
@@ -105,9 +105,7 @@ public class ZhiPuAiModelProvider extends AbstractModelProvider {
     }
 
     private static ZhiPuAiApi buildApi(ModelEndpoint endpoint) {
-        String baseUrl = endpoint.propertyOrDefault("baseUrl",
-                endpoint.getBaseUrl() != null && !endpoint.getBaseUrl().isBlank()
-                        ? endpoint.getBaseUrl() : DEFAULT_BASE_URL);
+        String baseUrl = endpoint.resolveBaseUrl(DEFAULT_BASE_URL);
         ZhiPuAiApi.Builder builder = ZhiPuAiApi.builder().apiKey(endpoint.getApiKey());
         if (baseUrl != null && !baseUrl.isBlank()) {
             builder.baseUrl(baseUrl);
@@ -125,15 +123,4 @@ public class ZhiPuAiModelProvider extends AbstractModelProvider {
                 .dimensions(dim).build();
     }
 
-    private static Double doubleProperty(ModelEndpoint endpoint, String key) {
-        String v = endpoint.property(key);
-        if (v == null || v.isBlank()) {
-            return null;
-        }
-        try {
-            return Double.valueOf(v);
-        } catch (NumberFormatException e) {
-            return null;
-        }
-    }
 }

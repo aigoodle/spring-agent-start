@@ -3,8 +3,8 @@ package io.github.aigoodle.knowledge.rerank;
 import io.github.aigoodle.knowledge.retrieve.RetrievedSegment;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Rescores candidates by blending vector score, keyword score and content-length prior.
@@ -19,24 +19,21 @@ public class WeightedReranker implements Reranker {
 
     public static final String NAME = "weighted";
 
-    private final double vectorWeight;
-    private final double keywordWeight;
-    private final double lengthWeight;
-    private final int idealLength;
+    private final WeightedRerankerSettings settings;
 
     public WeightedReranker() {
-        this(0.6, 0.3, 0.1, 400);
+        this(WeightedRerankerSettings.defaults());
     }
 
+    /** @deprecated Use {@link #WeightedReranker(WeightedRerankerSettings)}. */
+    @Deprecated(forRemoval = false)
     public WeightedReranker(double vectorWeight, double keywordWeight, double lengthWeight, int idealLength) {
-        double sum = vectorWeight + keywordWeight + lengthWeight;
-        if (sum <= 0) {
-            sum = 1;
-        }
-        this.vectorWeight = vectorWeight / sum;
-        this.keywordWeight = keywordWeight / sum;
-        this.lengthWeight = lengthWeight / sum;
-        this.idealLength = Math.max(50, idealLength);
+        this(new WeightedRerankerSettings(
+                vectorWeight, keywordWeight, lengthWeight, idealLength));
+    }
+
+    public WeightedReranker(WeightedRerankerSettings settings) {
+        this.settings = Objects.requireNonNull(settings, "settings must not be null");
     }
 
     @Override
@@ -49,31 +46,27 @@ public class WeightedReranker implements Reranker {
         if (candidates == null || candidates.isEmpty()) {
             return List.of();
         }
-        List<RetrievedSegment> rescored = new ArrayList<>(candidates.size());
-        for (RetrievedSegment s : candidates) {
-            double lengthScore = lengthPrior(s.getContent());
-            double fused = vectorWeight * s.getVectorScore()
-                    + keywordWeight * s.getKeywordScore()
-                    + lengthWeight * lengthScore;
-            s.setScore(fused);
-            rescored.add(s);
+        List<RetrievedSegment> rescoredCandidates = new ArrayList<>(candidates.size());
+        for (RetrievedSegment candidate : candidates) {
+            double contentLengthScore = contentLengthPrior(candidate.getContent());
+            double combinedScore = settings.vectorWeight() * candidate.getVectorScore()
+                    + settings.keywordWeight() * candidate.getKeywordScore()
+                    + settings.lengthWeight() * contentLengthScore;
+            candidate.setScore(combinedScore);
+            rescoredCandidates.add(candidate);
         }
-        rescored.sort(Comparator.comparingDouble(RetrievedSegment::getScore).reversed());
-        if (topN > 0 && rescored.size() > topN) {
-            return rescored.subList(0, topN);
-        }
-        return rescored;
+        return RankedSegments.highestScoring(rescoredCandidates, topN);
     }
 
-    /** Bell curve peaking at {@link #idealLength}. Very short or very long chunks lose score. */
-    private double lengthPrior(String content) {
-        int len = content == null ? 0 : content.length();
-        if (len == 0) {
+    /** Bell curve peaking at the ideal content length. */
+    private double contentLengthPrior(String content) {
+        int contentLength = content == null ? 0 : content.length();
+        if (contentLength == 0) {
             return 0.0;
         }
-        double ratio = (double) len / idealLength;
+        double lengthRatio = (double) contentLength / settings.idealContentLength();
         // Gaussian-like drop-off centred at 1.0.
-        double x = Math.log(ratio);
-        return Math.exp(-0.5 * x * x);
+        double logarithmicDistance = Math.log(lengthRatio);
+        return Math.exp(-0.5 * logarithmicDistance * logarithmicDistance);
     }
 }

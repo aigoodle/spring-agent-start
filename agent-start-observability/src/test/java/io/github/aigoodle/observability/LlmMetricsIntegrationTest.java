@@ -6,6 +6,7 @@ import io.github.aigoodle.model.service.ModelRegistration;
 import io.github.aigoodle.model.service.ModelService;
 import io.github.aigoodle.observability.api.LlmUsageStats;
 import io.github.aigoodle.observability.api.TokenUsage;
+import io.github.aigoodle.observability.api.LlmCallMeasurement;
 import io.github.aigoodle.observability.entity.LlmCallRecord;
 import io.github.aigoodle.observability.service.LlmMetricsService;
 import org.junit.jupiter.api.Test;
@@ -50,8 +51,10 @@ class LlmMetricsIntegrationTest {
 
     @Test
     void recordsAggregateByTenant() {
-        metrics.record("openai", "gpt-4o", "tenantA", new TokenUsage(100, 50, 150), 200, true, null);
-        metrics.record("openai", "gpt-4o", "tenantA", new TokenUsage(100, 50, 150), 400, false, "Timeout");
+        metrics.record(LlmCallMeasurement.successful(
+                "openai", "gpt-4o", "tenantA", new TokenUsage(100, 50, 150), 200));
+        metrics.record(new LlmCallMeasurement(
+                "openai", "gpt-4o", "tenantA", new TokenUsage(100, 50, 150), 400, false, "Timeout"));
 
         LlmUsageStats total = metrics.total("tenantA");
         assertEquals(2, total.getCalls());
@@ -64,7 +67,8 @@ class LlmMetricsIntegrationTest {
 
     @Test
     void directRecordAggregates() {
-        metrics.record("ollama", "llama3.2", "tenantB", TokenUsage.of(10, 5, null), 50, true, null);
+        metrics.record(LlmCallMeasurement.successful(
+                "ollama", "llama3.2", "tenantB", TokenUsage.of(10, 5, null), 50));
         assertEquals(15, metrics.total("tenantB").getTotalTokens());
     }
 }

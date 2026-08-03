@@ -19,9 +19,9 @@ public class TemplateTransformNodeExecutor implements NodeExecutor {
     }
 
     @Override
-    public NodeResult execute(NodeDef node, ExecutionContext ctx) {
+    public NodeResult execute(NodeDef node, ExecutionContext context) {
         String template = node.getString("template", "");
-        String rendered = VariableResolver.render(template, ctx.getPool());
-        return NodeResult.of(node.getString("outputKey", "output"), rendered);
+        String renderedText = VariableResolver.render(template, context.getPool());
+        return NodeResult.of(node.getString("outputKey", "output"), renderedText);
     }
 }

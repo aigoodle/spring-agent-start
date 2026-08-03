@@ -18,7 +18,7 @@ public class CreateAgentRequest {
     private String name;
     /** One-line summary shown on the agent card. */
     private String description;
-    /** Emoji ({@code "🤖"}) or icon key. */
+    /** Emoji or icon key shown on the application card. */
     private String icon;
     /** Hex background tint, e.g. {@code "#EEF2FF"}. */
     private String iconBackground;
@@ -55,7 +55,7 @@ public class CreateAgentRequest {
     @Builder.Default
     private boolean published = true;
 
-    // ------------------------------------------------------ Dify parity extras
+    // Dify-compatible application metadata
     /** {@code emoji} / {@code image}. */
     private String iconType;
     /** Reuse the app icon as the avatar for assistant replies. */
@@ -78,10 +78,9 @@ public class CreateAgentRequest {
     /** Retrieval override config for attached knowledge bases (opaque JSON). */
     private Object retrievalConfig;
     /**
-     * Per-app model runtime overrides — the "模型设置" drawer payload
-     * (temperature, topP, maxTokens, presencePenalty, frequencyPenalty, stop,
-     * thinkingMode). Applied per-request by {@code AgentChatOptionsFactory};
-     * unknown keys are stored verbatim and ignored at runtime.
+     * Per-application overrides from the model-settings drawer, including
+     * temperature, topP, maxTokens, penalties, stop sequences and thinking mode.
+     * Unknown keys remain persisted but are ignored by the runtime.
      */
     private Object modelSettings;
 }

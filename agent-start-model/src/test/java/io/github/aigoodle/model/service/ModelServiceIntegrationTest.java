@@ -2,6 +2,7 @@ package io.github.aigoodle.model.service;
 
 import io.github.aigoodle.model.ModelTestApplication;
 import io.github.aigoodle.model.entity.ModelEntity;
+import io.github.aigoodle.model.entity.ProviderCredentialEntity;
 import io.github.aigoodle.model.enums.ModelType;
 import io.github.aigoodle.model.provider.ModelEndpoint;
 import org.junit.jupiter.api.Test;
@@ -100,12 +101,14 @@ class ModelServiceIntegrationTest {
 
     @Test
     void sharedProviderCredentialIsInherited() {
-        var cred = credentialService.save("shared", "openai", "team-key",
-                Map.of("apiKey", "sk-shared", "baseUrl", "https://shared.example.com"));
+        ProviderCredentialEntity credential = credentialService.save(
+                new ProviderCredentialRegistration(
+                        "shared", "openai", "team-key",
+                        Map.of("apiKey", "sk-shared", "baseUrl", "https://shared.example.com")));
 
         ModelEntity model = modelService.register(ModelRegistration.builder()
                 .tenantId("shared").providerName("openai").modelName("gpt-4o")
-                .modelType(ModelType.LLM).credentialId(cred.getId()).build());
+                .modelType(ModelType.LLM).credentialId(credential.getId()).build());
 
         ModelEndpoint endpoint = modelService.resolveEndpoint(model.getId());
         assertEquals("sk-shared", endpoint.getApiKey());

@@ -9,15 +9,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * The resolved, runnable configuration of an agent (decoupled from its persistence).
- */
+/** Resolved runtime configuration, independent of its persistence representation. */
 @Data
 @Builder
 public class AgentDefinition {
 
+    private static final int DEFAULT_MAX_ITERATIONS = 6;
+    private static final int DEFAULT_MEMORY_WINDOW = 20;
+
     private String id;
-    /** Owning tenant — used to resolve {@link #modelProvider}+{@link #modelName} lazily. */
+    /** Owning tenant used when resolving the configured provider and model. */
     private String tenantId;
     private String name;
 
@@ -46,21 +47,52 @@ public class AgentDefinition {
     private List<String> delegateAgentIds = List.of();
 
     @Builder.Default
-    private int maxIterations = 6;
+    private int maxIterations = DEFAULT_MAX_ITERATIONS;
 
     @Builder.Default
     private boolean memoryEnabled = true;
 
     @Builder.Default
-    private int memoryWindow = 20;
+    private int memoryWindow = DEFAULT_MEMORY_WINDOW;
 
     /**
-     * Per-app model runtime overrides — decoded from
-     * {@code apps.model_settings_json}. Recognised keys:
+     * Per-application runtime overrides decoded from the model configuration.
+     * Recognised keys:
      * {@code temperature, topP, maxTokens, presencePenalty, frequencyPenalty,
      * stop, thinkingMode}. Vendor-specific translation of {@code thinkingMode}
      * happens in {@code AgentChatOptionsFactory}, keyed by {@link #modelProvider}.
      */
     @Builder.Default
     private Map<String, Object> modelSettings = new HashMap<>();
+
+    /** Returns the default reasoning strategy when a programmatic caller supplied null. */
+    public AgentStrategyType getStrategy() {
+        return strategy == null ? AgentStrategyType.REACT : strategy;
+    }
+
+    public List<String> getToolNames() {
+        return toolNames == null ? List.of() : toolNames;
+    }
+
+    public Set<String> getApprovalRequiredTools() {
+        return approvalRequiredTools == null ? Set.of() : approvalRequiredTools;
+    }
+
+    public List<String> getDelegateAgentIds() {
+        return delegateAgentIds == null ? List.of() : delegateAgentIds;
+    }
+
+    /** Guards strategy loops against invalid programmatic configuration. */
+    public int getMaxIterations() {
+        return maxIterations > 0 ? maxIterations : DEFAULT_MAX_ITERATIONS;
+    }
+
+    /** Guards memory implementations against invalid recall limits. */
+    public int getMemoryWindow() {
+        return memoryWindow > 0 ? memoryWindow : DEFAULT_MEMORY_WINDOW;
+    }
+
+    public Map<String, Object> getModelSettings() {
+        return modelSettings == null ? Map.of() : modelSettings;
+    }
 }

@@ -3,6 +3,7 @@ package io.github.aigoodle.knowledge.chunk.template;
 import io.github.aigoodle.knowledge.chunk.Chunk;
 import io.github.aigoodle.knowledge.chunk.Chunker;
 import io.github.aigoodle.knowledge.chunk.RecursiveSplitter;
+import io.github.aigoodle.knowledge.chunk.TextSplitSettings;
 import io.github.aigoodle.knowledge.config.ProcessRule;
 import io.github.aigoodle.knowledge.enums.ChunkingTemplate;
 
@@ -26,27 +27,30 @@ public class ParentChildChunker implements Chunker {
 
     @Override
     public List<Chunk> chunk(String text, ProcessRule rule, Map<String, Object> baseMetadata) {
-        List<String> parents = rule.getParentMode() == ProcessRule.ParentMode.FULL_DOC
+        TextSplitSettings parentSettings = TextSplitSettings.withoutOverlap(
+                rule.getSeparators(), rule.getParentChunkTokens());
+        List<String> parentChunks = rule.getParentMode() == ProcessRule.ParentMode.FULL_DOC
                 ? List.of(text)
-                : RecursiveSplitter.split(text, rule.getSeparators(), rule.getParentChunkTokens(), 0);
-        List<Chunk> children = new ArrayList<>();
-        int pos = 0;
+                : RecursiveSplitter.split(text, parentSettings);
+        TextSplitSettings childSettings = new TextSplitSettings(
+                rule.getSeparators(), rule.getChunkTokens(), rule.getOverlapTokens());
+        List<Chunk> childChunks = new ArrayList<>();
+        int position = 0;
         int parentIndex = 0;
-        for (String parent : parents) {
-            List<String> kids = RecursiveSplitter.split(parent, rule.getSeparators(),
-                    rule.getChunkTokens(), rule.getOverlapTokens());
-            for (String kid : kids) {
-                if (kid.isBlank()) {
+        for (String parentChunk : parentChunks) {
+            List<String> childPieces = RecursiveSplitter.split(parentChunk, childSettings);
+            for (String childPiece : childPieces) {
+                if (childPiece.isBlank()) {
                     continue;
                 }
-                Map<String, Object> md = new HashMap<>(baseMetadata);
-                md.put("parentIndex", parentIndex);
-                Chunk child = new Chunk(kid, pos++, md);
-                child.setParentContent(parent);
-                children.add(child);
+                Map<String, Object> metadata = new HashMap<>(baseMetadata);
+                metadata.put("parentIndex", parentIndex);
+                Chunk childChunk = new Chunk(childPiece, position++, metadata);
+                childChunk.setParentContent(parentChunk);
+                childChunks.add(childChunk);
             }
             parentIndex++;
         }
-        return children;
+        return childChunks;
     }
 }

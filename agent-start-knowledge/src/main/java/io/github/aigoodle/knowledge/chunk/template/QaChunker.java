@@ -19,10 +19,12 @@ import java.util.regex.Pattern;
  */
 public class QaChunker implements Chunker {
 
-    private static final Pattern Q = Pattern.compile(
-            "^\\s*(?:Q[:：.\\d]|问[:：]|问题[:：]|Question[:：])\\s*", Pattern.CASE_INSENSITIVE);
-    private static final Pattern A = Pattern.compile(
-            "^\\s*(?:A[:：.]|答[:：]|答案[:：]|Answer[:：])\\s*", Pattern.CASE_INSENSITIVE);
+    private static final Pattern QUESTION_MARKER = Pattern.compile(
+            "^\\s*(?:Q\\d*|Question|问|问题)\\s*[:：]\\s*",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    private static final Pattern ANSWER_MARKER = Pattern.compile(
+            "^\\s*(?:A|Answer|答|答案)\\s*[:：]\\s*",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
     private final NaiveChunker fallback = new NaiveChunker();
 
@@ -38,47 +40,61 @@ public class QaChunker implements Chunker {
         StringBuilder question = new StringBuilder();
         StringBuilder answer = new StringBuilder();
         boolean inAnswer = false;
-        int pos = 0;
-        boolean foundAny = false;
+        int nextPosition = 0;
+        boolean questionMarkerFound = false;
 
         for (String line : lines) {
-            Matcher qm = Q.matcher(line);
-            Matcher am = A.matcher(line);
-            if (qm.find()) {
-                pos = emit(chunks, question, answer, baseMetadata, pos);
+            Matcher questionMarker = QUESTION_MARKER.matcher(line);
+            Matcher answerMarker = ANSWER_MARKER.matcher(line);
+            if (questionMarker.find()) {
+                nextPosition = appendQuestionAnswerPair(
+                        chunks, question, answer, baseMetadata, nextPosition);
                 question.setLength(0);
                 answer.setLength(0);
-                question.append(line.substring(qm.end()).strip());
+                question.append(line.substring(questionMarker.end()).strip());
                 inAnswer = false;
-                foundAny = true;
-            } else if (am.find()) {
-                answer.append(line.substring(am.end()).strip());
+                questionMarkerFound = true;
+            } else if (answerMarker.find()) {
+                answer.append(line.substring(answerMarker.end()).strip());
                 inAnswer = true;
             } else if (!line.isBlank()) {
-                (inAnswer ? answer : question).append(inAnswer ? " " : " ").append(line.strip());
+                StringBuilder activePart = inAnswer ? answer : question;
+                if (activePart.length() > 0) {
+                    activePart.append(' ');
+                }
+                activePart.append(line.strip());
             }
         }
-        emit(chunks, question, answer, baseMetadata, pos);
+        appendQuestionAnswerPair(chunks, question, answer, baseMetadata, nextPosition);
 
-        if (!foundAny) {
+        if (!questionMarkerFound) {
             return fallback.chunk(text, rule, baseMetadata);
         }
         return chunks;
     }
 
-    private int emit(List<Chunk> chunks, StringBuilder question, StringBuilder answer,
-                     Map<String, Object> baseMetadata, int pos) {
-        String q = question.toString().strip();
-        String a = answer.toString().strip();
-        if (q.isEmpty() && a.isEmpty()) {
-            return pos;
+    private int appendQuestionAnswerPair(List<Chunk> chunks,
+                                         StringBuilder questionBuffer,
+                                         StringBuilder answerBuffer,
+                                         Map<String, Object> baseMetadata,
+                                         int position) {
+        String question = questionBuffer.toString().strip();
+        String answer = answerBuffer.toString().strip();
+        if (question.isEmpty() && answer.isEmpty()) {
+            return position;
         }
-        Map<String, Object> md = new HashMap<>(baseMetadata);
-        if (!q.isEmpty()) {
-            md.put("question", q);
+        Map<String, Object> metadata = new HashMap<>(baseMetadata);
+        if (!question.isEmpty()) {
+            metadata.put("question", question);
         }
-        String content = q.isEmpty() ? a : (a.isEmpty() ? q : "Q: " + q + "\nA: " + a);
-        chunks.add(new Chunk(content, pos, md));
-        return pos + 1;
+        chunks.add(new Chunk(formatPair(question, answer), position, metadata));
+        return position + 1;
+    }
+
+    private static String formatPair(String question, String answer) {
+        if (question.isEmpty()) {
+            return answer;
+        }
+        return answer.isEmpty() ? question : "Q: " + question + "\nA: " + answer;
     }
 }

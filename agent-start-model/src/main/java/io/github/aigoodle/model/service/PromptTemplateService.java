@@ -8,8 +8,6 @@ import io.github.aigoodle.model.mapper.PromptTemplateMapper;
 
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * CRUD for reusable prompt templates plus a lightweight {@link #render(String, Map)}
@@ -18,37 +16,51 @@ import java.util.regex.Pattern;
  */
 public class PromptTemplateService {
 
-    private static final Pattern REF = Pattern.compile("\\{\\{#\\s*([a-zA-Z0-9_\\-.]+)\\s*#}}");
+    private static final String DEFAULT_TENANT = "default";
 
     private final PromptTemplateMapper mapper;
+    private final PromptTemplateRenderer renderer = new PromptTemplateRenderer();
 
     public PromptTemplateService(PromptTemplateMapper mapper) {
         this.mapper = mapper;
     }
 
-    public PromptTemplateEntity create(String tenantId, String name, String category,
-                                        String description, String content, List<String> tags) {
-        PromptTemplateEntity e = new PromptTemplateEntity();
-        e.setTenantId(tenantId == null || tenantId.isBlank() ? "default" : tenantId);
-        e.setName(name);
-        e.setCategory(category);
-        e.setDescription(description);
-        e.setContent(content);
-        e.setTagsJson(tags == null ? "[]" : JsonUtils.toJson(tags));
-        mapper.insert(e);
-        return e;
+    public PromptTemplateEntity create(PromptTemplateDraft draft) {
+        PromptTemplateEntity template = new PromptTemplateEntity();
+        template.setTenantId(defaultTenant(draft.tenantId()));
+        template.setName(draft.name());
+        template.setCategory(draft.category());
+        template.setDescription(draft.description());
+        template.setContent(draft.content());
+        template.setTagsJson(tagsJson(draft.tags()));
+        mapper.insert(template);
+        return template;
     }
 
+    /** @deprecated use {@link #create(PromptTemplateDraft)} to avoid positional arguments. */
+    @Deprecated
+    public PromptTemplateEntity create(String tenantId, String name, String category,
+                                        String description, String content, List<String> tags) {
+        return create(new PromptTemplateDraft(
+                tenantId, name, category, description, content, tags));
+    }
+
+    public PromptTemplateEntity update(String id, PromptTemplatePatch patch) {
+        PromptTemplateEntity template = require(id);
+        if (patch.name() != null) template.setName(patch.name());
+        if (patch.category() != null) template.setCategory(patch.category());
+        if (patch.description() != null) template.setDescription(patch.description());
+        if (patch.content() != null) template.setContent(patch.content());
+        if (patch.tags() != null) template.setTagsJson(JsonUtils.toJson(patch.tags()));
+        mapper.updateById(template);
+        return template;
+    }
+
+    /** @deprecated use {@link #update(String, PromptTemplatePatch)}. */
+    @Deprecated
     public PromptTemplateEntity update(String id, String name, String category,
                                         String description, String content, List<String> tags) {
-        PromptTemplateEntity e = require(id);
-        if (name != null) e.setName(name);
-        if (category != null) e.setCategory(category);
-        if (description != null) e.setDescription(description);
-        if (content != null) e.setContent(content);
-        if (tags != null) e.setTagsJson(JsonUtils.toJson(tags));
-        mapper.updateById(e);
-        return e;
+        return update(id, new PromptTemplatePatch(name, category, description, content, tags));
     }
 
     public void delete(String id) {
@@ -56,11 +68,11 @@ public class PromptTemplateService {
     }
 
     public PromptTemplateEntity require(String id) {
-        PromptTemplateEntity e = mapper.selectById(id);
-        if (e == null) {
+        PromptTemplateEntity template = mapper.selectById(id);
+        if (template == null) {
             throw new AgentException("prompt_template_not_found", "Prompt template not found: " + id, null);
         }
-        return e;
+        return template;
     }
 
     public PromptTemplateEntity get(String id) {
@@ -68,18 +80,18 @@ public class PromptTemplateService {
     }
 
     public List<PromptTemplateEntity> list(String tenantId, String category) {
-        LambdaQueryWrapper<PromptTemplateEntity> q = new LambdaQueryWrapper<PromptTemplateEntity>()
-                .eq(PromptTemplateEntity::getTenantId, tenantId == null ? "default" : tenantId)
+        LambdaQueryWrapper<PromptTemplateEntity> query = new LambdaQueryWrapper<PromptTemplateEntity>()
+                .eq(PromptTemplateEntity::getTenantId, defaultTenant(tenantId))
                 .orderByDesc(PromptTemplateEntity::getUpdatedAt);
         if (category != null && !category.isBlank()) {
-            q.eq(PromptTemplateEntity::getCategory, category);
+            query.eq(PromptTemplateEntity::getCategory, category);
         }
-        return mapper.selectList(q);
+        return mapper.selectList(query);
     }
 
     public long count(String tenantId) {
         return mapper.selectCount(new LambdaQueryWrapper<PromptTemplateEntity>()
-                .eq(PromptTemplateEntity::getTenantId, tenantId == null ? "default" : tenantId));
+                .eq(PromptTemplateEntity::getTenantId, defaultTenant(tenantId)));
     }
 
     /**
@@ -88,57 +100,28 @@ public class PromptTemplateService {
      * state on first boot. Safe to call repeatedly; only writes when the table is empty.
      */
     public void seedStartersIfEmpty(String tenantId) {
-        String tid = tenantId == null || tenantId.isBlank() ? "default" : tenantId;
-        if (count(tid) > 0) {
+        String resolvedTenantId = defaultTenant(tenantId);
+        if (count(resolvedTenantId) > 0) {
             return;
         }
-        create(tid, "summarize-en", "summarization",
-                "Concise English summary in one paragraph.",
-                "You are a concise summarizer. Read the passage and write ONE paragraph "
-                        + "capturing the essential points.\n\nPassage:\n{{#input#}}",
-                java.util.List.of("summary", "en"));
-        create(tid, "classify-intent", "classifier",
-                "Route a user message into an intent id (uses {{#categories#}}).",
-                "You are a strict intent classifier. Pick ONE category id from the list.\n"
-                        + "Reply with ONLY the id.\nCategories:\n{{#categories#}}",
-                java.util.List.of("classifier"));
-        create(tid, "extract-json", "extraction",
-                "Extract structured JSON matching a supplied schema.",
-                "Extract the fields defined by the JSON schema from the input. Reply with "
-                        + "ONLY the JSON object, no code fences, no prose. Use null when a field "
-                        + "is missing.\n\nSchema:\n{{#schema#}}\n\nInput:\n{{#input#}}",
-                java.util.List.of("json", "extraction"));
+        StarterPromptTemplates.forTenant(resolvedTenantId).forEach(this::create);
     }
 
     /** Extract the referenced variable names — for previewing what a template needs. */
     public List<String> variablesOf(String content) {
-        if (content == null) {
-            return List.of();
-        }
-        List<String> vars = new java.util.ArrayList<>();
-        Matcher m = REF.matcher(content);
-        while (m.find()) {
-            String v = m.group(1);
-            if (!vars.contains(v)) {
-                vars.add(v);
-            }
-        }
-        return vars;
+        return renderer.referencedVariables(content);
     }
 
     /** Render a template against a variable map. Missing keys resolve to empty. */
     public String render(String content, Map<String, Object> variables) {
-        if (content == null || content.isEmpty()) {
-            return content;
-        }
-        Matcher m = REF.matcher(content);
-        StringBuilder sb = new StringBuilder();
-        while (m.find()) {
-            String path = m.group(1);
-            Object v = variables == null ? null : variables.get(path);
-            m.appendReplacement(sb, Matcher.quoteReplacement(v == null ? "" : String.valueOf(v)));
-        }
-        m.appendTail(sb);
-        return sb.toString();
+        return renderer.render(content, variables);
+    }
+
+    private static String defaultTenant(String tenantId) {
+        return tenantId == null || tenantId.isBlank() ? DEFAULT_TENANT : tenantId;
+    }
+
+    private static String tagsJson(List<String> tags) {
+        return tags == null ? "[]" : JsonUtils.toJson(tags);
     }
 }

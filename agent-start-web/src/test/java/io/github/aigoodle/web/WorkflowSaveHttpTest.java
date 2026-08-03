@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.aigoodle.workflow.entity.WorkflowEntity;
 import io.github.aigoodle.workflow.service.WorkflowService;
+import io.github.aigoodle.agent.service.AgentService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
@@ -45,6 +46,8 @@ class WorkflowSaveHttpTest {
     private WebTestClient http;
     @Autowired
     private WorkflowService workflowService;
+    @Autowired
+    private AgentService agentService;
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -261,6 +264,47 @@ class WorkflowSaveHttpTest {
         assertThat(g.get("viewport").get("zoom").asDouble()).isEqualTo(1.25);
         assertThat(g.get("nodes").get(0).get("type").asText()).isEqualTo("START");
         assertThat(g.get("nodes").get(1).get("type").asText()).isEqualTo("LLM");
+    }
+
+    @Test
+    void publishCreatesSnapshotAndRepointsApplication() {
+        Map<String, Object> agentBody = Map.of(
+                "tenantId", "wire-test",
+                "name", "publish-flow",
+                "mode", "workflow",
+                "strategy", "REACT",
+                "toolNames", List.of(),
+                "maxIterations", 6,
+                "memoryEnabled", true,
+                "memoryWindow", 20
+        );
+        String appId = http.post()
+                .uri("/agent-start/agents")
+                .bodyValue(agentBody)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(EnvelopeOfMap.class)
+                .returnResult()
+                .getResponseBody()
+                .getData()
+                .get("id")
+                .toString();
+
+        WorkflowEntity snapshot = http.post()
+                .uri("/agent-start/apps/{id}/workflow/publish", appId)
+                .bodyValue(Map.of("markedName", "release-1", "markedComment", "first release"))
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(EnvelopeOfWorkflow.class)
+                .returnResult()
+                .getResponseBody()
+                .getData();
+
+        assertThat(snapshot.getId()).isNotEqualTo(appId);
+        assertThat(snapshot.getVersion()).isEqualTo("release-1");
+        assertThat(snapshot.getPublished()).isTrue();
+        assertThat(workflowService.findDraft(appId)).isNotNull();
+        assertThat(agentService.require(appId).getWorkflowId()).isEqualTo(snapshot.getId());
     }
 
     /** Envelope shape for endpoints returning a raw map (e.g. AgentEntity view). */

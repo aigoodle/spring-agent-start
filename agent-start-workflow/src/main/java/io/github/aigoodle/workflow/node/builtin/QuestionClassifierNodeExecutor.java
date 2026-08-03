@@ -9,10 +9,7 @@ import io.github.aigoodle.workflow.node.NodeExecutor;
 import io.github.aigoodle.workflow.node.NodeResult;
 import io.github.aigoodle.workflow.variable.VariableResolver;
 import org.springframework.ai.chat.client.ChatClient;
-
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import org.springframework.ai.chat.prompt.ChatOptions;
 
 /**
  * Classifies the input into one of several classes using an LLM, then branches on the
@@ -23,7 +20,7 @@ import java.util.Map;
 public class QuestionClassifierNodeExecutor implements NodeExecutor {
 
     private final ModelService modelService;
-    private final PromptTemplateService promptTemplateService;
+    private final ClassifierPromptBuilder promptBuilder;
 
     public QuestionClassifierNodeExecutor(ModelService modelService) {
         this(modelService, null);
@@ -32,7 +29,7 @@ public class QuestionClassifierNodeExecutor implements NodeExecutor {
     public QuestionClassifierNodeExecutor(ModelService modelService,
                                            PromptTemplateService promptTemplateService) {
         this.modelService = modelService;
-        this.promptTemplateService = promptTemplateService;
+        this.promptBuilder = new ClassifierPromptBuilder(promptTemplateService);
     }
 
     @Override
@@ -41,61 +38,33 @@ public class QuestionClassifierNodeExecutor implements NodeExecutor {
     }
 
     @Override
-    public NodeResult execute(NodeDef node, ExecutionContext ctx) {
-        ChatClient client;
+    public NodeResult execute(NodeDef node, ExecutionContext context) {
+        ChatClient chatClient;
         try {
-            client = NodeModelResolver.resolve(node, ctx, modelService);
-        } catch (IllegalArgumentException e) {
+            chatClient = NodeModelResolver.resolve(node, context, modelService);
+        } catch (IllegalArgumentException exception) {
             return NodeResult.failure("Question classifier requires modelProvider + modelName");
         }
-        List<Map<String, Object>> classes = node.getMapList("classes");
-        if (classes.isEmpty()) {
+        ClassifierCategorySet categorySet = ClassifierCategorySet.from(node.getMapList("classes"));
+        if (categorySet.isEmpty()) {
             return NodeResult.failure("Question classifier requires 'classes'");
         }
-        String query = VariableResolver.render(node.getString("query", "{{#sys.query#}}"), ctx.getPool());
+        String query = VariableResolver.render(
+                node.getString("query", "{{#sys.query#}}"), context.getPool());
 
-        StringBuilder menu = new StringBuilder();
-        for (Map<String, Object> c : classes) {
-            menu.append("- ").append(c.get("id")).append(": ").append(c.get("name")).append("\n");
+        ChatClient.ChatClientRequestSpec request = chatClient.prompt()
+                .system(promptBuilder.build(node, categorySet))
+                .user(query);
+        ChatOptions nodeOptions = NodeModelResolver.perNodeOptions(node);
+        if (nodeOptions != null) {
+            request = request.options(nodeOptions);
         }
-        String system;
-        String templateId = node.getString("systemPromptTemplateId");
-        if (templateId != null && !templateId.isBlank() && promptTemplateService != null) {
-            var tpl = promptTemplateService.get(templateId);
-            if (tpl != null) {
-                Map<String, Object> vars = new HashMap<>();
-                vars.put("categories", menu.toString());
-                system = promptTemplateService.render(tpl.getContent(), vars);
-            } else {
-                system = defaultClassifierPrompt(menu);
-            }
-        } else {
-            system = defaultClassifierPrompt(menu);
-        }
-
-        String reply = client.prompt()
-                .system(system).user(query).call().content();
-        String answer = reply == null ? "" : reply.trim().toLowerCase();
-
-        // Match the reply to a class id (or name) robustly.
-        Map<String, Object> chosen = classes.get(classes.size() - 1); // default: last
-        for (Map<String, Object> c : classes) {
-            String id = String.valueOf(c.get("id")).toLowerCase();
-            String name = String.valueOf(c.get("name")).toLowerCase();
-            if (answer.contains(id) || (!name.isBlank() && answer.contains(name))) {
-                chosen = c;
-                break;
-            }
-        }
-        String classId = String.valueOf(chosen.get("id"));
+        String modelResponse = request.call().content();
+        ClassifierCategorySet.ClassifierCategory selectedCategory =
+                categorySet.match(modelResponse);
         return NodeResult.empty()
-                .output("classId", classId)
-                .output("className", chosen.get("name"))
-                .handle(classId);
-    }
-
-    private static String defaultClassifierPrompt(CharSequence menu) {
-        return "You are a precise text classifier. Choose exactly ONE category that best matches "
-                + "the user input. Reply with ONLY the category id, nothing else.\nCategories:\n" + menu;
+                .output("classId", selectedCategory.id())
+                .output("className", selectedCategory.name())
+                .handle(selectedCategory.id());
     }
 }

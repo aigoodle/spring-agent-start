@@ -2,29 +2,44 @@ package io.github.aigoodle.agent.multiagent;
 
 import io.github.aigoodle.agent.api.AgentRequest;
 import io.github.aigoodle.agent.api.AgentResponse;
+import io.github.aigoodle.common.exception.AgentException;
 import io.github.aigoodle.tool.AbstractAgentTool;
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.BiFunction;
 
-/**
- * Exposes a sub-agent as a tool, enabling multi-agent orchestration (an "orchestrator"
- * agent delegates a subtask to a specialist "worker" agent). The delegation runs the
- * sub-agent in its own conversation and returns its answer as the tool result.
- */
+/** Exposes one delegated agent as a model-callable tool. */
 public class AgentDelegationTool extends AbstractAgentTool {
+
+    private static final String INPUT_SCHEMA = """
+            {
+              "type": "object",
+              "properties": {
+                "input": {
+                  "type": "string",
+                  "description": "The task or question for the delegated agent"
+                }
+              },
+              "required": ["input"]
+            }
+            """;
 
     private final String toolName;
     private final String description;
-    private final String subAgentId;
-    private final BiFunction<String, AgentRequest, AgentResponse> runner;
+    private final String delegatedAgentId;
+    private final BiFunction<String, AgentRequest, AgentResponse> agentRunner;
 
-    public AgentDelegationTool(String toolName, String description, String subAgentId,
-                               BiFunction<String, AgentRequest, AgentResponse> runner) {
-        this.toolName = toolName;
-        this.description = description;
-        this.subAgentId = subAgentId;
-        this.runner = runner;
+    public AgentDelegationTool(
+            String toolName,
+            String description,
+            String delegatedAgentId,
+            BiFunction<String, AgentRequest, AgentResponse> agentRunner) {
+        this.toolName = Objects.requireNonNull(toolName, "toolName must not be null");
+        this.description = Objects.requireNonNull(description, "description must not be null");
+        this.delegatedAgentId = Objects.requireNonNull(
+                delegatedAgentId, "delegatedAgentId must not be null");
+        this.agentRunner = Objects.requireNonNull(agentRunner, "agentRunner must not be null");
     }
 
     @Override
@@ -39,14 +54,53 @@ public class AgentDelegationTool extends AbstractAgentTool {
 
     @Override
     public String inputSchema() {
-        return "{\"type\":\"object\",\"properties\":{\"input\":{\"type\":\"string\","
-                + "\"description\":\"the task or question for the sub-agent\"}},\"required\":[\"input\"]}";
+        return INPUT_SCHEMA;
     }
 
     @Override
-    public Object execute(Map<String, Object> args) {
-        String input = str(args, "input", str(args, "query", ""));
-        AgentResponse response = runner.apply(subAgentId, AgentRequest.of(input));
-        return response.getText() == null ? "" : response.getText();
+    public Object execute(Map<String, Object> arguments) {
+        String delegatedTask = delegatedTask(arguments);
+        AgentResponse delegationResponse = agentRunner.apply(
+                delegatedAgentId, AgentRequest.of(delegatedTask));
+        return completedText(delegationResponse);
+    }
+
+    private String delegatedTask(Map<String, Object> arguments) {
+        String legacyQuery = stringArgument(arguments, "query");
+        String task = stringArgument(arguments, "input", legacyQuery);
+        if (task == null || task.isBlank()) {
+            throw new AgentException(
+                    "delegation_input_required",
+                    "Delegation tool '" + toolName + "' requires a non-blank input",
+                    null);
+        }
+        return task;
+    }
+
+    private String completedText(AgentResponse response) {
+        if (response == null) {
+            throw delegationFailed("Delegated agent returned no response");
+        }
+        if (response.getStatus() == AgentResponse.Status.COMPLETED) {
+            return response.getText() == null ? "" : response.getText();
+        }
+        if (response.getStatus() == AgentResponse.Status.AWAITING_APPROVAL) {
+            throw new AgentException(
+                    "delegation_awaiting_approval",
+                    "Delegated agent " + delegatedAgentId + " is awaiting approval",
+                    null);
+        }
+
+        String details = response.getError() == null || response.getError().isBlank()
+                ? String.valueOf(response.getStatus())
+                : response.getError();
+        throw delegationFailed(details);
+    }
+
+    private AgentException delegationFailed(String details) {
+        return new AgentException(
+                "delegation_failed",
+                "Delegated agent " + delegatedAgentId + " failed: " + details,
+                null);
     }
 }

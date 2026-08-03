@@ -113,37 +113,37 @@ class NewNodesTest {
 
     @Test
     void iterationRunsSubGraphPerItem() {
-        // sub-graph: start -> template("hello {{#sys.item#}}") -> end
-        WorkflowGraph sub = new WorkflowGraph();
-        sub.addNode(NodeDef.of("sstart", NodeType.START));
-        sub.addNode(NodeDef.of("tpl", NodeType.TEMPLATE_TRANSFORM)
-                .with("template", "hello {{#sys.item#}}")
+        WorkflowGraph iterationGraph = new WorkflowGraph();
+        iterationGraph.addNode(NodeDef.of("iteration-start", NodeType.START));
+        iterationGraph.addNode(NodeDef.of("greeting", NodeType.TEMPLATE_TRANSFORM)
+                .with("template", "{{#sys.position#}}: hello {{#sys.customer#}}")
                 .with("outputKey", "line"));
-        sub.addNode(NodeDef.of("send", NodeType.END)
-                .with("outputs", Map.of("line", "{{#tpl.line#}}")));
-        sub.addEdge(EdgeDef.of("sstart", "tpl"));
-        sub.addEdge(EdgeDef.of("tpl", "send"));
+        iterationGraph.addNode(NodeDef.of("iteration-end", NodeType.END)
+                .with("outputs", Map.of("line", "{{#greeting.line#}}")));
+        iterationGraph.addEdge(EdgeDef.of("iteration-start", "greeting"));
+        iterationGraph.addEdge(EdgeDef.of("greeting", "iteration-end"));
 
-        WorkflowGraph g = new WorkflowGraph();
-        g.addNode(NodeDef.of("start", NodeType.START));
-        g.addNode(NodeDef.of("names", NodeType.VARIABLE_ASSIGNER)
+        WorkflowGraph workflow = new WorkflowGraph();
+        workflow.addNode(NodeDef.of("start", NodeType.START));
+        workflow.addNode(NodeDef.of("names", NodeType.VARIABLE_ASSIGNER)
                 .with("assignments", List.of(Map.of("name", "list", "value", List.of("Alice", "Bob")))));
-        g.addNode(NodeDef.of("loop", NodeType.ITERATION)
+        workflow.addNode(NodeDef.of("loop", NodeType.ITERATION)
                 .with("inputList", "names.list")
-                .with("subGraph", sub)
+                .with("subGraph", iterationGraph)
+                .with("itemKey", "customer")
+                .with("indexKey", "position")
                 .with("outputKey", "lines"));
-        g.addNode(NodeDef.of("end", NodeType.END)
+        workflow.addNode(NodeDef.of("end", NodeType.END)
                 .with("outputs", Map.of("all", "{{#loop.lines#}}")));
-        g.addEdge(EdgeDef.of("start", "names"));
-        g.addEdge(EdgeDef.of("names", "loop"));
-        g.addEdge(EdgeDef.of("loop", "end"));
+        workflow.addEdge(EdgeDef.of("start", "names"));
+        workflow.addEdge(EdgeDef.of("names", "loop"));
+        workflow.addEdge(EdgeDef.of("loop", "end"));
 
-        WorkflowRunResult r = buildEngine().run(g, Map.of(), null);
-        assertTrue(r.isSuccess(), r.getError());
-        assertNotNull(r.output("all"));
-        String all = String.valueOf(r.output("all"));
-        assertTrue(all.contains("hello Alice"), all);
-        assertTrue(all.contains("hello Bob"), all);
+        WorkflowRunResult result = buildEngine().run(workflow, Map.of(), null);
+        assertTrue(result.isSuccess(), result.getError());
+        String collectedGreetings = String.valueOf(result.output("all"));
+        assertTrue(collectedGreetings.contains("0: hello Alice"), collectedGreetings);
+        assertTrue(collectedGreetings.contains("1: hello Bob"), collectedGreetings);
     }
 
     @Test

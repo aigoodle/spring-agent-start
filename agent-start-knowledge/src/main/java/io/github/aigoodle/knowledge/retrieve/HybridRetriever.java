@@ -5,7 +5,6 @@ import io.github.aigoodle.common.util.JsonUtils;
 import io.github.aigoodle.knowledge.config.RetrievalConfig;
 import io.github.aigoodle.knowledge.entity.DatasetEntity;
 import io.github.aigoodle.knowledge.entity.SegmentEntity;
-import io.github.aigoodle.knowledge.enums.RetrievalMethod;
 import io.github.aigoodle.knowledge.index.VectorStoreManager;
 import io.github.aigoodle.knowledge.mapper.SegmentMapper;
 import io.github.aigoodle.knowledge.nlp.KeywordTokenizer;
@@ -48,53 +47,14 @@ public class HybridRetriever {
         this.rerankerRegistry = rerankerRegistry;
     }
 
-    public List<RetrievedSegment> retrieve(DatasetEntity dataset, RetrievalConfig cfg, RetrievalRequest req) {
-        RetrievalMethod method = req.getMethod() != null ? req.getMethod() : cfg.getMethod();
-        int topK = req.getTopK() != null ? req.getTopK() : cfg.getTopK();
-        double threshold = req.getScoreThreshold() != null ? req.getScoreThreshold() : cfg.getScoreThreshold();
-        double vectorWeight = req.getVectorWeight() != null ? req.getVectorWeight() : cfg.getVectorWeight();
-        double keywordWeight = Math.max(0.0, 1.0 - vectorWeight);
-
-        boolean hasVector = vectorStoreManager.hasVectorIndex(dataset);
-        if (method == RetrievalMethod.VECTOR && !hasVector) {
-            method = RetrievalMethod.FULL_TEXT; // economy dataset: degrade gracefully
-        }
-
-        int recallK = cfg.isRerankEnabled() ? Math.max(topK, cfg.getRerankPoolSize()) : Math.max(topK * 4, topK);
-
-        Map<String, Double> vectorScores = new HashMap<>();
-        if (method != RetrievalMethod.FULL_TEXT && hasVector) {
-            SearchRequest sr = SearchRequest.builder()
-                    .query(req.getQuery())
-                    .topK(recallK)
-                    .similarityThreshold(0.0)
-                    .build();
-            List<Document> docs = vectorStoreManager.getStore(dataset).similaritySearch(sr);
-            if (docs != null) {
-                for (Document d : docs) {
-                    Object sid = d.getMetadata().get("segmentId");
-                    if (sid != null) {
-                        vectorScores.put(sid.toString(), d.getScore() == null ? 0.0 : d.getScore());
-                    }
-                }
-            }
-        }
-
-        Map<String, Double> keywordScores = new HashMap<>();
-        if (method != RetrievalMethod.VECTOR) {
-            Set<String> queryTokens = new LinkedHashSet<>(KeywordTokenizer.tokenize(req.getQuery()));
-            if (!queryTokens.isEmpty()) {
-                List<SegmentEntity> segments = segmentMapper.selectList(new LambdaQueryWrapper<SegmentEntity>()
-                        .eq(SegmentEntity::getDatasetId, dataset.getId())
-                        .eq(SegmentEntity::getEnabled, true));
-                for (SegmentEntity s : segments) {
-                    double score = keywordScore(queryTokens, s.getKeywords());
-                    if (score > 0) {
-                        keywordScores.put(s.getId(), score);
-                    }
-                }
-            }
-        }
+    public List<RetrievedSegment> retrieve(DatasetEntity dataset,
+                                           RetrievalConfig config,
+                                           RetrievalRequest request) {
+        boolean vectorIndexAvailable = vectorStoreManager.hasVectorIndex(dataset);
+        RetrievalPlan plan = RetrievalPlan.resolve(config, request, vectorIndexAvailable);
+        Map<String, Double> vectorScores = recallVectorScores(
+                dataset, request.getQuery(), plan, vectorIndexAvailable);
+        Map<String, Double> keywordScores = recallKeywordScores(dataset, request.getQuery(), plan);
 
         Set<String> candidateIds = new HashSet<>();
         candidateIds.addAll(vectorScores.keySet());
@@ -103,69 +63,116 @@ public class HybridRetriever {
             return List.of();
         }
 
-        Map<String, SegmentEntity> segById = new HashMap<>();
-        for (SegmentEntity s : segmentMapper.selectBatchIds(candidateIds)) {
-            segById.put(s.getId(), s);
+        Map<String, SegmentEntity> segmentsById = new HashMap<>();
+        for (SegmentEntity segment : segmentMapper.selectBatchIds(candidateIds)) {
+            segmentsById.put(segment.getId(), segment);
         }
 
         List<RetrievedSegment> results = new ArrayList<>();
-        for (String id : candidateIds) {
-            SegmentEntity s = segById.get(id);
-            if (s == null || Boolean.FALSE.equals(s.getEnabled())) {
+        for (String candidateId : candidateIds) {
+            SegmentEntity segment = segmentsById.get(candidateId);
+            if (segment == null || Boolean.FALSE.equals(segment.getEnabled())) {
                 continue;
             }
-            Map<String, Object> metadata = JsonUtils.parseMap(s.getMetadataJson());
-            if (!matchesFilter(metadata, req.getMetadataFilter())) {
+            Map<String, Object> metadata = JsonUtils.parseMap(segment.getMetadataJson());
+            if (!matchesFilter(metadata, request.getMetadataFilter())) {
                 continue;
             }
-            double v = vectorScores.getOrDefault(id, 0.0);
-            double k = keywordScores.getOrDefault(id, 0.0);
-            double fused = switch (method) {
-                case VECTOR -> v;
-                case FULL_TEXT -> k;
-                case HYBRID -> vectorWeight * v + keywordWeight * k;
-            };
-            Object parent = metadata.get("parentContent");
+            double vectorScore = vectorScores.getOrDefault(candidateId, 0.0);
+            double keywordScore = keywordScores.getOrDefault(candidateId, 0.0);
+            Object parentContent = metadata.get("parentContent");
             results.add(RetrievedSegment.builder()
-                    .segmentId(s.getId())
-                    .datasetId(s.getDatasetId())
-                    .documentId(s.getDocumentId())
-                    .position(s.getPosition())
-                    .content(s.getContent())
-                    .parentContent(parent == null ? null : String.valueOf(parent))
-                    .vectorScore(v)
-                    .keywordScore(k)
-                    .score(fused)
+                    .segmentId(segment.getId())
+                    .datasetId(segment.getDatasetId())
+                    .documentId(segment.getDocumentId())
+                    .position(segment.getPosition())
+                    .content(segment.getContent())
+                    .parentContent(parentContent == null ? null : String.valueOf(parentContent))
+                    .vectorScore(vectorScore)
+                    .keywordScore(keywordScore)
+                    .score(plan.fusedScore(vectorScore, keywordScore))
                     .metadata(metadata)
                     .build());
         }
 
         results.sort(Comparator.comparingDouble(RetrievedSegment::getScore).reversed());
 
-        if (cfg.isRerankEnabled() && !results.isEmpty()) {
-            Reranker reranker = pickReranker(cfg);
-            int rerankPool = Math.min(results.size(), Math.max(topK, cfg.getRerankPoolSize()));
-            results = new ArrayList<>(reranker.rerank(req.getQuery(), results.subList(0, rerankPool), topK));
+        if (config.isRerankEnabled() && !results.isEmpty()) {
+            Reranker reranker = pickReranker(config);
+            int rerankPool = Math.min(results.size(), Math.max(plan.topK(), config.getRerankPoolSize()));
+            results = new ArrayList<>(reranker.rerank(
+                    request.getQuery(), results.subList(0, rerankPool), plan.topK()));
         }
 
-        List<RetrievedSegment> top = new ArrayList<>();
-        for (RetrievedSegment r : results) {
-            if (r.getScore() < threshold) {
+        List<RetrievedSegment> selectedResults = new ArrayList<>();
+        for (RetrievedSegment result : results) {
+            if (result.getScore() < plan.scoreThreshold()) {
                 continue;
             }
-            top.add(r);
-            if (top.size() >= topK) {
+            selectedResults.add(result);
+            if (selectedResults.size() >= plan.topK()) {
                 break;
             }
         }
-        return top;
+        return selectedResults;
     }
 
-    private Reranker pickReranker(RetrievalConfig cfg) {
-        String name = cfg.getRerankerName();
+    private Map<String, Double> recallVectorScores(DatasetEntity dataset,
+                                                   String query,
+                                                   RetrievalPlan plan,
+                                                   boolean vectorIndexAvailable) {
+        Map<String, Double> scores = new HashMap<>();
+        if (!plan.usesVectors(vectorIndexAvailable)) {
+            return scores;
+        }
+        SearchRequest searchRequest = SearchRequest.builder()
+                .query(query)
+                .topK(plan.recallLimit())
+                .similarityThreshold(0.0)
+                .build();
+        List<Document> documents = vectorStoreManager.getStore(dataset).similaritySearch(searchRequest);
+        if (documents == null) {
+            return scores;
+        }
+        for (Document document : documents) {
+            Object segmentId = document.getMetadata().get("segmentId");
+            if (segmentId != null) {
+                scores.put(segmentId.toString(), document.getScore() == null ? 0.0 : document.getScore());
+            }
+        }
+        return scores;
+    }
+
+    private Map<String, Double> recallKeywordScores(DatasetEntity dataset,
+                                                    String query,
+                                                    RetrievalPlan plan) {
+        Map<String, Double> scores = new HashMap<>();
+        if (!plan.usesKeywords()) {
+            return scores;
+        }
+        Set<String> queryTokens = new LinkedHashSet<>(KeywordTokenizer.tokenize(query));
+        if (queryTokens.isEmpty()) {
+            return scores;
+        }
+        List<SegmentEntity> segments = segmentMapper.selectList(new LambdaQueryWrapper<SegmentEntity>()
+                .eq(SegmentEntity::getDatasetId, dataset.getId())
+                .eq(SegmentEntity::getEnabled, true));
+        for (SegmentEntity segment : segments) {
+            double score = keywordScore(queryTokens, segment.getKeywords());
+            if (score > 0) {
+                scores.put(segment.getId(), score);
+            }
+        }
+        return scores;
+    }
+
+    private Reranker pickReranker(RetrievalConfig config) {
+        String name = config.getRerankerName();
         // Convention: when a rerankModelId is configured but no explicit name is set,
         // route to the model-based reranker automatically.
-        if ((name == null || name.isBlank()) && cfg.getRerankModelId() != null && !cfg.getRerankModelId().isBlank()) {
+        if ((name == null || name.isBlank())
+                && config.getRerankModelId() != null
+                && !config.getRerankModelId().isBlank()) {
             name = "model";
         }
         return rerankerRegistry.get(name);
@@ -175,10 +182,10 @@ public class HybridRetriever {
         if (segmentKeywords == null || segmentKeywords.isBlank()) {
             return 0.0;
         }
-        Set<String> segTokens = new HashSet<>(List.of(segmentKeywords.split(" ")));
+        Set<String> segmentTokens = new HashSet<>(List.of(segmentKeywords.split(" ")));
         int matched = 0;
-        for (String t : queryTokens) {
-            if (segTokens.contains(t)) {
+        for (String token : queryTokens) {
+            if (segmentTokens.contains(token)) {
                 matched++;
             }
         }
@@ -189,9 +196,10 @@ public class HybridRetriever {
         if (filter == null || filter.isEmpty()) {
             return true;
         }
-        for (Map.Entry<String, Object> e : filter.entrySet()) {
-            Object actual = metadata.get(e.getKey());
-            if (actual == null || !String.valueOf(actual).equals(String.valueOf(e.getValue()))) {
+        for (Map.Entry<String, Object> expectedEntry : filter.entrySet()) {
+            Object actual = metadata.get(expectedEntry.getKey());
+            if (actual == null
+                    || !String.valueOf(actual).equals(String.valueOf(expectedEntry.getValue()))) {
                 return false;
             }
         }

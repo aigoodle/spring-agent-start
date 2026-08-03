@@ -18,9 +18,9 @@ public class StartNodeExecutor implements NodeExecutor {
     }
 
     @Override
-    public NodeResult execute(NodeDef node, ExecutionContext ctx) {
+    public NodeResult execute(NodeDef node, ExecutionContext context) {
         NodeResult result = NodeResult.empty();
-        ctx.getInputs().forEach(result::output);
+        context.getInputs().forEach(result::output);
         return result;
     }
 }

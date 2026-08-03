@@ -11,5 +11,5 @@ public interface NodeExecutor {
 
     NodeType type();
 
-    NodeResult execute(NodeDef node, ExecutionContext ctx);
+    NodeResult execute(NodeDef node, ExecutionContext context);
 }

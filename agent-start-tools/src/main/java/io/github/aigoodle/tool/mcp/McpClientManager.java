@@ -22,11 +22,12 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class McpClientManager {
 
-    private static final Logger log = LoggerFactory.getLogger(McpClientManager.class);
+    private static final Logger logger = LoggerFactory.getLogger(McpClientManager.class);
 
     private final List<McpProperties.Server> servers;
     private final McpJsonMapper jsonMapper = McpJsonMapper.getDefault();
-    private final ConcurrentHashMap<String, McpSyncClient> clients = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, McpSyncClient> clientsByServerName =
+            new ConcurrentHashMap<>();
 
     public McpClientManager(List<McpProperties.Server> servers) {
         this.servers = servers == null ? List.of() : servers;
@@ -37,7 +38,8 @@ public class McpClientManager {
     }
 
     public McpSyncClient client(McpProperties.Server server) {
-        return clients.computeIfAbsent(server.getName(), k -> connect(server));
+        return clientsByServerName.computeIfAbsent(
+                server.getName(), ignoredName -> connect(server));
     }
 
     private McpSyncClient connect(McpProperties.Server server) {
@@ -46,9 +48,14 @@ public class McpClientManager {
                 .clientInfo(new McpSchema.Implementation("spring-agent-start", "0.1.0"))
                 .requestTimeout(Duration.ofSeconds(server.getRequestTimeoutSeconds()))
                 .build();
-        client.initialize();
-        log.info("Connected to MCP server '{}' ({})", server.getName(), server.getType());
-        return client;
+        try {
+            client.initialize();
+            logger.info("Connected to MCP server '{}' ({})", server.getName(), server.getType());
+            return client;
+        } catch (RuntimeException connectionFailure) {
+            closeClient(server.getName(), client);
+            throw connectionFailure;
+        }
     }
 
     private McpClientTransport transport(McpProperties.Server server) {
@@ -63,20 +70,24 @@ public class McpClientManager {
             throw new AgentException("mcp_command_required",
                     "MCP server '" + server.getName() + "' is type=stdio but has no command", null);
         }
-        ServerParameters params = ServerParameters.builder(server.getCommand())
+        ServerParameters serverParameters = ServerParameters.builder(server.getCommand())
                 .args(server.getArgs())
                 .build();
-        return new StdioClientTransport(params, jsonMapper);
+        return new StdioClientTransport(serverParameters, jsonMapper);
     }
 
     public void close() {
-        clients.values().forEach(c -> {
-            try {
-                c.closeGracefully();
-            } catch (Exception e) {
-                log.warn("Error closing MCP client: {}", e.getMessage());
-            }
-        });
-        clients.clear();
+        clientsByServerName.entrySet().forEach(clientEntry ->
+                closeClient(clientEntry.getKey(), clientEntry.getValue()));
+        clientsByServerName.clear();
+    }
+
+    private static void closeClient(String serverName, McpSyncClient client) {
+        try {
+            client.closeGracefully();
+        } catch (RuntimeException closeFailure) {
+            logger.warn("Failed to close MCP client '{}': {}",
+                    serverName, closeFailure.getMessage());
+        }
     }
 }

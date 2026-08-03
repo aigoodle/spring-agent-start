@@ -36,25 +36,43 @@ public class ModelEndpoint {
     @Builder.Default
     private Map<String, Object> properties = new HashMap<>();
 
-    public String property(String key) {
-        Object v = properties == null ? null : properties.get(key);
-        return v == null ? null : String.valueOf(v);
+    public String property(String name) {
+        Object value = properties == null ? null : properties.get(name);
+        return value == null ? null : String.valueOf(value);
     }
 
-    public String propertyOrDefault(String key, String defaultValue) {
-        String v = property(key);
-        return v == null || v.isBlank() ? defaultValue : v;
+    public String propertyOrDefault(String name, String defaultValue) {
+        String value = property(name);
+        return value == null || value.isBlank() ? defaultValue : value;
     }
 
-    public Integer intProperty(String key) {
-        String v = property(key);
-        if (v == null || v.isBlank()) {
+    public Integer intProperty(String name) {
+        String value = property(name);
+        if (value == null || value.isBlank()) {
             return null;
         }
         try {
-            return Integer.valueOf(v);
-        } catch (NumberFormatException e) {
+            return Integer.valueOf(value);
+        } catch (NumberFormatException exception) {
             return null;
         }
+    }
+
+    public Double decimalProperty(String name) {
+        String value = property(name);
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Double.valueOf(value);
+        } catch (NumberFormatException exception) {
+            return null;
+        }
+    }
+
+    /** Resolves a property override, the endpoint column, then the provider default. */
+    public String resolveBaseUrl(String providerDefault) {
+        String endpointBaseUrl = baseUrl == null || baseUrl.isBlank() ? providerDefault : baseUrl;
+        return propertyOrDefault("baseUrl", endpointBaseUrl);
     }
 }

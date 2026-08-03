@@ -3,6 +3,7 @@ package io.github.aigoodle.observability.metering;
 import io.github.aigoodle.model.provider.ModelEndpoint;
 import io.github.aigoodle.model.runtime.ChatModelDecorator;
 import io.github.aigoodle.observability.service.LlmMetricsService;
+import io.github.aigoodle.observability.api.ModelCallContext;
 import org.springframework.ai.chat.model.ChatModel;
 
 /**
@@ -11,14 +12,16 @@ import org.springframework.ai.chat.model.ChatModel;
  */
 public class MeteringChatModelDecorator implements ChatModelDecorator {
 
-    private final LlmMetricsService metrics;
+    private final LlmMetricsService metricsService;
 
-    public MeteringChatModelDecorator(LlmMetricsService metrics) {
-        this.metrics = metrics;
+    public MeteringChatModelDecorator(LlmMetricsService metricsService) {
+        this.metricsService = metricsService;
     }
 
     @Override
     public ChatModel decorate(ChatModel delegate, ModelEndpoint endpoint) {
-        return new MeteringChatModel(delegate, endpoint.getProviderName(), endpoint.getModelName(), metrics);
+        ModelCallContext callContext = ModelCallContext.of(
+                endpoint.getProviderName(), endpoint.getModelName());
+        return new MeteringChatModel(delegate, callContext, metricsService);
     }
 }

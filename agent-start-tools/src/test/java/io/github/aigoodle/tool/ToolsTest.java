@@ -64,6 +64,23 @@ class ToolsTest {
 
         List<ToolCallback> callbacks = registry.toolCallbacks();
         assertEquals(2, callbacks.size());
+        assertEquals(List.of("calculator", "current_time"), registry.names());
+        assertThrows(UnsupportedOperationException.class, () -> registry.all().clear());
+        assertThrows(UnsupportedOperationException.class, () -> registry.names().clear());
+    }
+
+    @Test
+    void registrySelectsKnownCallbacksInRequestedOrder() {
+        ToolRegistry registry = new ToolRegistry(
+                List.of(new CalculatorTool(), new CurrentTimeTool()), List.of());
+
+        List<ToolCallback> callbacks = registry.toolCallbacks(
+                List.of("current_time", "missing", "calculator"));
+
+        assertEquals(List.of("current_time", "calculator"), callbacks.stream()
+                .map(callback -> callback.getToolDefinition().name())
+                .toList());
+        assertEquals(List.of(), registry.toolCallbacks(null));
     }
 
     @Test

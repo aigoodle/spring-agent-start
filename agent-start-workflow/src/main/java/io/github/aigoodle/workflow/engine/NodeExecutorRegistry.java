@@ -16,11 +16,12 @@ public class NodeExecutorRegistry {
 
     private final Map<NodeType, NodeExecutor> executors = new EnumMap<>(NodeType.class);
 
-    public NodeExecutorRegistry(List<NodeExecutor> executorBeans) {
-        if (executorBeans != null) {
-            for (NodeExecutor e : executorBeans) {
-                executors.put(e.type(), e);
-            }
+    public NodeExecutorRegistry(List<NodeExecutor> nodeExecutors) {
+        if (nodeExecutors == null) {
+            return;
+        }
+        for (NodeExecutor nodeExecutor : nodeExecutors) {
+            executors.put(nodeExecutor.type(), nodeExecutor);
         }
     }
 

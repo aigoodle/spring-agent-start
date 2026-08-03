@@ -1,8 +1,10 @@
 package io.github.aigoodle.common.util;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -16,7 +18,7 @@ import java.util.Map;
  */
 public final class JsonUtils {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper()
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper()
             .registerModule(new JavaTimeModule())
             .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
             .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
@@ -25,7 +27,7 @@ public final class JsonUtils {
     }
 
     public static ObjectMapper mapper() {
-        return MAPPER;
+        return OBJECT_MAPPER;
     }
 
     public static String toJson(Object value) {
@@ -33,9 +35,11 @@ public final class JsonUtils {
             return null;
         }
         try {
-            return MAPPER.writeValueAsString(value);
-        } catch (Exception e) {
-            throw new IllegalArgumentException("Failed to serialize object to JSON", e);
+            return OBJECT_MAPPER.writeValueAsString(value);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalArgumentException(
+                    "Failed to serialize " + value.getClass().getSimpleName() + " to JSON",
+                    exception);
         }
     }
 
@@ -43,22 +47,15 @@ public final class JsonUtils {
         if (json == null || json.isBlank()) {
             return null;
         }
-        try {
-            return MAPPER.readValue(json, type);
-        } catch (Exception e) {
-            throw new IllegalArgumentException("Failed to parse JSON into " + type.getSimpleName(), e);
-        }
+        return readValue(json, OBJECT_MAPPER.constructType(type), type.getSimpleName());
     }
 
     public static <T> T parse(String json, TypeReference<T> type) {
         if (json == null || json.isBlank()) {
             return null;
         }
-        try {
-            return MAPPER.readValue(json, type);
-        } catch (Exception e) {
-            throw new IllegalArgumentException("Failed to parse JSON", e);
-        }
+        JavaType targetType = OBJECT_MAPPER.getTypeFactory().constructType(type);
+        return readValue(json, targetType, targetType.toCanonical());
     }
 
     public static Map<String, Object> parseMap(String json) {
@@ -73,23 +70,32 @@ public final class JsonUtils {
         if (json == null || json.isBlank()) {
             return List.of();
         }
-        try {
-            var listType = MAPPER.getTypeFactory().constructCollectionType(List.class, elementType);
-            return MAPPER.readValue(json, listType);
-        } catch (Exception e) {
-            throw new IllegalArgumentException("Failed to parse JSON array", e);
-        }
+        JavaType listType = OBJECT_MAPPER.getTypeFactory()
+                .constructCollectionType(List.class, elementType);
+        return readValue(json, listType, "List<" + elementType.getSimpleName() + ">");
     }
 
     public static JsonNode readTree(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
         try {
-            return MAPPER.readTree(json);
-        } catch (Exception e) {
-            throw new IllegalArgumentException("Failed to read JSON tree", e);
+            return OBJECT_MAPPER.readTree(json);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalArgumentException("Failed to parse JSON into a tree", exception);
         }
     }
 
     public static <T> T convert(Object value, Class<T> type) {
-        return MAPPER.convertValue(value, type);
+        return OBJECT_MAPPER.convertValue(value, type);
+    }
+
+    private static <T> T readValue(String json, JavaType targetType, String targetDescription) {
+        try {
+            return OBJECT_MAPPER.readValue(json, targetType);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalArgumentException(
+                    "Failed to parse JSON into " + targetDescription, exception);
+        }
     }
 }

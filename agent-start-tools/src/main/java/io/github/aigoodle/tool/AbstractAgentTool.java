@@ -7,25 +7,43 @@ import java.util.Map;
  */
 public abstract class AbstractAgentTool implements AgentTool {
 
-    protected String str(Map<String, Object> args, String key) {
-        Object v = args == null ? null : args.get(key);
-        return v == null ? null : String.valueOf(v);
+    protected String stringArgument(Map<String, Object> arguments, String name) {
+        Object value = arguments == null ? null : arguments.get(name);
+        return value == null ? null : String.valueOf(value);
     }
 
-    protected String str(Map<String, Object> args, String key, String defaultValue) {
-        String v = str(args, key);
-        return v == null || v.isBlank() ? defaultValue : v;
+    protected String stringArgument(Map<String, Object> arguments, String name, String defaultValue) {
+        String value = stringArgument(arguments, name);
+        return value == null || value.isBlank() ? defaultValue : value;
     }
 
-    protected double dbl(Map<String, Object> args, String key, double defaultValue) {
-        Object v = args == null ? null : args.get(key);
-        if (v instanceof Number n) {
-            return n.doubleValue();
+    protected double doubleArgument(Map<String, Object> arguments, String name, double defaultValue) {
+        Object value = arguments == null ? null : arguments.get(name);
+        if (value instanceof Number number) {
+            return number.doubleValue();
         }
         try {
-            return v == null ? defaultValue : Double.parseDouble(String.valueOf(v));
-        } catch (NumberFormatException e) {
+            return value == null ? defaultValue : Double.parseDouble(String.valueOf(value));
+        } catch (NumberFormatException exception) {
             return defaultValue;
         }
+    }
+
+    /** @deprecated since 0.1.0; use {@link #stringArgument(Map, String)}. */
+    @Deprecated
+    protected String str(Map<String, Object> arguments, String name) {
+        return stringArgument(arguments, name);
+    }
+
+    /** @deprecated since 0.1.0; use {@link #stringArgument(Map, String, String)}. */
+    @Deprecated
+    protected String str(Map<String, Object> arguments, String name, String defaultValue) {
+        return stringArgument(arguments, name, defaultValue);
+    }
+
+    /** @deprecated since 0.1.0; use {@link #doubleArgument(Map, String, double)}. */
+    @Deprecated
+    protected double dbl(Map<String, Object> arguments, String name, double defaultValue) {
+        return doubleArgument(arguments, name, defaultValue);
     }
 }

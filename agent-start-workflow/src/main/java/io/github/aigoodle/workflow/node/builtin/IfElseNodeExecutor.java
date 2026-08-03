@@ -63,33 +63,28 @@ public class IfElseNodeExecutor implements NodeExecutor {
     }
 
     @Override
-    public NodeResult execute(NodeDef node, ExecutionContext ctx) {
-        List<Map<String, Object>> cases = node.getMapList("cases");
-        if (cases != null && !cases.isEmpty()) {
-            return evaluateCases(cases, ctx);
+    public NodeResult execute(NodeDef node, ExecutionContext context) {
+        List<Map<String, Object>> configuredCases = node.getMapList("cases");
+        if (!configuredCases.isEmpty()) {
+            return evaluateCases(configuredCases, context);
         }
         // Legacy flat shape — kept alive so old saved graphs / tests still work.
         boolean matched = ConditionEvaluator.evaluate(
                 node.getMapList("conditions"),
                 node.getString("logicalOperator", "and"),
-                ctx.getPool());
+                context.getPool());
         return NodeResult.empty()
                 .output("result", matched)
                 .output("case", matched ? "true" : "false")
                 .handle(matched ? "true" : "false");
     }
 
-    private static NodeResult evaluateCases(List<Map<String, Object>> cases, ExecutionContext ctx) {
-        for (int i = 0; i < cases.size(); i++) {
-            Map<String, Object> c = cases.get(i);
-            if (ConditionEvaluator.evaluateCase(c, ctx.getPool())) {
-                String handle = firstString(c, "id", "caseId");
-                String caseLabel = firstString(c, "caseId", "id");
-                return NodeResult.empty()
-                        .output("case", caseLabel != null ? caseLabel : "true")
-                        .output("caseIndex", i)
-                        .output("result", true)
-                        .handle(handle != null ? handle : "true");
+    private static NodeResult evaluateCases(List<Map<String, Object>> configuredCases,
+                                            ExecutionContext context) {
+        for (int caseIndex = 0; caseIndex < configuredCases.size(); caseIndex++) {
+            Map<String, Object> candidateCase = configuredCases.get(caseIndex);
+            if (ConditionEvaluator.evaluateCase(candidateCase, context.getPool())) {
+                return matchedCase(candidateCase, caseIndex);
             }
         }
         // No case matched — implicit else. Emit "false" so a designer can
@@ -101,12 +96,26 @@ public class IfElseNodeExecutor implements NodeExecutor {
                 .handle("false");
     }
 
-    private static String firstString(Map<String, Object> map, String... keys) {
-        for (String k : keys) {
-            Object v = map.get(k);
-            if (v == null) continue;
-            String s = String.valueOf(v).trim();
-            if (!s.isEmpty()) return s;
+    private static NodeResult matchedCase(Map<String, Object> candidateCase, int caseIndex) {
+        String branchHandle = firstNonBlank(candidateCase, "id", "caseId");
+        String caseLabel = firstNonBlank(candidateCase, "caseId", "id");
+        return NodeResult.empty()
+                .output("case", caseLabel != null ? caseLabel : "true")
+                .output("caseIndex", caseIndex)
+                .output("result", true)
+                .handle(branchHandle != null ? branchHandle : "true");
+    }
+
+    private static String firstNonBlank(Map<String, Object> values, String... candidateKeys) {
+        for (String candidateKey : candidateKeys) {
+            Object candidateValue = values.get(candidateKey);
+            if (candidateValue == null) {
+                continue;
+            }
+            String text = String.valueOf(candidateValue).trim();
+            if (!text.isEmpty()) {
+                return text;
+            }
         }
         return null;
     }

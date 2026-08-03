@@ -15,28 +15,29 @@ import java.util.Map;
  */
 public class AgentToolCallback implements ToolCallback {
 
-    private final AgentTool tool;
+    private final AgentTool agentTool;
 
-    public AgentToolCallback(AgentTool tool) {
-        this.tool = tool;
+    public AgentToolCallback(AgentTool agentTool) {
+        this.agentTool = agentTool;
     }
 
     @Override
     public ToolDefinition getToolDefinition() {
         return DefaultToolDefinition.builder()
-                .name(tool.name())
-                .description(tool.description())
-                .inputSchema(tool.inputSchema())
+                .name(agentTool.name())
+                .description(agentTool.description())
+                .inputSchema(agentTool.inputSchema())
                 .build();
     }
 
     @Override
     public String call(String toolInput) {
-        Map<String, Object> args = JsonUtils.parseMap(toolInput);
-        Object result = tool.execute(args == null ? Map.of() : args);
-        if (result == null) {
+        Map<String, Object> parsedArguments = JsonUtils.parseMap(toolInput);
+        Map<String, Object> arguments = parsedArguments == null ? Map.of() : parsedArguments;
+        Object toolResult = agentTool.execute(arguments);
+        if (toolResult == null) {
             return "";
         }
-        return result instanceof String s ? s : JsonUtils.toJson(result);
+        return toolResult instanceof String text ? text : JsonUtils.toJson(toolResult);
     }
 }

@@ -9,17 +9,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/**
- * Aggregate per-app conversation metrics derived from the {@code messages} table
- * — powers the "监测" tab in the app design drawer.
- * <p>
- * Kept intentionally light: everything is derivable from what {@code AgentMemory}
- * already persists, so wiring a monitor UI required no new writes. Costs and
- * tokens come from a separate observability stream ({@code llm_calls}) which
- * doesn't carry an {@code app_id} column yet, so those numbers are surfaced as
- * globals by the frontend.
- */
+/** Derives an application's conversation metrics from its persisted messages. */
 public class AppMetricsService {
+
+    private static final String USER_ROLE = "USER";
+    private static final String ASSISTANT_ROLE = "ASSISTANT";
 
     private final AgentMessageMapper messageMapper;
 
@@ -27,47 +21,69 @@ public class AppMetricsService {
         this.messageMapper = messageMapper;
     }
 
-    public AppMetricsView compute(String appId) {
-        List<AgentMessageEntity> all = messageMapper.selectList(
+    public AppMetricsView summarize(String appId) {
+        List<AgentMessageEntity> messages = messageMapper.selectList(
                 new LambdaQueryWrapper<AgentMessageEntity>()
                         .eq(AgentMessageEntity::getAgentId, appId));
 
-        int totalMessages = all.size();
-        Set<String> conversationIds = new HashSet<>();
-        int userMessages = 0;
-        int assistantMessages = 0;
-        LocalDateTime lastActivity = null;
+        MetricsAccumulator metrics = new MetricsAccumulator();
+        messages.forEach(metrics::include);
+        return metrics.toView(appId, messages.size());
+    }
 
-        for (AgentMessageEntity m : all) {
-            if (m.getConversationId() != null) {
-                conversationIds.add(m.getConversationId());
+    private static final class MetricsAccumulator {
+
+        private final Set<String> conversationIds = new HashSet<>();
+        private int userMessageCount;
+        private int assistantMessageCount;
+        private LocalDateTime mostRecentActivity;
+
+        void include(AgentMessageEntity message) {
+            if (message.getConversationId() != null) {
+                conversationIds.add(message.getConversationId());
             }
-            if ("USER".equalsIgnoreCase(m.getRole())) userMessages++;
-            else if ("ASSISTANT".equalsIgnoreCase(m.getRole())) assistantMessages++;
+            countRole(message.getRole());
+            includeActivityTime(activityTime(message));
+        }
 
-            if (m.getUpdatedAt() != null && (lastActivity == null || m.getUpdatedAt().isAfter(lastActivity))) {
-                lastActivity = m.getUpdatedAt();
+        AppMetricsView toView(String appId, int totalMessageCount) {
+            int conversationCount = conversationIds.size();
+            return AppMetricsView.builder()
+                    .appId(appId)
+                    .totalConversations(conversationCount)
+                    .totalMessages(totalMessageCount)
+                    .userMessages(userMessageCount)
+                    .assistantMessages(assistantMessageCount)
+                    .avgInteractionsPerConversation(averageUserTurns(conversationCount))
+                    .lastActivityAt(mostRecentActivity == null ? null : mostRecentActivity.toString())
+                    .build();
+        }
+
+        private void countRole(String role) {
+            if (USER_ROLE.equalsIgnoreCase(role)) {
+                userMessageCount++;
+            } else if (ASSISTANT_ROLE.equalsIgnoreCase(role)) {
+                assistantMessageCount++;
             }
         }
 
-        int totalConversations = conversationIds.size();
-        // Prefer user-message count as "interactions" — one round-trip per user turn.
-        double avgInteractions = totalConversations == 0
-                ? 0.0
-                : ((double) userMessages) / totalConversations;
+        private void includeActivityTime(LocalDateTime activityTime) {
+            if (activityTime != null
+                    && (mostRecentActivity == null || activityTime.isAfter(mostRecentActivity))) {
+                mostRecentActivity = activityTime;
+            }
+        }
 
-        return AppMetricsView.builder()
-                .appId(appId)
-                .totalConversations(totalConversations)
-                .totalMessages(totalMessages)
-                .userMessages(userMessages)
-                .assistantMessages(assistantMessages)
-                .avgInteractionsPerConversation(round(avgInteractions))
-                .lastActivityAt(lastActivity == null ? null : lastActivity.toString())
-                .build();
-    }
+        private double averageUserTurns(int conversationCount) {
+            if (conversationCount == 0) {
+                return 0.0;
+            }
+            double average = (double) userMessageCount / conversationCount;
+            return Math.round(average * 100.0) / 100.0;
+        }
 
-    private static double round(double v) {
-        return Math.round(v * 100.0) / 100.0;
+        private static LocalDateTime activityTime(AgentMessageEntity message) {
+            return message.getUpdatedAt() != null ? message.getUpdatedAt() : message.getCreatedAt();
+        }
     }
 }

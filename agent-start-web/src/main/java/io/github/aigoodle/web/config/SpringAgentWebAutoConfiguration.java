@@ -38,7 +38,8 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @EnableConfigurationProperties(SpringAgentWebProperties.class)
 @ComponentScan(basePackages = {
         "io.github.aigoodle.web.controller",
-        "io.github.aigoodle.web.service"
+        "io.github.aigoodle.web.service",
+        "io.github.aigoodle.web.support"
 })
 public class SpringAgentWebAutoConfiguration {
 

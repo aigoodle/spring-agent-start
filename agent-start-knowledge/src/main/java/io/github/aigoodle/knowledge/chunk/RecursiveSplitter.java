@@ -13,97 +13,111 @@ public final class RecursiveSplitter {
     private RecursiveSplitter() {
     }
 
-    public static List<String> split(String text, List<String> separators, int maxTokens, int overlapTokens) {
-        List<String> atoms = new ArrayList<>();
-        recurse(text, separators, 0, Math.max(1, maxTokens), atoms);
-        return mergeWithOverlap(atoms, Math.max(1, maxTokens), Math.max(0, overlapTokens));
+    public static List<String> split(String text, TextSplitSettings settings) {
+        List<String> smallestFittingPieces = new ArrayList<>();
+        splitRecursively(text, settings, 0, smallestFittingPieces);
+        return mergeWithOverlap(smallestFittingPieces, settings);
     }
 
-    private static void recurse(String text, List<String> separators, int sepIndex, int maxTokens,
-                                List<String> out) {
+    /** @deprecated Use {@link #split(String, TextSplitSettings)}. */
+    @Deprecated(forRemoval = false)
+    public static List<String> split(
+            String text, List<String> separators, int maximumTokens, int overlapTokens) {
+        return split(text, new TextSplitSettings(separators, maximumTokens, overlapTokens));
+    }
+
+    private static void splitRecursively(String text,
+                                         TextSplitSettings settings,
+                                         int separatorIndex,
+                                         List<String> output) {
         if (text == null || text.isBlank()) {
             return;
         }
-        if (TokenCounter.count(text) <= maxTokens) {
-            out.add(text.strip());
+        if (TokenCounter.count(text) <= settings.maximumTokens()) {
+            output.add(text.strip());
             return;
         }
-        if (sepIndex >= separators.size()) {
+        if (separatorIndex >= settings.separators().size()) {
             // No separators left: hard split on token budget by characters.
-            out.addAll(hardSplit(text, maxTokens));
+            output.addAll(hardSplit(text, settings.maximumTokens()));
             return;
         }
-        String sep = separators.get(sepIndex);
-        if (sep.isEmpty() || !text.contains(sep)) {
-            recurse(text, separators, sepIndex + 1, maxTokens, out);
+        String separator = settings.separators().get(separatorIndex);
+        if (separator.isEmpty() || !text.contains(separator)) {
+            splitRecursively(text, settings, separatorIndex + 1, output);
             return;
         }
-        for (String part : text.split(java.util.regex.Pattern.quote(sep))) {
+        for (String part : text.split(java.util.regex.Pattern.quote(separator))) {
             if (part.isBlank()) {
                 continue;
             }
             // Re-attach the separator so sentence punctuation is preserved.
-            String piece = part + (isPunctuation(sep) ? sep : "");
-            recurse(piece, separators, sepIndex + 1, maxTokens, out);
+            String separatedPiece = part + (isPunctuation(separator) ? separator : "");
+            splitRecursively(separatedPiece, settings, separatorIndex + 1, output);
         }
     }
 
-    private static List<String> hardSplit(String text, int maxTokens) {
-        List<String> result = new ArrayList<>();
+    private static List<String> hardSplit(String text, int maximumTokens) {
+        List<String> pieces = new ArrayList<>();
         // Approx chars per chunk: 1 token ~ 1 CJK char or ~4 latin chars; use a safe lower bound.
-        int approxChars = Math.max(1, maxTokens);
-        for (int i = 0; i < text.length(); i += approxChars) {
-            result.add(text.substring(i, Math.min(text.length(), i + approxChars)).strip());
+        int approximateCharactersPerPiece = Math.max(1, maximumTokens);
+        for (int start = 0; start < text.length(); start += approximateCharactersPerPiece) {
+            int end = Math.min(text.length(), start + approximateCharactersPerPiece);
+            pieces.add(text.substring(start, end).strip());
         }
-        return result;
+        return pieces;
     }
 
-    private static List<String> mergeWithOverlap(List<String> atoms, int maxTokens, int overlapTokens) {
-        List<String> merged = new ArrayList<>();
-        StringBuilder current = new StringBuilder();
-        for (String atom : atoms) {
-            if (atom.isBlank()) {
+    private static List<String> mergeWithOverlap(
+            List<String> pieces, TextSplitSettings settings) {
+        List<String> chunks = new ArrayList<>();
+        StringBuilder currentChunk = new StringBuilder();
+        for (String piece : pieces) {
+            if (piece.isBlank()) {
                 continue;
             }
-            if (current.length() == 0) {
-                current.append(atom);
-            } else if (TokenCounter.count(current + "\n" + atom) <= maxTokens) {
-                current.append("\n").append(atom);
+            if (currentChunk.length() == 0) {
+                currentChunk.append(piece);
+            } else if (TokenCounter.count(currentChunk + "\n" + piece)
+                    <= settings.maximumTokens()) {
+                currentChunk.append("\n").append(piece);
             } else {
-                merged.add(current.toString());
-                String overlap = overlapTokens > 0 ? tail(current.toString(), overlapTokens) : "";
-                current = new StringBuilder();
+                chunks.add(currentChunk.toString());
+                String overlap = settings.overlapTokens() > 0
+                        ? trailingTokenSlice(currentChunk.toString(), settings.overlapTokens())
+                        : "";
+                currentChunk = new StringBuilder();
                 if (!overlap.isBlank()) {
-                    current.append(overlap).append("\n");
+                    currentChunk.append(overlap).append("\n");
                 }
-                current.append(atom);
+                currentChunk.append(piece);
             }
         }
-        if (current.length() > 0) {
-            merged.add(current.toString());
+        if (currentChunk.length() > 0) {
+            chunks.add(currentChunk.toString());
         }
-        return merged;
+        return chunks;
     }
 
     /** Return a trailing slice of {@code text} of roughly {@code overlapTokens} tokens. */
-    private static String tail(String text, int overlapTokens) {
+    private static String trailingTokenSlice(String text, int overlapTokens) {
         if (TokenCounter.count(text) <= overlapTokens) {
             return text;
         }
-        int lo = 0;
-        int hi = text.length();
+        int sliceStart = 0;
         // Walk back from the end accumulating until we hit the token budget.
-        for (int i = text.length() - 1; i >= 0; i--) {
-            if (TokenCounter.count(text.substring(i)) >= overlapTokens) {
-                lo = i;
+        for (int index = text.length() - 1; index >= 0; index--) {
+            if (TokenCounter.count(text.substring(index)) >= overlapTokens) {
+                sliceStart = index;
                 break;
             }
         }
-        return text.substring(lo, hi).strip();
+        return text.substring(sliceStart).strip();
     }
 
-    private static boolean isPunctuation(String sep) {
-        String s = sep.strip();
-        return s.length() == 1 && !Character.isLetterOrDigit(s.charAt(0));
+    private static boolean isPunctuation(String separator) {
+        String strippedSeparator = separator.strip();
+        return strippedSeparator.length() == 1
+                && !Character.isLetterOrDigit(strippedSeparator.charAt(0));
     }
 }

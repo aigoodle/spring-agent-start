@@ -1,6 +1,7 @@
 package io.github.aigoodle.web.controller;
 
 import io.github.aigoodle.agent.service.AppDatasetService;
+import io.github.aigoodle.agent.service.AttachedDatasetView;
 import io.github.aigoodle.web.common.ApiResponse;
 import io.github.aigoodle.web.dto.AttachDatasetsRequest;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -30,34 +31,34 @@ import java.util.List;
 @RequestMapping("${spring-agent.web.base-path:}/apps/{appId}/datasets")
 public class AppDatasetController {
 
-    private final AppDatasetService service;
+    private final AppDatasetService appDatasetService;
 
-    public AppDatasetController(AppDatasetService service) {
-        this.service = service;
+    public AppDatasetController(AppDatasetService appDatasetService) {
+        this.appDatasetService = appDatasetService;
     }
 
     @GetMapping
-    public ApiResponse<List<AppDatasetService.AttachedDataset>> list(@PathVariable String appId) {
-        return ApiResponse.ok(service.list(appId));
+    public ApiResponse<List<AttachedDatasetView>> list(@PathVariable String appId) {
+        return ApiResponse.ok(appDatasetService.list(appId));
     }
 
     /** Additive — merges the supplied ids with the existing attached set. */
     @PostMapping
-    public ApiResponse<List<AppDatasetService.AttachedDataset>> attach(@PathVariable String appId,
-                                                                       @RequestBody AttachDatasetsRequest req) {
-        return ApiResponse.ok(service.attach(appId, req.getDatasetIds()));
+    public ApiResponse<List<AttachedDatasetView>> attach(@PathVariable String appId,
+                                                         @RequestBody AttachDatasetsRequest request) {
+        return ApiResponse.ok(appDatasetService.attach(appId, request.getDatasetIds()));
     }
 
     /** Replace the whole attached list — used by the "save" button on the settings panel. */
     @PutMapping
-    public ApiResponse<List<AppDatasetService.AttachedDataset>> replace(@PathVariable String appId,
-                                                                        @RequestBody AttachDatasetsRequest req) {
-        return ApiResponse.ok(service.replace(appId, req.getDatasetIds()));
+    public ApiResponse<List<AttachedDatasetView>> replace(@PathVariable String appId,
+                                                          @RequestBody AttachDatasetsRequest request) {
+        return ApiResponse.ok(appDatasetService.replace(appId, request.getDatasetIds()));
     }
 
     @DeleteMapping("/{datasetId}")
-    public ApiResponse<List<AppDatasetService.AttachedDataset>> detach(@PathVariable String appId,
-                                                                       @PathVariable String datasetId) {
-        return ApiResponse.ok(service.detach(appId, datasetId));
+    public ApiResponse<List<AttachedDatasetView>> detach(@PathVariable String appId,
+                                                         @PathVariable String datasetId) {
+        return ApiResponse.ok(appDatasetService.detach(appId, datasetId));
     }
 }

@@ -6,7 +6,7 @@ import java.util.List;
 
 /**
  * SPI for post-retrieval reranking. A reranker takes the fused candidate list produced
- * by {@code HybridRetriever} and returns it — possibly reordered, rescored or trimmed.
+ * by {@code HybridRetriever} and returns it, possibly reordered, rescored or trimmed.
  * <p>
  * Implementations are Spring beans. Which reranker is used per request is decided by
  * {@code RetrievalConfig#rerankEnabled}; when disabled, {@link NoopReranker} is used.

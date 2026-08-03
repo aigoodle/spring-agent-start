@@ -24,20 +24,20 @@ public class VariableAssignerNodeExecutor implements NodeExecutor {
     }
 
     @Override
-    public NodeResult execute(NodeDef node, ExecutionContext ctx) {
+    public NodeResult execute(NodeDef node, ExecutionContext context) {
         List<Map<String, Object>> assignments = node.getMapList("assignments");
         NodeResult result = NodeResult.empty();
-        for (Map<String, Object> a : assignments) {
-            Object rawName = a.get("name");
-            if (rawName == null) {
+        for (Map<String, Object> assignment : assignments) {
+            Object configuredName = assignment.get("name");
+            if (configuredName == null) {
                 continue;
             }
-            String name = String.valueOf(rawName);
-            Object rawValue = a.get("value");
-            Object value = rawValue instanceof String s
-                    ? VariableResolver.render(s, ctx.getPool())
-                    : rawValue;
-            result.output(name, value);
+            String variableName = String.valueOf(configuredName);
+            Object configuredValue = assignment.get("value");
+            Object resolvedValue = configuredValue instanceof String template
+                    ? VariableResolver.render(template, context.getPool())
+                    : configuredValue;
+            result.output(variableName, resolvedValue);
         }
         return result;
     }

@@ -1,6 +1,11 @@
 package io.github.aigoodle.completion.config;
 
+import io.github.aigoodle.agent.service.ApiTokenService;
+import io.github.aigoodle.completion.support.AppAccessResolver;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 
 /**
@@ -29,4 +34,11 @@ import org.springframework.context.annotation.ComponentScan;
         "io.github.aigoodle.completion.service"
 })
 public class SpringAgentCompletionAutoConfiguration {
+
+    @Bean
+    @ConditionalOnMissingBean
+    public AppAccessResolver appAccessResolver(
+            ObjectProvider<ApiTokenService> apiTokenServices) {
+        return new AppAccessResolver(apiTokenServices);
+    }
 }

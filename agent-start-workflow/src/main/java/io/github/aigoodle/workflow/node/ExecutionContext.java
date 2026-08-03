@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Per-run state shared with every node executor: the variable pool plus run-level
@@ -34,6 +35,19 @@ public class ExecutionContext {
      * null = classic blocking mode.
      */
     private ChatStreamSink chatSink;
+
+    public static ExecutionContext start(Map<String, Object> inputs, String conversationId,
+                                         ChatStreamSink chatSink) {
+        ExecutionContext context = new ExecutionContext();
+        context.runId = UUID.randomUUID().toString();
+        context.conversationId = conversationId;
+        context.chatSink = chatSink;
+        if (inputs != null) {
+            context.inputs.putAll(inputs);
+            inputs.forEach(context.pool::setSystem);
+        }
+        return context;
+    }
 
     public void record(StepRecord step) {
         steps.add(step);

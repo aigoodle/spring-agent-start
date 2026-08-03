@@ -2,6 +2,7 @@ package io.github.aigoodle.trigger.event;
 
 import io.github.aigoodle.trigger.api.TriggerType;
 import io.github.aigoodle.trigger.entity.TriggerEntity;
+import io.github.aigoodle.trigger.service.TriggerInvocationRequest;
 import io.github.aigoodle.trigger.service.TriggerService;
 import org.springframework.beans.factory.ObjectProvider;
 
@@ -15,40 +16,46 @@ import java.util.Map;
  */
 public class EventTriggerBus {
 
-    private final ObjectProvider<TriggerService> triggerService;
+    private final ObjectProvider<TriggerService> triggerServiceProvider;
 
-    public EventTriggerBus(ObjectProvider<TriggerService> triggerService) {
-        this.triggerService = triggerService;
+    public EventTriggerBus(ObjectProvider<TriggerService> triggerServiceProvider) {
+        this.triggerServiceProvider = triggerServiceProvider;
     }
 
     /** Fire matching triggers asynchronously; returns the started invocation ids. */
     public List<String> publish(String eventName, Map<String, Object> payload) {
-        TriggerService service = triggerService.getObject();
+        TriggerService triggerService = triggerServiceProvider.getObject();
         List<String> invocationIds = new ArrayList<>();
-        for (TriggerEntity t : matching(service, eventName)) {
-            invocationIds.add(service.fire(t.getId(), payload, "event"));
+        for (TriggerEntity trigger : findMatchingTriggers(triggerService, eventName)) {
+            invocationIds.add(triggerService.fireAsynchronously(
+                    TriggerInvocationRequest.event(trigger.getId(), payload)));
         }
         return invocationIds;
     }
 
     /** Fire matching triggers synchronously (handy for tests / request-scoped flows). */
     public int publishSync(String eventName, Map<String, Object> payload) {
-        TriggerService service = triggerService.getObject();
-        int fired = 0;
-        for (TriggerEntity t : matching(service, eventName)) {
-            service.fireSync(t.getId(), payload, "event");
-            fired++;
+        TriggerService triggerService = triggerServiceProvider.getObject();
+        int invocationCount = 0;
+        for (TriggerEntity trigger : findMatchingTriggers(triggerService, eventName)) {
+            triggerService.fireSynchronously(
+                    TriggerInvocationRequest.event(trigger.getId(), payload));
+            invocationCount++;
         }
-        return fired;
+        return invocationCount;
     }
 
-    private List<TriggerEntity> matching(TriggerService service, String eventName) {
-        List<TriggerEntity> matched = new ArrayList<>();
-        for (TriggerEntity t : service.listEnabledByType(TriggerType.EVENT)) {
-            if (eventName != null && eventName.equals(String.valueOf(service.config(t).get("eventName")))) {
-                matched.add(t);
+    private List<TriggerEntity> findMatchingTriggers(TriggerService triggerService, String eventName) {
+        if (eventName == null) {
+            return List.of();
+        }
+        List<TriggerEntity> matchingTriggers = new ArrayList<>();
+        for (TriggerEntity trigger : triggerService.listEnabledByType(TriggerType.EVENT)) {
+            Object configuredEventName = triggerService.config(trigger).get("eventName");
+            if (eventName.equals(String.valueOf(configuredEventName))) {
+                matchingTriggers.add(trigger);
             }
         }
-        return matched;
+        return matchingTriggers;
     }
 }

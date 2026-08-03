@@ -18,10 +18,11 @@ import org.springframework.ai.ollama.api.OllamaEmbeddingOptions;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -36,6 +37,11 @@ public class OllamaModelProvider extends AbstractModelProvider {
 
     public static final String NAME = "ollama";
     private static final String DEFAULT_BASE_URL = "http://localhost:11434";
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
+    private static final Duration READ_TIMEOUT = Duration.ofSeconds(15);
+
+    private final OllamaRemoteModelCatalog remoteModelCatalog =
+            new OllamaRemoteModelCatalog();
 
     @Override
     public String getName() {
@@ -62,23 +68,13 @@ public class OllamaModelProvider extends AbstractModelProvider {
     }
 
     private OllamaApi buildApi(ModelEndpoint endpoint) {
-        String baseUrl = endpoint.propertyOrDefault("baseUrl",
-                endpoint.getBaseUrl() != null && !endpoint.getBaseUrl().isBlank()
-                        ? endpoint.getBaseUrl() : DEFAULT_BASE_URL);
-        return OllamaApi.builder().baseUrl(baseUrl).build();
+        return OllamaApi.builder().baseUrl(resolveBaseUrl(endpoint)).build();
     }
 
     @Override
     public ChatModel createChatModel(ModelEndpoint endpoint) {
         OllamaChatOptions.Builder options = OllamaChatOptions.builder().model(endpoint.getModelName());
-        String temperature = endpoint.property("temperature");
-        if (temperature != null && !temperature.isBlank()) {
-            try {
-                options.temperature(Double.valueOf(temperature));
-            } catch (NumberFormatException ignored) {
-                // leave default
-            }
-        }
+        applyTemperature(endpoint, options);
         return OllamaChatModel.builder()
                 .ollamaApi(buildApi(endpoint))
                 .defaultOptions(options.build())
@@ -109,55 +105,59 @@ public class OllamaModelProvider extends AbstractModelProvider {
      */
     @Override
     public List<RemoteModel> listRemoteModels(ModelEndpoint endpoint) {
-        String baseUrl = endpoint.propertyOrDefault("baseUrl",
-                endpoint.getBaseUrl() != null && !endpoint.getBaseUrl().isBlank()
-                        ? endpoint.getBaseUrl() : DEFAULT_BASE_URL);
-        String trimmed = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
-        String url = trimmed + "/api/tags";
+        String catalogUrl = catalogUrl(resolveBaseUrl(endpoint));
 
-        RestClient client = RestClient.builder()
+        RestClient restClient = RestClient.builder()
                 .requestFactory(newRequestFactory())
                 .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
                 .build();
 
-        Map<String, Object> body;
+        Map<String, Object> responseBody;
         try {
-            body = client.get().uri(url).retrieve()
+            responseBody = restClient.get().uri(catalogUrl).retrieve()
                     .body(new ParameterizedTypeReference<>() {});
-        } catch (Exception e) {
-            log.warn("Ollama listing failed at {}: {}", url, e.getMessage());
-            throw new IllegalStateException("Failed to list Ollama models from " + url + ": " + e.getMessage(), e);
+        } catch (RestClientException exception) {
+            log.warn("Ollama model discovery failed at {}: {}",
+                    catalogUrl, exception.getMessage());
+            throw new IllegalStateException(
+                    "Failed to list Ollama models from " + catalogUrl, exception);
         }
-        if (body == null) {
-            return List.of();
-        }
-        Object models = body.get("models");
-        if (!(models instanceof List<?> list)) {
-            return List.of();
-        }
-        List<RemoteModel> out = new ArrayList<>();
-        for (Object o : list) {
-            if (!(o instanceof Map<?, ?> m)) {
-                continue;
-            }
-            Object nameVal = m.get("name");
-            if (nameVal == null) {
-                continue;
-            }
-            String modelId = String.valueOf(nameVal);
-            ModelType inferred = RemoteModel.inferModelType(modelId);
-            out.add(RemoteModel.builder()
-                    .modelId(modelId).label(modelId).modelType(inferred)
-                    .ownedBy("ollama").typeInferred(true).build());
-        }
-        return out;
+        return remoteModelCatalog.fromResponse(responseBody);
     }
 
-    private static org.springframework.http.client.SimpleClientHttpRequestFactory newRequestFactory() {
-        org.springframework.http.client.SimpleClientHttpRequestFactory f =
-                new org.springframework.http.client.SimpleClientHttpRequestFactory();
-        f.setConnectTimeout((int) Duration.ofSeconds(5).toMillis());
-        f.setReadTimeout((int) Duration.ofSeconds(15).toMillis());
-        return f;
+    private static String resolveBaseUrl(ModelEndpoint endpoint) {
+        String endpointBaseUrl = endpoint.getBaseUrl();
+        String defaultBaseUrl = endpointBaseUrl != null && !endpointBaseUrl.isBlank()
+                ? endpointBaseUrl
+                : DEFAULT_BASE_URL;
+        return endpoint.propertyOrDefault("baseUrl", defaultBaseUrl);
+    }
+
+    private static String catalogUrl(String baseUrl) {
+        String normalizedBaseUrl = baseUrl.endsWith("/")
+                ? baseUrl.substring(0, baseUrl.length() - 1)
+                : baseUrl;
+        return normalizedBaseUrl + "/api/tags";
+    }
+
+    private static void applyTemperature(ModelEndpoint endpoint,
+                                         OllamaChatOptions.Builder options) {
+        String configuredTemperature = endpoint.property("temperature");
+        if (configuredTemperature == null || configuredTemperature.isBlank()) {
+            return;
+        }
+        try {
+            options.temperature(Double.valueOf(configuredTemperature));
+        } catch (NumberFormatException invalidTemperature) {
+            // Keep Spring AI's default when an older stored endpoint contains bad data.
+        }
+    }
+
+    private static SimpleClientHttpRequestFactory newRequestFactory() {
+        SimpleClientHttpRequestFactory requestFactory =
+                new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout((int) CONNECT_TIMEOUT.toMillis());
+        requestFactory.setReadTimeout((int) READ_TIMEOUT.toMillis());
+        return requestFactory;
     }
 }

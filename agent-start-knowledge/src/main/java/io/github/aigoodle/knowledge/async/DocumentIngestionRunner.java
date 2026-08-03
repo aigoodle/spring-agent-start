@@ -10,6 +10,7 @@ import io.github.aigoodle.knowledge.enums.DocumentStatus;
 import io.github.aigoodle.knowledge.index.IndexingService;
 import io.github.aigoodle.knowledge.mapper.DocumentIngestQueueMapper;
 import io.github.aigoodle.knowledge.mapper.KnowledgeDocumentMapper;
+import io.github.aigoodle.knowledge.service.DatasetCountChange;
 import io.github.aigoodle.knowledge.service.DatasetService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -103,7 +104,8 @@ public class DocumentIngestionRunner {
             doc.setStatus(DocumentStatus.COMPLETED);
             documentMapper.updateById(doc);
 
-            datasetService.updateCounts(dataset, 1, count);
+            datasetService.applyCountChange(
+                    dataset, DatasetCountChange.documentAdded(count));
             queueMapper.deleteById(documentId);
             log.info("Async-ingested document '{}' into dataset {} as {} segments",
                     doc.getName(), doc.getDatasetId(), count);

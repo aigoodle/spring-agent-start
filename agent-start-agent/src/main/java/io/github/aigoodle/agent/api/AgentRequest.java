@@ -15,7 +15,7 @@ public class AgentRequest {
 
     private String query;
 
-    /** Conversation id for memory; a new one is generated when null. */
+    /** Conversation ID for memory; a new one is generated when absent or blank. */
     private String conversationId;
 
     /** Extra variables available to the agent's instructions template. */

@@ -45,3 +45,11 @@ node_modules/
 *.log
 .env.local
 .env.*.local
+.m2/
+.maven-central-verify/
+.mvn/settings-central-global.xml
+.mvn/settings-central.xml
+.mvn/central-verify.log
+.mvn/central-verify.err.log
+.mvn/central-deploy.log
+.mvn/central-deploy.err.log

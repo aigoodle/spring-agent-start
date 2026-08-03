@@ -17,7 +17,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CompletionException;
@@ -56,10 +55,10 @@ public class WorkflowEngine {
     private static final Logger log = LoggerFactory.getLogger(WorkflowEngine.class);
     private static final int MAX_STEPS = 1000;
 
-    private final NodeExecutorRegistry registry;
+    private final NodeExecutorRegistry executorRegistry;
 
-    public WorkflowEngine(NodeExecutorRegistry registry) {
-        this.registry = registry;
+    public WorkflowEngine(NodeExecutorRegistry executorRegistry) {
+        this.executorRegistry = executorRegistry;
     }
 
     public WorkflowRunResult run(WorkflowGraph graph, Map<String, Object> inputs, String conversationId) {
@@ -81,164 +80,121 @@ public class WorkflowEngine {
                                   Consumer<StepRecord> stepListener,
                                   io.github.aigoodle.workflow.chat.ChatStreamSink chatSink) {
         graph.reindex();
-        ExecutionContext ctx = new ExecutionContext();
-        ctx.setRunId(UUID.randomUUID().toString());
-        ctx.setConversationId(conversationId);
-        ctx.setChatSink(chatSink);
-        if (inputs != null) {
-            ctx.getInputs().putAll(inputs);
-            inputs.forEach(ctx.getPool()::setSystem);
-        }
-
-        WorkflowRunResult result = new WorkflowRunResult();
-        result.setRunId(ctx.getRunId());
-        result.setSteps(ctx.getSteps());
-        Map<String, Object> endOutputs = new ConcurrentHashMap<>();
+        ExecutionContext context = ExecutionContext.start(inputs, conversationId, chatSink);
+        WorkflowRunResult result = WorkflowRunResult.forRun(context.getRunId(), context.getSteps());
+        RunState run = new RunState(context, stepListener);
 
         NodeDef startNode = graph.startNode();
         Map<String, List<EdgeDef>> incomingByTarget = indexIncoming(graph);
 
-        Map<String, NodeOutcome> outcomes = new ConcurrentHashMap<>();
         Map<String, CompletableFuture<Void>> nodeFutures = new HashMap<>();
-        for (NodeDef n : graph.getNodes()) {
-            nodeFutures.put(n.getId(), new CompletableFuture<>());
+        for (NodeDef node : graph.getNodes()) {
+            nodeFutures.put(node.getId(), new CompletableFuture<>());
         }
-
-        AtomicInteger stepCount = new AtomicInteger();
-        AtomicReference<String> failure = new AtomicReference<>();
-        Object listenerLock = new Object();
 
         // A per-run virtual-thread executor: nodes are typically I/O-bound (HTTP,
         // LLM, retrieval), so per-task virtual threads give ideal parallelism
         // without needing a bounded pool tuned for blocking.
         try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
-            for (NodeDef n : graph.getNodes()) {
-                scheduleNode(n, startNode, incomingByTarget.getOrDefault(n.getId(), List.of()),
-                        nodeFutures, outcomes, endOutputs, stepCount, failure, listenerLock,
-                        ctx, stepListener, executor);
+            for (NodeDef node : graph.getNodes()) {
+                scheduleNode(node, startNode, incomingByTarget.getOrDefault(node.getId(), List.of()),
+                        nodeFutures, run, executor);
             }
 
             try {
                 CompletableFuture.allOf(nodeFutures.values().toArray(new CompletableFuture[0])).join();
             } catch (CompletionException ex) {
                 Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
-                log.error("Workflow run {} failed: {}", ctx.getRunId(), cause.getMessage(), cause);
-                result.setSuccess(false);
-                result.setError(cause.getMessage());
-                result.setOutputs(endOutputs);
-                return result;
+                log.error("Workflow run {} failed: {}", context.getRunId(), cause.getMessage(), cause);
+                return result.fail(cause.getMessage(), run.endOutputs);
             } catch (Exception ex) {
-                log.error("Workflow run {} failed: {}", ctx.getRunId(), ex.getMessage(), ex);
-                result.setSuccess(false);
-                result.setError(ex.getMessage());
-                result.setOutputs(endOutputs);
-                return result;
+                log.error("Workflow run {} failed: {}", context.getRunId(), ex.getMessage(), ex);
+                return result.fail(ex.getMessage(), run.endOutputs);
             }
         }
 
-        String err = failure.get();
-        if (err != null) {
-            result.setSuccess(false);
-            result.setError(err);
-        } else {
-            result.setSuccess(true);
+        String failureMessage = run.failure.get();
+        if (failureMessage != null) {
+            return result.fail(failureMessage, run.endOutputs);
         }
-        result.setOutputs(endOutputs);
-        return result;
+        return result.succeed(run.endOutputs);
     }
 
     private void scheduleNode(NodeDef node, NodeDef startNode, List<EdgeDef> incoming,
                               Map<String, CompletableFuture<Void>> nodeFutures,
-                              Map<String, NodeOutcome> outcomes,
-                              Map<String, Object> endOutputs,
-                              AtomicInteger stepCount,
-                              AtomicReference<String> failure,
-                              Object listenerLock,
-                              ExecutionContext ctx,
-                              Consumer<StepRecord> stepListener,
+                              RunState run,
                               Executor executor) {
         boolean isStart = node.getId().equals(startNode.getId());
-        CompletableFuture<Void> self = nodeFutures.get(node.getId());
+        CompletableFuture<Void> nodeFuture = nodeFutures.get(node.getId());
 
-        Runnable task = () -> runOne(node, isStart, incoming, outcomes, endOutputs,
-                stepCount, failure, listenerLock, ctx, stepListener, self);
+        Runnable nodeTask = () -> executeNode(node, isStart, incoming, run, nodeFuture);
 
         if (isStart) {
-            executor.execute(task);
+            executor.execute(nodeTask);
             return;
         }
         if (incoming.isEmpty()) {
             // Orphan node: never reachable from START, so skip and let the run finish.
-            outcomes.put(node.getId(), NodeOutcome.skipped());
-            self.complete(null);
+            run.outcomes.put(node.getId(), NodeOutcome.skipped());
+            nodeFuture.complete(null);
             return;
         }
         CompletableFuture<?>[] parents = incoming.stream()
-                .map(e -> nodeFutures.get(e.getSource()))
+                .map(edge -> nodeFutures.get(edge.getSource()))
                 .filter(Objects::nonNull)
                 .distinct()
                 .toArray(CompletableFuture[]::new);
-        CompletableFuture.allOf(parents).thenRunAsync(task, executor);
+        CompletableFuture.allOf(parents).thenRunAsync(nodeTask, executor);
     }
 
-    private void runOne(NodeDef node, boolean isStart, List<EdgeDef> incoming,
-                        Map<String, NodeOutcome> outcomes,
-                        Map<String, Object> endOutputs,
-                        AtomicInteger stepCount,
-                        AtomicReference<String> failure,
-                        Object listenerLock,
-                        ExecutionContext ctx,
-                        Consumer<StepRecord> stepListener,
-                        CompletableFuture<Void> self) {
+    private void executeNode(NodeDef node, boolean isStart, List<EdgeDef> incoming,
+                        RunState run,
+                        CompletableFuture<Void> nodeFuture) {
         try {
-            boolean fired = isStart || anyIncomingFired(incoming, outcomes);
-            if (!fired || failure.get() != null) {
-                outcomes.put(node.getId(), NodeOutcome.skipped());
+            boolean fired = isStart || anyIncomingFired(incoming, run.outcomes);
+            if (!fired || run.failure.get() != null) {
+                run.outcomes.put(node.getId(), NodeOutcome.skipped());
                 return;
             }
-            if (stepCount.incrementAndGet() > MAX_STEPS) {
-                failure.compareAndSet(null,
+            if (run.stepCount.incrementAndGet() > MAX_STEPS) {
+                run.failure.compareAndSet(null,
                         new AgentException("max_steps",
                                 "Workflow exceeded " + MAX_STEPS + " steps", null).getMessage());
-                outcomes.put(node.getId(), NodeOutcome.skipped());
+                run.outcomes.put(node.getId(), NodeOutcome.skipped());
                 return;
             }
 
             long start = System.nanoTime();
-            NodeResult nr;
+            NodeResult nodeResult;
             try {
-                NodeExecutor exec = registry.get(node.getType());
-                nr = exec.execute(node, ctx);
-            } catch (Exception e) {
-                log.error("Node {} ({}) failed: {}", node.getId(), node.getType(), e.getMessage(), e);
-                nr = NodeResult.failure(e.getMessage());
+                NodeExecutor nodeExecutor = executorRegistry.get(node.getType());
+                nodeResult = nodeExecutor.execute(node, run.context);
+            } catch (Exception exception) {
+                log.error("Node {} ({}) failed: {}", node.getId(), node.getType(), exception.getMessage(), exception);
+                nodeResult = NodeResult.failure(exception.getMessage());
             }
-            long elapsed = (System.nanoTime() - start) / 1_000_000;
+            long elapsedMillis = (System.nanoTime() - start) / 1_000_000;
 
-            ctx.getPool().putAll(node.getId(), nr.getOutputs());
-            synchronized (listenerLock) {
-                StepRecord rec = record(ctx, node, nr, elapsed);
-                fire(stepListener, rec);
-            }
+            run.record(node, nodeResult, elapsedMillis);
 
-            if (nr.isFailed()) {
-                failure.compareAndSet(null, "Node " + node.getId() + " failed: " + nr.getError());
-                outcomes.put(node.getId(), NodeOutcome.executed(nr.getHandle()));
+            if (nodeResult.isFailed()) {
+                run.failure.compareAndSet(null, "Node " + node.getId() + " failed: " + nodeResult.getError());
+                run.outcomes.put(node.getId(), NodeOutcome.executed(nodeResult.getHandle()));
                 return;
             }
-            if (node.getType() == NodeType.END && nr.getOutputs() != null) {
-                endOutputs.putAll(nr.getOutputs());
+            if (node.getType() == NodeType.END && nodeResult.getOutputs() != null) {
+                run.endOutputs.putAll(nodeResult.getOutputs());
             }
-            outcomes.put(node.getId(), NodeOutcome.executed(nr.getHandle()));
+            run.outcomes.put(node.getId(), NodeOutcome.executed(nodeResult.getHandle()));
         } finally {
-            self.complete(null);
+            nodeFuture.complete(null);
         }
     }
 
     private static boolean anyIncomingFired(List<EdgeDef> incoming, Map<String, NodeOutcome> outcomes) {
-        for (EdgeDef e : incoming) {
-            NodeOutcome parent = outcomes.get(e.getSource());
-            if (parent != null && parent.executed() && matches(e, parent.handle())) {
+        for (EdgeDef edge : incoming) {
+            NodeOutcome parent = outcomes.get(edge.getSource());
+            if (parent != null && parent.executed() && matches(edge, parent.handle())) {
                 return true;
             }
         }
@@ -247,13 +203,13 @@ public class WorkflowEngine {
 
     private static Map<String, List<EdgeDef>> indexIncoming(WorkflowGraph graph) {
         Map<String, List<EdgeDef>> incoming = new HashMap<>();
-        for (NodeDef n : graph.getNodes()) {
-            incoming.put(n.getId(), new ArrayList<>());
+        for (NodeDef node : graph.getNodes()) {
+            incoming.put(node.getId(), new ArrayList<>());
         }
-        for (EdgeDef e : graph.getEdges()) {
-            List<EdgeDef> list = incoming.get(e.getTarget());
-            if (list != null) {
-                list.add(e);
+        for (EdgeDef edge : graph.getEdges()) {
+            List<EdgeDef> incomingEdges = incoming.get(edge.getTarget());
+            if (incomingEdges != null) {
+                incomingEdges.add(edge);
             }
         }
         return incoming;
@@ -266,28 +222,14 @@ public class WorkflowEngine {
         return edge.getSourceHandle().equals(handle);
     }
 
-    private static StepRecord record(ExecutionContext ctx, NodeDef node, NodeResult nr, long elapsed) {
-        StepRecord rec = new StepRecord();
-        rec.setNodeId(node.getId());
-        rec.setNodeType(node.getType());
-        rec.setTitle(node.getTitle());
-        rec.setOutputs(nr.getOutputs());
-        rec.setHandle(nr.getHandle());
-        rec.setElapsedMillis(elapsed);
-        rec.setFailed(nr.isFailed());
-        rec.setError(nr.getError());
-        ctx.record(rec);
-        return rec;
-    }
-
-    private static void fire(Consumer<StepRecord> listener, StepRecord rec) {
+    private static void notifyStepListener(Consumer<StepRecord> listener, StepRecord step) {
         if (listener == null) {
             return;
         }
         try {
-            listener.accept(rec);
-        } catch (Exception e) {
-            log.warn("Workflow step listener threw: {}", e.getMessage());
+            listener.accept(step);
+        } catch (Exception exception) {
+            log.warn("Workflow step listener threw: {}", exception.getMessage());
         }
     }
 
@@ -299,6 +241,31 @@ public class WorkflowEngine {
 
         static NodeOutcome executed(String handle) {
             return new NodeOutcome(true, handle);
+        }
+    }
+
+    private static final class RunState {
+
+        private final ExecutionContext context;
+        private final Consumer<StepRecord> stepListener;
+        private final Map<String, NodeOutcome> outcomes = new ConcurrentHashMap<>();
+        private final Map<String, Object> endOutputs = new ConcurrentHashMap<>();
+        private final AtomicInteger stepCount = new AtomicInteger();
+        private final AtomicReference<String> failure = new AtomicReference<>();
+        private final Object listenerLock = new Object();
+
+        private RunState(ExecutionContext context, Consumer<StepRecord> stepListener) {
+            this.context = context;
+            this.stepListener = stepListener;
+        }
+
+        private void record(NodeDef node, NodeResult result, long elapsedMillis) {
+            context.getPool().putAll(node.getId(), result.getOutputs());
+            synchronized (listenerLock) {
+                StepRecord step = StepRecord.completed(node, result, elapsedMillis);
+                context.record(step);
+                notifyStepListener(stepListener, step);
+            }
         }
     }
 }

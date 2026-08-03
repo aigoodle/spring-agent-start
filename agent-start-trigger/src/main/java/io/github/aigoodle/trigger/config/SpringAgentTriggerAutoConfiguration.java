@@ -8,6 +8,7 @@ import io.github.aigoodle.trigger.event.EventTriggerBus;
 import io.github.aigoodle.trigger.mapper.TriggerInvocationMapper;
 import io.github.aigoodle.trigger.mapper.TriggerMapper;
 import io.github.aigoodle.trigger.service.TriggerChangeListener;
+import io.github.aigoodle.trigger.service.TriggerInvocationRunner;
 import io.github.aigoodle.trigger.service.TriggerService;
 import io.github.aigoodle.trigger.web.TriggerWebhookController;
 import io.github.aigoodle.workflow.config.SpringAgentWorkflowAutoConfiguration;
@@ -51,10 +52,10 @@ public class SpringAgentTriggerAutoConfiguration {
     @Bean(name = "triggerExecutor", destroyMethod = "shutdown")
     @ConditionalOnMissingBean(name = "triggerExecutor")
     public ExecutorService triggerExecutor() {
-        return Executors.newFixedThreadPool(4, r -> {
-            Thread t = new Thread(r, "agent-trigger");
-            t.setDaemon(true);
-            return t;
+        return Executors.newFixedThreadPool(4, task -> {
+            Thread worker = new Thread(task, "agent-trigger");
+            worker.setDaemon(true);
+            return worker;
         });
     }
 
@@ -84,10 +85,19 @@ public class SpringAgentTriggerAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public TriggerService triggerService(TriggerMapper triggerMapper, TriggerInvocationMapper invocationMapper,
-                                         TriggerDispatcherRegistry dispatcherRegistry, ExecutorService triggerExecutor,
+    public TriggerInvocationRunner triggerInvocationRunner(
+            TriggerInvocationMapper invocationMapper,
+            TriggerDispatcherRegistry dispatcherRegistry) {
+        return new TriggerInvocationRunner(invocationMapper, dispatcherRegistry);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public TriggerService triggerService(TriggerMapper triggerMapper,
+                                         TriggerInvocationRunner invocationRunner,
+                                         ExecutorService triggerExecutor,
                                          List<TriggerChangeListener> changeListeners) {
-        return new TriggerService(triggerMapper, invocationMapper, dispatcherRegistry, triggerExecutor, changeListeners);
+        return new TriggerService(triggerMapper, invocationRunner, triggerExecutor, changeListeners);
     }
 
     /** Webhook endpoint, only in a servlet web application. */

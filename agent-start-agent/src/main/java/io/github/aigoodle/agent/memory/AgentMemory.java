@@ -36,7 +36,9 @@ public interface AgentMemory {
     void append(String conversationId, String agentId, AgentMessage message);
 
     default void appendAll(String conversationId, String agentId, List<AgentMessage> messages) {
-        messages.forEach(m -> append(conversationId, agentId, m));
+        for (AgentMessage message : messages) {
+            append(conversationId, agentId, message);
+        }
     }
 
     /**

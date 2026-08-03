@@ -20,14 +20,13 @@ public class VariableAggregatorNodeExecutor implements NodeExecutor {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    public NodeResult execute(NodeDef node, ExecutionContext ctx) {
-        Object vars = node.get("variables");
-        if (vars instanceof List<?> list) {
-            for (Object path : (List<Object>) list) {
-                Object value = ctx.getPool().get(String.valueOf(path));
-                if (value != null && !String.valueOf(value).isBlank()) {
-                    return NodeResult.of("output", value);
+    public NodeResult execute(NodeDef node, ExecutionContext context) {
+        Object configuredVariables = node.get("variables");
+        if (configuredVariables instanceof List<?> variablePaths) {
+            for (Object variablePath : variablePaths) {
+                Object candidateValue = context.getPool().get(String.valueOf(variablePath));
+                if (candidateValue != null && !String.valueOf(candidateValue).isBlank()) {
+                    return NodeResult.of("output", candidateValue);
                 }
             }
         }

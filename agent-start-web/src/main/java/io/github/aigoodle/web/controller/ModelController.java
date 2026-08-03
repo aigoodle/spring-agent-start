@@ -5,10 +5,7 @@ import io.github.aigoodle.model.entity.PredefinedModelEntity;
 import io.github.aigoodle.model.entity.ProviderCredentialEntity;
 import io.github.aigoodle.model.entity.ProviderDefinitionEntity;
 import io.github.aigoodle.model.enums.ModelType;
-import io.github.aigoodle.model.provider.CredentialField;
-import io.github.aigoodle.model.provider.ModelParameterRule;
 import io.github.aigoodle.model.provider.ModelProvider;
-import io.github.aigoodle.model.provider.PredefinedModel;
 import io.github.aigoodle.model.provider.RemoteModel;
 import io.github.aigoodle.model.registry.ModelProviderRegistry;
 import io.github.aigoodle.model.service.ModelRegistration;
@@ -18,6 +15,8 @@ import io.github.aigoodle.model.service.ProviderDefinitionService;
 import io.github.aigoodle.model.service.ProviderModelSettingsService;
 import io.github.aigoodle.web.common.ApiResponse;
 import io.github.aigoodle.web.dto.ProviderCredentialRequest;
+import io.github.aigoodle.web.service.ModelCatalogQueryService;
+import io.github.aigoodle.web.support.ModelViewMapper;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -55,16 +54,19 @@ public class ModelController {
     private final ProviderCredentialService credentialService;
     private final ProviderDefinitionService definitionService;
     private final ProviderModelSettingsService settingsService;
+    private final ModelCatalogQueryService catalogQueries;
 
     public ModelController(ModelService modelService, ModelProviderRegistry providerRegistry,
                            ProviderCredentialService credentialService,
                            ProviderDefinitionService definitionService,
-                           ProviderModelSettingsService settingsService) {
+                           ProviderModelSettingsService settingsService,
+                           ModelCatalogQueryService catalogQueries) {
         this.modelService = modelService;
         this.providerRegistry = providerRegistry;
         this.credentialService = credentialService;
         this.definitionService = definitionService;
         this.settingsService = settingsService;
+        this.catalogQueries = catalogQueries;
     }
 
     // --------------------------------------------------------------- providers
@@ -79,27 +81,14 @@ public class ModelController {
     @GetMapping("/model-providers")
     public ApiResponse<List<Map<String, Object>>> listProviders(
             @RequestParam(required = false) String tenantId) {
-        List<Map<String, Object>> out = new ArrayList<>();
-        List<ProviderDefinitionEntity> defs = definitionService.list(tenantId);
-        if (defs.isEmpty()) {
+        return ApiResponse.ok(catalogQueries.providers(tenantId));
             // Cold start fallback — first boot before seeder ran, still show Java built-ins.
-            for (ModelProvider p : providerRegistry.all()) {
-                out.add(asProviderViewFromBean(p, tenantId));
-            }
-            return ApiResponse.ok(out);
-        }
-        for (ProviderDefinitionEntity def : defs) {
-            out.add(asProviderView(def, tenantId));
-        }
-        return ApiResponse.ok(out);
     }
 
     @GetMapping("/model-providers/{name}")
     public ApiResponse<Map<String, Object>> getProvider(@PathVariable String name,
                                                         @RequestParam(required = false) String tenantId) {
-        ProviderDefinitionEntity def = definitionService.findByName(tenantId, name);
-        if (def != null) return ApiResponse.ok(asProviderView(def, tenantId));
-        return ApiResponse.ok(asProviderViewFromBean(providerRegistry.get(name), tenantId));
+        return ApiResponse.ok(catalogQueries.provider(name, tenantId));
     }
 
     // ------------------------------------------------ provider definition CRUD
@@ -114,9 +103,11 @@ public class ModelController {
     @PostMapping("/model-provider-definitions")
     public ApiResponse<ProviderDefinitionEntity> createDefinition(
             @RequestBody Map<String, Object> body) {
-        ProviderDefinitionEntity def = fromDefinitionPayload(body);
-        if (def.getSource() == null) def.setSource("custom");
-        return ApiResponse.ok(definitionService.upsert(def));
+        ProviderDefinitionEntity definition = ModelViewMapper.toProviderDefinition(body);
+        if (definition.getSource() == null) {
+            definition.setSource("custom");
+        }
+        return ApiResponse.ok(definitionService.upsert(definition));
     }
 
     @PutMapping("/model-provider-definitions/{id}")
@@ -152,19 +143,8 @@ public class ModelController {
     @GetMapping("/model-providers/{name}/catalog")
     public ApiResponse<List<Map<String, Object>>> providerCatalog(
             @PathVariable String name, @RequestParam(required = false) String tenantId) {
-        List<Map<String, Object>> out = new ArrayList<>();
-        Map<String, io.github.aigoodle.model.entity.ProviderModelSettingEntity> settings =
-                settingsService.settingIndex(tenantId, name);
-        Map<ModelType, io.github.aigoodle.model.entity.TenantDefaultModelEntity> defaults =
-                settingsService.listDefaults(tenantId);
+        return ApiResponse.ok(catalogQueries.catalog(name, tenantId));
         // Predefined DB rows first (source=predefined), then custom rows.
-        for (PredefinedModelEntity pd : definitionService.listPredefined(name)) {
-            out.add(asCatalogRow(pd, settings, defaults));
-        }
-        for (ModelEntity m : modelService.listByProvider(tenantId, name)) {
-            out.add(asCustomCatalogRow(m, defaults));
-        }
-        return ApiResponse.ok(out);
     }
 
     /** Add a predefined model to a provider (extend the shipped catalog from admin UI). */
@@ -250,8 +230,8 @@ public class ModelController {
     public ApiResponse<Map<String, Object>> getProviderCredential(@PathVariable String name,
                                                                   @RequestParam(required = false) String tenantId) {
         ModelProvider provider = providerRegistry.get(name);
-        ProviderCredentialEntity cred = credentialService.findPrimary(tenantId, provider.getName());
-        return ApiResponse.ok(asCredentialView(provider, cred));
+        ProviderCredentialEntity credential = credentialService.findPrimary(tenantId, provider.getName());
+        return ApiResponse.ok(ModelViewMapper.toCredentialView(provider, credential));
     }
 
     /**
@@ -263,11 +243,11 @@ public class ModelController {
      */
     @PutMapping("/model-providers/{name}/credential")
     public ApiResponse<Map<String, Object>> upsertProviderCredential(
-            @PathVariable String name, @RequestBody ProviderCredentialRequest req) {
+            @PathVariable String name, @RequestBody ProviderCredentialRequest request) {
         ModelProvider provider = providerRegistry.get(name);
-        ProviderCredentialEntity cred = modelService.saveProviderCredentialWithValidation(
-                req.getTenantId(), provider.getName(), req.getCredentials());
-        return ApiResponse.ok(asCredentialView(provider, cred));
+        ProviderCredentialEntity credential = modelService.saveProviderCredentialWithValidation(
+                request.getTenantId(), provider.getName(), request.getCredentials());
+        return ApiResponse.ok(ModelViewMapper.toCredentialView(provider, credential));
     }
 
     /**
@@ -294,7 +274,7 @@ public class ModelController {
     public ApiResponse<List<Map<String, Object>>> listRemoteModels(@PathVariable String name,
                                                                     @RequestParam(required = false) String tenantId) {
         List<RemoteModel> models = modelService.listRemoteModels(tenantId, name);
-        return ApiResponse.ok(models.stream().map(ModelController::asRemoteModelView).toList());
+        return ApiResponse.ok(models.stream().map(ModelViewMapper::toRemoteModelView).toList());
     }
 
     /**
@@ -306,7 +286,7 @@ public class ModelController {
     public ApiResponse<List<Map<String, Object>>> refreshCatalog(
             @PathVariable String name, @RequestParam(required = false) String tenantId) {
         List<RemoteModel> remote = modelService.refreshCatalog(tenantId, name);
-        return ApiResponse.ok(remote.stream().map(ModelController::asRemoteModelView).toList());
+        return ApiResponse.ok(remote.stream().map(ModelViewMapper::toRemoteModelView).toList());
     }
 
     // ------------------------------------------------------------------ models
@@ -323,8 +303,8 @@ public class ModelController {
     }
 
     @PostMapping("/models")
-    public ApiResponse<ModelEntity> registerModel(@RequestBody ModelRegistration req) {
-        return ApiResponse.ok(modelService.register(req));
+    public ApiResponse<ModelEntity> registerModel(@RequestBody ModelRegistration registration) {
+        return ApiResponse.ok(modelService.register(registration));
     }
 
     @PutMapping("/models/{id}/credentials")
@@ -360,8 +340,8 @@ public class ModelController {
 
     /** Dry-run the credentials without persisting: builds the provider once. */
     @PostMapping("/models/validate")
-    public ApiResponse<Void> validate(@RequestBody ModelRegistration req) {
-        modelService.validate(req);
+    public ApiResponse<Void> validate(@RequestBody ModelRegistration registration) {
+        modelService.validate(registration);
         return ApiResponse.ok();
     }
 
@@ -385,19 +365,7 @@ public class ModelController {
      */
     @GetMapping("/models/{id}/parameters")
     public ApiResponse<Map<String, Object>> getModelParameters(@PathVariable String id) {
-        List<ModelParameterRule> rules = modelService.parameterRulesFor(id);
-        Map<String, Object> stored = modelService.getModelProperties(id);
-        Map<String, Object> values = new LinkedHashMap<>();
-        for (ModelParameterRule r : rules) {
-            Object v = stored.get(r.getName());
-            if (v != null) {
-                values.put(r.getName(), v);
-            }
-        }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("rules", rules.stream().map(ModelController::asRuleView).toList());
-        out.put("parameters", values);
-        return ApiResponse.ok(out);
+        return ApiResponse.ok(catalogQueries.parameters(id));
     }
 
     /**
@@ -455,12 +423,14 @@ public class ModelController {
     @GetMapping("/models/grouped-by-type")
     public ApiResponse<Map<String, List<Map<String, Object>>>> listModelsGroupedByType(
             @RequestParam(required = false) String tenantId) {
-        Map<String, List<Map<String, Object>>> out = new LinkedHashMap<>();
+        Map<String, List<Map<String, Object>>> providersByModelType = new LinkedHashMap<>();
         // Seed empty buckets so the UI can render every supported type even when
         // there are no candidates yet (keeps the shape stable).
-        for (ModelType t : ModelType.values()) out.put(t.name(), new ArrayList<>());
+        for (ModelType modelType : ModelType.values()) {
+            providersByModelType.put(modelType.name(), new ArrayList<>());
+        }
 
-        for (ProviderDefinitionEntity def : definitionService.list(tenantId)) {
+        for (ProviderDefinitionEntity definition : definitionService.list(tenantId)) {
             // A provider only surfaces in the default picker once its credential
             // has been saved — the model behind it wouldn't be invocable otherwise.
             // We intentionally do NOT require the per-model "enabled" toggle here:
@@ -471,323 +441,39 @@ public class ModelController {
             // user hit ("配置了模型之后…下拉选择默认模型无法加载"). Downstream
             // usability is guaranteed by {@link #setModelDefault} which flips
             // the enabled flag as a side effect of choosing a default.
-            ProviderCredentialEntity cred =
-                    credentialService.findPrimary(tenantId, def.getName());
-            if (cred == null) continue;
+            ProviderCredentialEntity credential =
+                    credentialService.findPrimary(tenantId, definition.getName());
+            if (credential == null) {
+                continue;
+            }
 
             // Bucket every predefined model (shipped by the provider) by type.
-            Map<ModelType, List<Map<String, Object>>> byType = new LinkedHashMap<>();
-            for (PredefinedModelEntity pd : definitionService.listPredefined(def.getName())) {
-                byType.computeIfAbsent(pd.getModelType(), k -> new ArrayList<>())
-                        .add(asGroupedModelView(def.getName(), pd.getModel(), pd.getModelType()));
+            Map<ModelType, List<Map<String, Object>>> modelsByType = new LinkedHashMap<>();
+            for (PredefinedModelEntity predefinedModel
+                    : definitionService.listPredefined(definition.getName())) {
+                modelsByType.computeIfAbsent(
+                                predefinedModel.getModelType(), ignored -> new ArrayList<>())
+                        .add(ModelViewMapper.toGroupedModelView(
+                                definition.getName(), predefinedModel.getModel(),
+                                predefinedModel.getModelType()));
             }
             // Bucket every custom-registered model too — user-added rows are
             // implicitly "configured" by virtue of existing in agent_model.
-            for (ModelEntity m : modelService.listByProvider(tenantId, def.getName())) {
-                byType.computeIfAbsent(m.getModelType(), k -> new ArrayList<>())
-                        .add(asGroupedModelView(def.getName(), m.getModelName(), m.getModelType()));
+            for (ModelEntity customModel
+                    : modelService.listByProvider(tenantId, definition.getName())) {
+                modelsByType.computeIfAbsent(
+                                customModel.getModelType(), ignored -> new ArrayList<>())
+                        .add(ModelViewMapper.toGroupedModelView(
+                                definition.getName(), customModel.getModelName(),
+                                customModel.getModelType()));
             }
 
             // Publish one provider entry per model type with a non-empty bucket.
-            for (var e : byType.entrySet()) {
-                out.get(e.getKey().name()).add(asGroupedProviderView(def, e.getValue()));
+            for (Map.Entry<ModelType, List<Map<String, Object>>> models : modelsByType.entrySet()) {
+                providersByModelType.get(models.getKey().name()).add(
+                        ModelViewMapper.toGroupedProviderView(definition, models.getValue()));
             }
         }
-        return ApiResponse.ok(out);
-    }
-
-    // ---------------------------------------------------------------- helpers
-
-    /**
-     * Serialize a provider plus (optional) tenant-scoped state so the front-end can
-     * render "configured / pending / available" sections in a single pass without
-     * chasing follow-up round-trips per provider.
-     */
-    /**
-     * DB-driven provider view. Metadata (label / icon / credential schema /
-     * parameter rules / predefined models) is deserialized from the definition
-     * row and its child predefined-model rows. Runtime capability
-     * ({@code supportsRemoteModelListing}) comes from the definition column,
-     * which was seeded from the Java bean.
-     */
-    private Map<String, Object> asProviderView(ProviderDefinitionEntity def, String tenantId) {
-        Map<String, Object> view = new LinkedHashMap<>();
-        view.put("id", def.getId());
-        view.put("name", def.getName());
-        view.put("label", def.getLabel());
-        view.put("description", def.getDescription());
-        view.put("icon", def.getIcon());
-        view.put("svgIcon", def.getSvgIcon());
-        view.put("implementationKey", def.getImplementationKey());
-        view.put("defaultBaseUrl", def.getDefaultBaseUrl());
-        view.put("source", def.getSource());
-        view.put("sortOrder", def.getSortOrder());
-        view.put("enabled", def.getEnabled());
-        view.put("supportsRemoteModelListing",
-                Boolean.TRUE.equals(def.getSupportsRemoteModelListing()));
-
-        var types = definitionService.deserializeModelTypes(def.getSupportedModelTypes());
-        view.put("supportedModelTypes", types);
-        view.put("credentialSchema",
-                definitionService.deserializeCredentialSchema(def.getCredentialSchema()).stream()
-                        .map(ModelController::asFieldView).toList());
-        var rulesByType = definitionService.deserializeParameterRules(def.getDefaultParameterRules());
-        Map<String, Object> defaultRules = new LinkedHashMap<>();
-        for (ModelType t : types) {
-            List<ModelParameterRule> rules = rulesByType.getOrDefault(t, List.of());
-            defaultRules.put(t.name(),
-                    rules.stream().map(ModelController::asRuleView).toList());
-        }
-        view.put("defaultParameterRules", defaultRules);
-
-        // Predefined catalog from DB — replaces the old Java bean read.
-        List<PredefinedModelEntity> predefined =
-                definitionService.listPredefined(def.getName());
-        view.put("predefinedModels", predefined.stream()
-                .map(this::asPredefinedRowView).toList());
-
-        // Tenant-scoped state.
-        ProviderCredentialEntity cred = credentialService.findPrimary(tenantId, def.getName());
-        view.put("credentialConfigured", cred != null);
-        if (cred != null) {
-            view.put("credentialId", cred.getId());
-            // Secret field names come from the credential schema itself.
-            List<String> secretKeys = new ArrayList<>();
-            for (CredentialField f :
-                    definitionService.deserializeCredentialSchema(def.getCredentialSchema())) {
-                if (f.isSecret()) secretKeys.add(f.getName());
-            }
-            view.put("credentialMasked", credentialService.maskedView(cred, secretKeys));
-        }
-        int installed = 0;
-        for (ModelEntity m : modelService.list(tenantId)) {
-            if (def.getName().equalsIgnoreCase(m.getProviderName())) installed++;
-        }
-        view.put("installedModelCount", installed);
-        return view;
-    }
-
-    /** Cold-start fallback view used before the seeder has populated the DB. */
-    private Map<String, Object> asProviderViewFromBean(ModelProvider p, String tenantId) {
-        Map<String, Object> view = new LinkedHashMap<>();
-        view.put("name", p.getName());
-        view.put("label", p.getLabel());
-        view.put("implementationKey", p.implementationKey());
-        view.put("source", "builtin");
-        view.put("supportedModelTypes", p.supportedModelTypes());
-        view.put("credentialSchema", p.credentialSchema().fields().stream().map(ModelController::asFieldView).toList());
-        view.put("predefinedModels", p.predefinedModels().stream().map(ModelController::asPredefinedView).toList());
-        Map<String, Object> defaultRules = new LinkedHashMap<>();
-        for (ModelType t : p.supportedModelTypes()) {
-            defaultRules.put(t.name(),
-                    p.defaultParameterRules(t).stream().map(ModelController::asRuleView).toList());
-        }
-        view.put("defaultParameterRules", defaultRules);
-        view.put("supportsRemoteModelListing", p.supportsRemoteModelListing());
-        ProviderCredentialEntity cred = credentialService.findPrimary(tenantId, p.getName());
-        view.put("credentialConfigured", cred != null);
-        if (cred != null) {
-            view.put("credentialId", cred.getId());
-            view.put("credentialMasked", credentialService.maskedView(cred,
-                    p.credentialSchema().secretFieldNames()));
-        }
-        int installed = 0;
-        for (ModelEntity m : modelService.list(tenantId)) {
-            if (p.getName().equalsIgnoreCase(m.getProviderName())) installed++;
-        }
-        view.put("installedModelCount", installed);
-        return view;
-    }
-
-    /** Serialize an {@link ProviderDefinitionEntity} create payload from JSON body. */
-    private static ProviderDefinitionEntity fromDefinitionPayload(Map<String, Object> body) {
-        ProviderDefinitionEntity def = new ProviderDefinitionEntity();
-        def.setName((String) body.get("name"));
-        def.setLabel(body.get("label") == null ? (String) body.get("name") : (String) body.get("label"));
-        def.setDescription((String) body.get("description"));
-        def.setIcon((String) body.get("icon"));
-        def.setSvgIcon((String) body.get("svgIcon"));
-        def.setImplementationKey((String) body.get("implementationKey"));
-        def.setDefaultBaseUrl((String) body.get("defaultBaseUrl"));
-        def.setSource((String) body.get("source"));
-        if (body.get("sortOrder") instanceof Number n) def.setSortOrder(n.intValue());
-        if (body.get("enabled") instanceof Boolean b) def.setEnabled(b);
-        if (body.get("supportsRemoteModelListing") instanceof Boolean b) {
-            def.setSupportsRemoteModelListing(b);
-        }
-        if (body.containsKey("supportedModelTypes")) {
-            def.setSupportedModelTypes(
-                    io.github.aigoodle.common.util.JsonUtils.toJson(body.get("supportedModelTypes")));
-        }
-        if (body.containsKey("credentialSchema")) {
-            def.setCredentialSchema(
-                    io.github.aigoodle.common.util.JsonUtils.toJson(body.get("credentialSchema")));
-        }
-        if (body.containsKey("defaultParameterRules")) {
-            def.setDefaultParameterRules(
-                    io.github.aigoodle.common.util.JsonUtils.toJson(body.get("defaultParameterRules")));
-        }
-        return def;
-    }
-
-    /**
-     * Provider entry in the "grouped-by-type" response. Shape matches the
-     * a-select-opt-group binding: the top-level {@code provider} + {@code description}
-     * drive the group header, {@code declaration} carries icon hints, and
-     * {@code modelList} feeds the &lt;a-select-option&gt; rows.
-     */
-    private Map<String, Object> asGroupedProviderView(ProviderDefinitionEntity def,
-                                                     List<Map<String, Object>> modelList) {
-        Map<String, Object> view = new LinkedHashMap<>();
-        view.put("id", def.getName());
-        view.put("provider", def.getName());
-        view.put("label", def.getLabel());
-        view.put("description", def.getDescription());
-        Map<String, Object> declaration = new LinkedHashMap<>();
-        declaration.put("icon", def.getIcon());
-        // Snake-case here matches GroupedProviderView.declaration on the web
-        // side. The main /model-providers endpoint uses camelCase (`svgIcon`).
-        declaration.put("svg_icon", def.getSvgIcon());
-        view.put("declaration", declaration);
-        view.put("modelList", modelList);
-        return view;
-    }
-
-    /**
-     * Model entry inside a grouped provider's {@code modelList}. {@code id} is a
-     * composite ({@code provider::model::type}) so the client sends it back
-     * verbatim to the set-default endpoint without needing to look anything up.
-     */
-    private static Map<String, Object> asGroupedModelView(String providerName,
-                                                          String modelName,
-                                                          ModelType modelType) {
-        Map<String, Object> view = new LinkedHashMap<>();
-        view.put("id", providerName + "::" + modelName + "::" + modelType.name());
-        view.put("providerName", providerName);
-        view.put("modelName", modelName);
-        view.put("modelType", modelType.name());
-        return view;
-    }
-
-    /** Render a predefined DB row as a catalog view entry (source=predefined). */
-    private Map<String, Object> asPredefinedRowView(PredefinedModelEntity pd) {
-        Map<String, Object> view = new LinkedHashMap<>();
-        view.put("id", pd.getId());
-        view.put("model", pd.getModel());
-        view.put("label", pd.getLabel());
-        view.put("modelType", pd.getModelType());
-        view.put("contextLength", pd.getContextLength());
-        view.put("dimensions", pd.getDimensions());
-        view.put("features", definitionService.deserializeFeatures(pd.getFeatures()));
-        view.put("source", "predefined");
-        if (pd.getParameterRules() != null) {
-            view.put("parameterRules",
-                    definitionService.deserializeRuleList(pd.getParameterRules()).stream()
-                            .map(ModelController::asRuleView).toList());
-        }
-        return view;
-    }
-
-    private Map<String, Object> asCatalogRow(
-            PredefinedModelEntity pd,
-            Map<String, io.github.aigoodle.model.entity.ProviderModelSettingEntity> settings,
-            Map<ModelType, io.github.aigoodle.model.entity.TenantDefaultModelEntity> defaults) {
-        Map<String, Object> row = asPredefinedRowView(pd);
-        var setting = settings.get(pd.getModel() + "::" + pd.getModelType().name());
-        // Opt-in: enabled only when an explicit setting row says so. Freshly-configured
-        // providers show every model as disabled — user picks which to enable.
-        row.put("enabled", setting != null && Boolean.TRUE.equals(setting.getEnabled()));
-        row.put("loadBalancingEnabled",
-                setting != null && Boolean.TRUE.equals(setting.getLoadBalancingEnabled()));
-        var def = defaults.get(pd.getModelType());
-        row.put("isDefault", def != null && pd.getModel().equalsIgnoreCase(def.getModelName())
-                && pd.getProviderName().equalsIgnoreCase(def.getProviderName()));
-        return row;
-    }
-
-    private Map<String, Object> asCustomCatalogRow(
-            ModelEntity m,
-            Map<ModelType, io.github.aigoodle.model.entity.TenantDefaultModelEntity> defaults) {
-        Map<String, Object> row = new LinkedHashMap<>();
-        row.put("id", m.getId());
-        row.put("model", m.getModelName());
-        row.put("label", m.getModelName());
-        row.put("modelType", m.getModelType());
-        row.put("credentialId", m.getCredentialId());
-        row.put("enabled", m.getEnabled());
-        row.put("source", "custom");
-        var def = defaults.get(m.getModelType());
-        row.put("isDefault", def != null && m.getModelName().equalsIgnoreCase(def.getModelName())
-                && m.getProviderName().equalsIgnoreCase(def.getProviderName()));
-        return row;
-    }
-
-    private static Map<String, Object> asCredentialView(ModelProvider provider,
-                                                        ProviderCredentialEntity cred) {
-        Map<String, Object> view = new LinkedHashMap<>();
-        view.put("providerName", provider.getName());
-        view.put("configured", cred != null);
-        if (cred != null) {
-            view.put("credentialId", cred.getId());
-            view.put("credentialName", cred.getCredentialName());
-            // Only mask the schema-declared secret fields; leave baseUrl etc. as-is.
-        }
-        return view;
-    }
-
-    private static Map<String, Object> asFieldView(CredentialField f) {
-        Map<String, Object> view = new LinkedHashMap<>();
-        view.put("name", f.getName());
-        view.put("label", f.getLabel());
-        view.put("type", f.getType());
-        view.put("required", f.isRequired());
-        view.put("secret", f.isSecret());
-        view.put("defaultValue", f.getDefaultValue());
-        view.put("placeholder", f.getPlaceholder());
-        return view;
-    }
-
-    private static Map<String, Object> asPredefinedView(PredefinedModel m) {
-        Map<String, Object> view = new LinkedHashMap<>();
-        view.put("model", m.getModel());
-        view.put("label", m.getLabel());
-        view.put("modelType", m.getModelType());
-        view.put("features", m.getFeatures());
-        view.put("contextLength", m.getContextLength());
-        view.put("dimensions", m.getDimensions());
-        if (m.getParameterRules() != null && !m.getParameterRules().isEmpty()) {
-            view.put("parameterRules",
-                    m.getParameterRules().stream().map(ModelController::asRuleView).toList());
-        }
-        return view;
-    }
-
-    private static Map<String, Object> asRuleView(ModelParameterRule r) {
-        Map<String, Object> view = new LinkedHashMap<>();
-        view.put("name", r.getName());
-        view.put("label", r.getLabel());
-        view.put("type", r.getType());
-        view.put("min", r.getMin());
-        view.put("max", r.getMax());
-        view.put("step", r.getStep());
-        view.put("precision", r.getPrecision());
-        view.put("defaultValue", r.getDefaultValue());
-        view.put("placeholder", r.getPlaceholder());
-        view.put("help", r.getHelp());
-        view.put("required", r.isRequired());
-        return view;
-    }
-
-    private static Map<String, Object> asRemoteModelView(RemoteModel m) {
-        Map<String, Object> view = new LinkedHashMap<>();
-        view.put("modelId", m.getModelId());
-        view.put("label", m.getLabel());
-        view.put("modelType", m.getModelType());
-        view.put("contextLength", m.getContextLength());
-        view.put("dimensions", m.getDimensions());
-        view.put("features", m.getFeatures());
-        view.put("ownedBy", m.getOwnedBy());
-        view.put("typeInferred", m.isTypeInferred());
-        return view;
+        return ApiResponse.ok(providersByModelType);
     }
 }

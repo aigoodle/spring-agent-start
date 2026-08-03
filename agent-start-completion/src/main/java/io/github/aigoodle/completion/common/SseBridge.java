@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public final class SseBridge {
 
-    private static final Logger log = LoggerFactory.getLogger(SseBridge.class);
+    private static final Logger logger = LoggerFactory.getLogger(SseBridge.class);
 
     private static final Scheduler PRODUCER_SCHEDULER =
             Schedulers.fromExecutorService(Executors.newVirtualThreadPerTaskExecutor(), "sse-producer");
@@ -35,7 +35,7 @@ public final class SseBridge {
 
     @FunctionalInterface
     public interface Emit {
-        void event(String name, Object data);
+        void event(String eventName, Object eventData);
     }
 
     @FunctionalInterface
@@ -50,27 +50,32 @@ public final class SseBridge {
      */
     public static Flux<ServerSentEvent<Object>> stream(Producer producer) {
         return Flux.<ServerSentEvent<Object>>create(sink -> {
-            AtomicLong seq = new AtomicLong();
-            Emit emit = (name, data) -> {
-                if (sink.isCancelled()) return;
-                sink.next(ServerSentEvent.builder(data)
-                        .id(Long.toString(seq.incrementAndGet()))
-                        .event(name)
+            AtomicLong eventSequence = new AtomicLong();
+            Emit emitter = (eventName, eventData) -> {
+                if (sink.isCancelled()) {
+                    return;
+                }
+                sink.next(ServerSentEvent.builder(eventData)
+                        .id(Long.toString(eventSequence.incrementAndGet()))
+                        .event(eventName)
                         .build());
             };
             try {
-                producer.run(emit);
+                producer.run(emitter);
                 sink.complete();
-            } catch (Exception e) {
-                log.warn("SSE producer failed: {}", e.getMessage());
+            } catch (Exception producerFailure) {
+                logger.warn("SSE producer failed: {}", producerFailure.getMessage());
                 if (!sink.isCancelled()) {
-                    sink.next(ServerSentEvent.builder((Object) Map.of(
-                                    "message", e.getMessage() == null ? "unknown" : e.getMessage()))
-                            .event("error")
-                            .build());
+                    emitter.event("error", Map.of(
+                            "message", failureMessage(producerFailure)));
                 }
-                sink.error(e);
+                sink.error(producerFailure);
             }
         }).subscribeOn(PRODUCER_SCHEDULER);
+    }
+
+    private static String failureMessage(Exception producerFailure) {
+        String message = producerFailure.getMessage();
+        return message == null || message.isBlank() ? "unknown" : message;
     }
 }

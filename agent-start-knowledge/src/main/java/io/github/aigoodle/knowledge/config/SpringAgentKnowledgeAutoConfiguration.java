@@ -28,6 +28,7 @@ import io.github.aigoodle.knowledge.rerank.NoopReranker;
 import io.github.aigoodle.knowledge.rerank.Reranker;
 import io.github.aigoodle.knowledge.rerank.RerankerRegistry;
 import io.github.aigoodle.knowledge.rerank.WeightedReranker;
+import io.github.aigoodle.knowledge.rerank.WeightedRerankerSettings;
 import io.github.aigoodle.knowledge.retrieve.HybridRetriever;
 import io.github.aigoodle.knowledge.service.DatasetService;
 import io.github.aigoodle.knowledge.service.KnowledgeService;
@@ -122,7 +123,8 @@ public class SpringAgentKnowledgeAutoConfiguration {
             @Value("${spring-agent.knowledge.reranker.weighted.keyword-weight:0.3}") double keywordWeight,
             @Value("${spring-agent.knowledge.reranker.weighted.length-weight:0.1}") double lengthWeight,
             @Value("${spring-agent.knowledge.reranker.weighted.ideal-length:400}") int idealLength) {
-        return new WeightedReranker(vectorWeight, keywordWeight, lengthWeight, idealLength);
+        return new WeightedReranker(new WeightedRerankerSettings(
+                vectorWeight, keywordWeight, lengthWeight, idealLength));
     }
 
     @Bean

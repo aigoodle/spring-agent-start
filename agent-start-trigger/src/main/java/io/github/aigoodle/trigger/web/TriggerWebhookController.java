@@ -1,6 +1,7 @@
 package io.github.aigoodle.trigger.web;
 
 import io.github.aigoodle.trigger.entity.TriggerEntity;
+import io.github.aigoodle.trigger.service.TriggerInvocationRequest;
 import io.github.aigoodle.trigger.service.TriggerService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -10,9 +11,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * Inbound webhook endpoint: {@code POST /triggers/webhook/{path}} resolves the matching
@@ -29,24 +28,27 @@ public class TriggerWebhookController {
     }
 
     @PostMapping("/triggers/webhook/{path}")
-    public ResponseEntity<?> hook(@PathVariable String path,
-                                  @RequestBody(required = false) Map<String, Object> payload,
-                                  @RequestParam(required = false) String token,
-                                  @RequestHeader(value = "X-Trigger-Token", required = false) String headerToken) {
-        Optional<TriggerEntity> found = triggerService.findWebhook(path);
-        if (found.isEmpty()) {
+    public ResponseEntity<Map<String, String>> invokeWebhook(
+            @PathVariable String path,
+            @RequestBody(required = false) Map<String, Object> payload,
+            @RequestParam(required = false) String token,
+            @RequestHeader(value = "X-Trigger-Token", required = false) String headerToken) {
+        TriggerEntity trigger = triggerService.findWebhook(path).orElse(null);
+        if (trigger == null) {
             return ResponseEntity.status(404).body(Map.of("error", "no webhook trigger for path '" + path + "'"));
         }
-        TriggerEntity trigger = found.get();
-        Object expected = triggerService.config(trigger).get("token");
-        if (expected != null && !String.valueOf(expected).isBlank()) {
-            String provided = token != null ? token : headerToken;
-            if (!String.valueOf(expected).equals(provided)) {
+
+        Object configuredToken = triggerService.config(trigger).get("token");
+        if (configuredToken != null && !String.valueOf(configuredToken).isBlank()) {
+            String providedToken = token != null ? token : headerToken;
+            if (!String.valueOf(configuredToken).equals(providedToken)) {
                 return ResponseEntity.status(401).body(Map.of("error", "invalid token"));
             }
         }
-        String invocationId = triggerService.fire(trigger.getId(),
-                payload == null ? new HashMap<>() : payload, "webhook");
+
+        TriggerInvocationRequest invocationRequest = TriggerInvocationRequest.webhook(
+                trigger.getId(), payload == null ? Map.of() : payload);
+        String invocationId = triggerService.fireAsynchronously(invocationRequest);
         return ResponseEntity.accepted().body(Map.of("invocationId", invocationId, "triggerId", trigger.getId()));
     }
 }

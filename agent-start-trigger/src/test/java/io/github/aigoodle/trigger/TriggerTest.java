@@ -8,6 +8,7 @@ import io.github.aigoodle.trigger.entity.TriggerEntity;
 import io.github.aigoodle.trigger.entity.TriggerInvocationEntity;
 import io.github.aigoodle.trigger.event.EventTriggerBus;
 import io.github.aigoodle.trigger.service.CreateTriggerRequest;
+import io.github.aigoodle.trigger.service.TriggerInvocationRequest;
 import io.github.aigoodle.trigger.service.TriggerService;
 import io.github.aigoodle.workflow.entity.WorkflowEntity;
 import io.github.aigoodle.workflow.graph.EdgeDef;
@@ -39,17 +40,18 @@ class TriggerTest {
 
     /** An echo workflow: Start -> Template("Echo: {{#sys.text#}}") -> End(answer). */
     private String echoWorkflow() {
-        WorkflowGraph g = new WorkflowGraph();
-        g.addNode(NodeDef.of("start", NodeType.START));
-        g.addNode(NodeDef.of("tpl", NodeType.TEMPLATE_TRANSFORM)
+        WorkflowGraph graph = new WorkflowGraph();
+        graph.addNode(NodeDef.of("start", NodeType.START));
+        graph.addNode(NodeDef.of("tpl", NodeType.TEMPLATE_TRANSFORM)
                 .with("template", "Echo: {{#sys.text#}}").with("outputKey", "msg"));
-        g.addNode(NodeDef.of("end", NodeType.END).with("outputs", Map.of("answer", "{{#tpl.msg#}}")));
-        g.addEdge(EdgeDef.of("start", "tpl"));
-        g.addEdge(EdgeDef.of("tpl", "end"));
-        WorkflowEntity wf = workflowService.save(
+        graph.addNode(NodeDef.of("end", NodeType.END)
+                .with("outputs", Map.of("answer", "{{#tpl.msg#}}")));
+        graph.addEdge(EdgeDef.of("start", "tpl"));
+        graph.addEdge(EdgeDef.of("tpl", "end"));
+        WorkflowEntity workflow = workflowService.save(
                 "app-trigger-" + java.util.UUID.randomUUID(),
-                "t", "echo", "workflow", g);
-        return wf.getId();
+                "t", "echo", "workflow", graph);
+        return workflow.getId();
     }
 
     private TriggerEntity trigger(TriggerType type, Map<String, Object> config) {
@@ -61,17 +63,19 @@ class TriggerTest {
 
     @Test
     void webhookFiresWorkflowSynchronously() {
-        TriggerEntity t = trigger(TriggerType.WEBHOOK, Map.of("path", "hook1", "token", "s3cr3t"));
+        TriggerEntity trigger = trigger(
+                TriggerType.WEBHOOK, Map.of("path", "hook1", "token", "s3cr3t"));
         assertTrue(triggerService.findWebhook("hook1").isPresent());
 
-        DispatchResult r = triggerService.fireSync(t.getId(), Map.of("text", "hi"), "webhook");
-        assertTrue(r.isSuccess(), r.getError());
-        assertEquals("Echo: hi", r.getOutputs().get("answer"));
+        DispatchResult result = triggerService.fireSynchronously(
+                TriggerInvocationRequest.webhook(trigger.getId(), Map.of("text", "hi")));
+        assertTrue(result.isSuccess(), result.getError());
+        assertEquals("Echo: hi", result.getOutputs().get("answer"));
 
-        List<TriggerInvocationEntity> invs = triggerService.invocations(t.getId());
-        assertEquals(1, invs.size());
-        assertEquals(InvocationStatus.COMPLETED, invs.get(0).getStatus());
-        assertNotNull(invs.get(0).getRunId());
+        List<TriggerInvocationEntity> invocations = triggerService.invocations(trigger.getId());
+        assertEquals(1, invocations.size());
+        assertEquals(InvocationStatus.COMPLETED, invocations.get(0).getStatus());
+        assertNotNull(invocations.get(0).getRunId());
     }
 
     @Test
@@ -85,42 +89,47 @@ class TriggerTest {
 
     @Test
     void asyncFireCompletesEventually() {
-        TriggerEntity t = trigger(TriggerType.MANUAL, Map.of());
-        String invId = triggerService.fire(t.getId(), Map.of("text", "async"), "manual");
-        assertNotNull(invId);
+        TriggerEntity trigger = trigger(TriggerType.MANUAL, Map.of());
+        String invocationId = triggerService.fireAsynchronously(
+                TriggerInvocationRequest.manual(trigger.getId(), Map.of("text", "async")));
+        assertNotNull(invocationId);
 
-        TriggerInvocationEntity inv = await(() -> {
-            TriggerInvocationEntity i = triggerService.invocation(invId);
-            return i != null && i.getStatus() == InvocationStatus.COMPLETED ? i : null;
+        TriggerInvocationEntity invocation = await(() -> {
+            TriggerInvocationEntity candidate = triggerService.invocation(invocationId);
+            return candidate != null && candidate.getStatus() == InvocationStatus.COMPLETED
+                    ? candidate : null;
         }, 5000);
-        assertNotNull(inv, "async invocation should complete");
-        assertEquals("{\"answer\":\"Echo: async\"}", inv.getOutputsJson());
+        assertNotNull(invocation, "async invocation should complete");
+        assertEquals("{\"answer\":\"Echo: async\"}", invocation.getOutputsJson());
     }
 
     @Test
     void replayReusesOriginalPayload() {
-        TriggerEntity t = trigger(TriggerType.MANUAL, Map.of());
-        DispatchResult first = triggerService.fireSync(t.getId(), Map.of("text", "replay-me"), "manual");
-        String origId = triggerService.invocations(t.getId()).get(0).getId();
+        TriggerEntity trigger = trigger(TriggerType.MANUAL, Map.of());
+        DispatchResult first = triggerService.fireSynchronously(
+                TriggerInvocationRequest.manual(trigger.getId(), Map.of("text", "replay-me")));
+        String originalInvocationId = triggerService.invocations(trigger.getId()).get(0).getId();
 
-        TriggerInvocationEntity replayed = triggerService.replay(origId);
+        TriggerInvocationEntity replayed = triggerService.replay(originalInvocationId);
         assertEquals(InvocationStatus.COMPLETED, replayed.getStatus());
-        assertEquals(origId, replayed.getReplayOf());
+        assertEquals(originalInvocationId, replayed.getReplayOf());
         assertEquals("Echo: replay-me", first.getOutputs().get("answer"));
         assertTrue(replayed.getOutputsJson().contains("Echo: replay-me"));
     }
 
     @Test
     void cronTriggerSchedulesAndFires() {
-        TriggerEntity t = trigger(TriggerType.CRON, Map.of("expression", "*/1 * * * * *"));
-        assertTrue(cronScheduler.isScheduled(t.getId()), "cron trigger should be scheduled on create");
+        TriggerEntity trigger = trigger(TriggerType.CRON, Map.of("expression", "*/1 * * * * *"));
+        assertTrue(cronScheduler.isScheduled(trigger.getId()),
+                "cron trigger should be scheduled on create");
 
-        List<TriggerInvocationEntity> invs = await(() -> {
-            List<TriggerInvocationEntity> list = triggerService.invocations(t.getId());
-            return list.isEmpty() ? null : list;
+        List<TriggerInvocationEntity> invocations = await(() -> {
+            List<TriggerInvocationEntity> candidates = triggerService.invocations(trigger.getId());
+            return candidates.isEmpty() ? null : candidates;
         }, 6000);
-        assertNotNull(invs, "cron trigger should fire within a few seconds");
-        assertTrue(invs.stream().anyMatch(i -> "cron".equals(i.getSource())));
+        assertNotNull(invocations, "cron trigger should fire within a few seconds");
+        assertTrue(invocations.stream()
+                .anyMatch(invocation -> "cron".equals(invocation.getSource())));
     }
 
     private <T> T await(Supplier<T> condition, long timeoutMs) {

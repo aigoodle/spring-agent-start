@@ -57,8 +57,10 @@ public class SpringAgentToolsAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public ToolRegistry toolRegistry(ObjectProvider<AgentTool> tools, ObjectProvider<ToolProvider> providers) {
-        return new ToolRegistry(tools.orderedStream().toList(), providers.orderedStream().toList());
+    public ToolRegistry toolRegistry(ObjectProvider<AgentTool> declaredTools,
+                                     ObjectProvider<ToolProvider> toolProviders) {
+        return new ToolRegistry(declaredTools.orderedStream().toList(),
+                toolProviders.orderedStream().toList());
     }
 
     /**
@@ -78,8 +80,8 @@ public class SpringAgentToolsAutoConfiguration {
 
         @Bean
         @ConditionalOnMissingBean(name = "mcpToolProvider")
-        public ToolProvider mcpToolProvider(McpClientManager manager) {
-            return new McpToolProvider(manager);
+        public ToolProvider mcpToolProvider(McpClientManager clientManager) {
+            return new McpToolProvider(clientManager);
         }
     }
 
@@ -109,11 +111,11 @@ public class SpringAgentToolsAutoConfiguration {
                 if (registry.containsBeanDefinition(callbackBeanName)) {
                     continue;
                 }
-                ConstructorArgumentValues args = new ConstructorArgumentValues();
-                args.addIndexedArgumentValue(0, new RuntimeBeanReference(toolBeanName));
-                RootBeanDefinition def = new RootBeanDefinition(AgentToolCallback.class);
-                def.setConstructorArgumentValues(args);
-                registry.registerBeanDefinition(callbackBeanName, def);
+                ConstructorArgumentValues constructorArguments = new ConstructorArgumentValues();
+                constructorArguments.addIndexedArgumentValue(0, new RuntimeBeanReference(toolBeanName));
+                RootBeanDefinition callbackDefinition = new RootBeanDefinition(AgentToolCallback.class);
+                callbackDefinition.setConstructorArgumentValues(constructorArguments);
+                registry.registerBeanDefinition(callbackBeanName, callbackDefinition);
             }
         }
     }

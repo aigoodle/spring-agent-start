@@ -1,6 +1,8 @@
 package io.github.aigoodle.observability.metering;
 
 import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.observability.api.LlmCallMeasurement;
+import io.github.aigoodle.observability.api.ModelCallContext;
 import io.github.aigoodle.observability.api.TokenUsage;
 import io.github.aigoodle.observability.service.LlmMetricsService;
 import org.springframework.ai.chat.metadata.ChatResponseMetadata;
@@ -9,6 +11,11 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
+import reactor.core.publisher.Flux;
+
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * A {@link ChatModel} decorator that times each call and records token usage / cost /
@@ -18,34 +25,42 @@ import org.springframework.ai.chat.prompt.Prompt;
 public class MeteringChatModel implements ChatModel {
 
     private final ChatModel delegate;
-    private final String provider;
-    private final String model;
-    private final LlmMetricsService metrics;
+    private final ModelCallContext callContext;
+    private final LlmMetricsService metricsService;
 
-    public MeteringChatModel(ChatModel delegate, String provider, String model, LlmMetricsService metrics) {
+    public MeteringChatModel(
+            ChatModel delegate, String provider, String model, LlmMetricsService metricsService) {
+        this(delegate, ModelCallContext.of(provider, model), metricsService);
+    }
+
+    public MeteringChatModel(ChatModel delegate,
+                             ModelCallContext callContext,
+                             LlmMetricsService metricsService) {
         this.delegate = delegate;
-        this.provider = provider;
-        this.model = model;
-        this.metrics = metrics;
+        this.callContext = callContext;
+        this.metricsService = metricsService;
     }
 
     @Override
     public ChatResponse call(Prompt prompt) {
-        long start = System.nanoTime();
+        long startedAtNanos = System.nanoTime();
         try {
             ChatResponse response = delegate.call(prompt);
-            metrics.record(provider, model, null, extractUsage(response), elapsedMs(start), true, null);
+            recordSuccess(extractUsage(response), startedAtNanos);
             return response;
-        } catch (RuntimeException e) {
-            metrics.record(provider, model, null, TokenUsage.ZERO, elapsedMs(start), false,
-                    e.getClass().getSimpleName());
-            if (e instanceof AgentException) {
-                throw e;
+        } catch (RuntimeException exception) {
+            recordFailure(exception, startedAtNanos);
+            if (exception instanceof AgentException) {
+                throw exception;
             }
-            String raw = e.getMessage();
-            String detail = (raw == null || raw.isBlank()) ? e.getClass().getSimpleName() : raw.strip();
+            String exceptionMessage = exception.getMessage();
+            String detail = exceptionMessage == null || exceptionMessage.isBlank()
+                    ? exception.getClass().getSimpleName()
+                    : exceptionMessage.strip();
             throw new AgentException("model_call_failed",
-                    "Model call failed (provider=" + provider + ", model=" + model + "): " + detail, e);
+                    "Model call failed (provider=" + callContext.provider()
+                            + ", model=" + callContext.model() + "): " + detail,
+                    exception);
         }
     }
 
@@ -59,21 +74,24 @@ public class MeteringChatModel implements ChatModel {
      * terminal frame during streaming).
      */
     @Override
-    public reactor.core.publisher.Flux<ChatResponse> stream(Prompt prompt) {
-        long start = System.nanoTime();
-        java.util.concurrent.atomic.AtomicReference<TokenUsage> lastUsage =
-                new java.util.concurrent.atomic.AtomicReference<>(TokenUsage.ZERO);
-        return delegate.stream(prompt)
-                .doOnNext(chunk -> {
-                    TokenUsage u = extractUsage(chunk);
-                    if (u != null && u != TokenUsage.ZERO) {
-                        lastUsage.set(u);
-                    }
-                })
-                .doOnComplete(() ->
-                        metrics.record(provider, model, null, lastUsage.get(), elapsedMs(start), true, null))
-                .doOnError(err -> metrics.record(provider, model, null, TokenUsage.ZERO,
-                        elapsedMs(start), false, err.getClass().getSimpleName()));
+    public Flux<ChatResponse> stream(Prompt prompt) {
+        return Flux.defer(() -> meterStreamSubscription(prompt));
+    }
+
+    private Flux<ChatResponse> meterStreamSubscription(Prompt prompt) {
+        StreamMeasurement measurement = new StreamMeasurement();
+        Flux<ChatResponse> responseStream;
+        try {
+            responseStream = delegate.stream(prompt);
+        } catch (RuntimeException streamFailure) {
+            measurement.recordFailure(streamFailure);
+            return Flux.error(streamFailure);
+        }
+        return responseStream
+                .doOnNext(measurement::observe)
+                .doOnComplete(measurement::recordSuccess)
+                .doOnError(measurement::recordFailure)
+                .doOnCancel(measurement::recordCancellation);
     }
 
     @Override
@@ -81,8 +99,19 @@ public class MeteringChatModel implements ChatModel {
         return delegate.getDefaultOptions();
     }
 
-    private static long elapsedMs(long startNanos) {
-        return (System.nanoTime() - startNanos) / 1_000_000;
+    private void recordSuccess(TokenUsage tokenUsage, long startedAtNanos) {
+        metricsService.record(LlmCallMeasurement.successful(
+                callContext, tokenUsage, elapsedMilliseconds(startedAtNanos)));
+    }
+
+    private void recordFailure(Throwable exception, long startedAtNanos) {
+        metricsService.record(LlmCallMeasurement.failed(
+                callContext, elapsedMilliseconds(startedAtNanos),
+                exception.getClass().getSimpleName()));
+    }
+
+    private static long elapsedMilliseconds(long startedAtNanos) {
+        return (System.nanoTime() - startedAtNanos) / 1_000_000;
     }
 
     private static TokenUsage extractUsage(ChatResponse response) {
@@ -95,5 +124,41 @@ public class MeteringChatModel implements ChatModel {
             return TokenUsage.ZERO;
         }
         return TokenUsage.of(usage.getPromptTokens(), usage.getCompletionTokens(), usage.getTotalTokens());
+    }
+
+    /** Holds the mutable metering state belonging to exactly one stream subscription. */
+    private final class StreamMeasurement {
+
+        private final long startedAtNanos = System.nanoTime();
+        private final AtomicReference<TokenUsage> latestUsage =
+                new AtomicReference<>(TokenUsage.ZERO);
+        private final AtomicBoolean recorded = new AtomicBoolean();
+
+        void observe(ChatResponse responseChunk) {
+            TokenUsage tokenUsage = extractUsage(responseChunk);
+            if (tokenUsage.totalTokens() > 0) {
+                latestUsage.set(tokenUsage);
+            }
+        }
+
+        void recordSuccess() {
+            recordOnce(() -> MeteringChatModel.this.recordSuccess(
+                    latestUsage.get(), startedAtNanos));
+        }
+
+        void recordFailure(Throwable streamFailure) {
+            recordOnce(() -> MeteringChatModel.this.recordFailure(
+                    streamFailure, startedAtNanos));
+        }
+
+        void recordCancellation() {
+            recordFailure(new CancellationException("stream cancelled"));
+        }
+
+        private void recordOnce(Runnable recorder) {
+            if (recorded.compareAndSet(false, true)) {
+                recorder.run();
+            }
+        }
     }
 }

@@ -14,16 +14,21 @@ public class JdbcVectorStoreFactory implements VectorStoreFactory {
 
     public static final String DEFAULT_TABLE = "embeddings";
 
-    private final JdbcTemplate jdbc;
-    private final String table;
+    private final JdbcTemplate jdbcTemplate;
+    private final String tableName;
 
-    public JdbcVectorStoreFactory(JdbcTemplate jdbc, String table) {
-        this.jdbc = jdbc;
-        this.table = table == null || table.isBlank() ? DEFAULT_TABLE : table;
+    public JdbcVectorStoreFactory(JdbcTemplate jdbcTemplate, String tableName) {
+        this.jdbcTemplate = jdbcTemplate;
+        String configuredTableName = tableName == null || tableName.isBlank()
+                ? DEFAULT_TABLE
+                : tableName;
+        this.tableName = JdbcVectorStoreConfiguration.requireValidTableName(configuredTableName);
     }
 
     @Override
     public VectorStore create(DatasetEntity dataset, EmbeddingModel embeddingModel) {
-        return new JdbcVectorStore(jdbc, embeddingModel, dataset.getId(), table);
+        JdbcVectorStoreConfiguration configuration = new JdbcVectorStoreConfiguration(
+                dataset.getId(), tableName);
+        return new JdbcVectorStore(jdbcTemplate, embeddingModel, configuration);
     }
 }

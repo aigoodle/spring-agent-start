@@ -3,6 +3,7 @@ package io.github.aigoodle.trigger.cron;
 import io.github.aigoodle.trigger.api.TriggerType;
 import io.github.aigoodle.trigger.entity.TriggerEntity;
 import io.github.aigoodle.trigger.service.TriggerChangeListener;
+import io.github.aigoodle.trigger.service.TriggerInvocationRequest;
 import io.github.aigoodle.trigger.service.TriggerService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,67 +23,84 @@ import java.util.concurrent.ScheduledFuture;
  */
 public class CronTriggerScheduler implements TriggerChangeListener, SmartInitializingSingleton {
 
-    private static final Logger log = LoggerFactory.getLogger(CronTriggerScheduler.class);
+    private static final Logger logger = LoggerFactory.getLogger(CronTriggerScheduler.class);
 
     private final TaskScheduler taskScheduler;
-    private final ObjectProvider<TriggerService> triggerService;
-    private final Map<String, ScheduledFuture<?>> futures = new ConcurrentHashMap<>();
+    private final ObjectProvider<TriggerService> triggerServiceProvider;
+    private final Map<String, ScheduledFuture<?>> scheduledTasks = new ConcurrentHashMap<>();
 
-    public CronTriggerScheduler(TaskScheduler taskScheduler, ObjectProvider<TriggerService> triggerService) {
+    public CronTriggerScheduler(TaskScheduler taskScheduler,
+                                ObjectProvider<TriggerService> triggerServiceProvider) {
         this.taskScheduler = taskScheduler;
-        this.triggerService = triggerService;
+        this.triggerServiceProvider = triggerServiceProvider;
     }
 
     @Override
     public void afterSingletonsInstantiated() {
-        for (TriggerEntity t : triggerService.getObject().listEnabledByType(TriggerType.CRON)) {
-            schedule(t);
+        TriggerService triggerService = triggerServiceProvider.getObject();
+        for (TriggerEntity cronTrigger : triggerService.listEnabledByType(TriggerType.CRON)) {
+            scheduleTrigger(cronTrigger);
         }
     }
 
     @Override
     public void onSaved(TriggerEntity trigger) {
         if (trigger.getType() == TriggerType.CRON) {
-            schedule(trigger);
+            scheduleTrigger(trigger);
+        } else {
+            cancelScheduledTask(trigger.getId());
         }
     }
 
     @Override
     public void onRemoved(String triggerId) {
-        cancel(triggerId);
+        cancelScheduledTask(triggerId);
     }
 
-    private void schedule(TriggerEntity trigger) {
-        cancel(trigger.getId());
-        Map<String, Object> config = triggerService.getObject().config(trigger);
-        Object expr = config.get("expression");
-        if (expr == null || String.valueOf(expr).isBlank()) {
-            log.warn("Cron trigger {} has no 'expression'; skipping", trigger.getId());
+    private void scheduleTrigger(TriggerEntity trigger) {
+        String triggerId = trigger.getId();
+        cancelScheduledTask(triggerId);
+
+        Map<String, Object> triggerConfig = triggerServiceProvider.getObject().config(trigger);
+        Object configuredExpression = triggerConfig.get("expression");
+        if (configuredExpression == null || String.valueOf(configuredExpression).isBlank()) {
+            logger.warn("Cron trigger {} has no 'expression'; skipping", triggerId);
             return;
         }
+        String cronExpression = String.valueOf(configuredExpression);
         try {
-            ScheduledFuture<?> future = taskScheduler.schedule(() -> {
-                try {
-                    triggerService.getObject().fire(trigger.getId(), Map.of(), "cron");
-                } catch (Exception e) {
-                    log.error("Cron trigger {} fire failed: {}", trigger.getId(), e.getMessage());
-                }
-            }, new CronTrigger(String.valueOf(expr)));
-            futures.put(trigger.getId(), future);
-            log.info("Scheduled cron trigger {} with expression '{}'", trigger.getId(), expr);
-        } catch (Exception e) {
-            log.error("Invalid cron expression '{}' for trigger {}: {}", expr, trigger.getId(), e.getMessage());
+            ScheduledFuture<?> scheduledTask = taskScheduler.schedule(
+                    () -> fireTrigger(triggerId), new CronTrigger(cronExpression));
+            if (scheduledTask == null) {
+                logger.warn("Task scheduler did not accept cron trigger {}", triggerId);
+                return;
+            }
+            scheduledTasks.put(triggerId, scheduledTask);
+            logger.info("Scheduled cron trigger {} with expression '{}'", triggerId, cronExpression);
+        } catch (RuntimeException schedulingFailure) {
+            logger.error("Unable to schedule cron expression '{}' for trigger {}: {}",
+                    cronExpression, triggerId, schedulingFailure.getMessage(), schedulingFailure);
         }
     }
 
-    private void cancel(String triggerId) {
-        ScheduledFuture<?> future = futures.remove(triggerId);
-        if (future != null) {
-            future.cancel(false);
+    private void fireTrigger(String triggerId) {
+        try {
+            triggerServiceProvider.getObject().fireAsynchronously(
+                    TriggerInvocationRequest.cron(triggerId));
+        } catch (RuntimeException invocationFailure) {
+            logger.error("Cron trigger {} fire failed: {}",
+                    triggerId, invocationFailure.getMessage(), invocationFailure);
+        }
+    }
+
+    private void cancelScheduledTask(String triggerId) {
+        ScheduledFuture<?> scheduledTask = scheduledTasks.remove(triggerId);
+        if (scheduledTask != null) {
+            scheduledTask.cancel(false);
         }
     }
 
     public boolean isScheduled(String triggerId) {
-        return futures.containsKey(triggerId);
+        return scheduledTasks.containsKey(triggerId);
     }
 }

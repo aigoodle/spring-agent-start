@@ -17,9 +17,8 @@ import java.util.Map;
 /**
  * Dify-parity per-tenant settings for models:
  * <ul>
- *   <li>{@code agent_provider_model_setting} — enable / load-balancing switch.
- *       Missing row = enabled (so the vast majority of predefined models need
- *       no row at all).</li>
+ *   <li>{@code agent_provider_model_setting} — opt-in enablement and load-balancing settings.
+ *       A missing row means the model is disabled.</li>
  *   <li>{@code agent_tenant_default_model} — one default per model type.</li>
  * </ul>
  * <p>
@@ -46,19 +45,18 @@ public class ProviderModelSettingsService {
     /**
      * True only when an explicit {@code enabled=true} row exists — <em>opt-in</em>
      * semantics. A freshly-configured provider shows every model as disabled
-     * so the user picks exactly which ones they want to use (per user request:
-     * "配置 API Key 之后不要自动启用任何模型").
+     * so each tenant explicitly selects the models it intends to use.
      */
     public boolean isEnabled(String tenantId, String providerName, String modelName,
                              ModelType modelType) {
-        ProviderModelSettingEntity row = findSetting(tenantId, providerName, modelName, modelType);
-        return row != null && Boolean.TRUE.equals(row.getEnabled());
+        ProviderModelSettingEntity setting = findSetting(tenantId, providerName, modelName, modelType);
+        return setting != null && Boolean.TRUE.equals(setting.getEnabled());
     }
 
     public ProviderModelSettingEntity findSetting(String tenantId, String providerName,
                                                   String modelName, ModelType modelType) {
         return settingMapper.selectOne(new LambdaQueryWrapper<ProviderModelSettingEntity>()
-                .eq(ProviderModelSettingEntity::getTenantId, tenant(tenantId))
+                .eq(ProviderModelSettingEntity::getTenantId, normalizeTenantId(tenantId))
                 .eq(ProviderModelSettingEntity::getProviderName, providerName)
                 .eq(ProviderModelSettingEntity::getModelName, modelName)
                 .eq(ProviderModelSettingEntity::getModelType, modelType)
@@ -70,15 +68,15 @@ public class ProviderModelSettingsService {
      * keyed by "{modelName}::{modelType}" for cheap in-memory joins.
      */
     public Map<String, ProviderModelSettingEntity> settingIndex(String tenantId, String providerName) {
-        List<ProviderModelSettingEntity> rows = settingMapper.selectList(
+        List<ProviderModelSettingEntity> settings = settingMapper.selectList(
                 new LambdaQueryWrapper<ProviderModelSettingEntity>()
-                        .eq(ProviderModelSettingEntity::getTenantId, tenant(tenantId))
+                        .eq(ProviderModelSettingEntity::getTenantId, normalizeTenantId(tenantId))
                         .eq(ProviderModelSettingEntity::getProviderName, providerName));
-        Map<String, ProviderModelSettingEntity> out = new LinkedHashMap<>();
-        for (ProviderModelSettingEntity r : rows) {
-            out.put(key(r.getModelName(), r.getModelType()), r);
+        Map<String, ProviderModelSettingEntity> settingsByModel = new LinkedHashMap<>();
+        for (ProviderModelSettingEntity setting : settings) {
+            settingsByModel.put(indexKey(setting.getModelName(), setting.getModelType()), setting);
         }
-        return out;
+        return settingsByModel;
     }
 
     /**
@@ -95,16 +93,13 @@ public class ProviderModelSettingsService {
         if (existing == null) {
             // No row — persist an explicit setting only when turning ON. Turning OFF
             // when there's no row is a no-op (already disabled by default).
-            if (!enabled) return null;
-            ProviderModelSettingEntity row = new ProviderModelSettingEntity();
-            row.setTenantId(tenant(tenantId));
-            row.setProviderName(providerName);
-            row.setModelName(modelName);
-            row.setModelType(modelType);
-            row.setEnabled(Boolean.TRUE);
-            row.setLoadBalancingEnabled(Boolean.FALSE);
-            settingMapper.insert(row);
-            return row;
+            if (!enabled) {
+                return null;
+            }
+            ProviderModelReference model = new ProviderModelReference(providerName, modelName, modelType);
+            ProviderModelSettingEntity setting = model.newEnabledSetting(normalizeTenantId(tenantId));
+            settingMapper.insert(setting);
+            return setting;
         }
         // Setting exists — flip flag, or drop the row when turning OFF a plain row
         // (load-balancing rows are kept so their config isn't lost).
@@ -121,18 +116,20 @@ public class ProviderModelSettingsService {
 
     public TenantDefaultModelEntity getDefault(String tenantId, ModelType modelType) {
         return defaultMapper.selectOne(new LambdaQueryWrapper<TenantDefaultModelEntity>()
-                .eq(TenantDefaultModelEntity::getTenantId, tenant(tenantId))
+                .eq(TenantDefaultModelEntity::getTenantId, normalizeTenantId(tenantId))
                 .eq(TenantDefaultModelEntity::getModelType, modelType)
                 .last("limit 1"));
     }
 
     public Map<ModelType, TenantDefaultModelEntity> listDefaults(String tenantId) {
-        List<TenantDefaultModelEntity> rows = defaultMapper.selectList(
+        List<TenantDefaultModelEntity> defaults = defaultMapper.selectList(
                 new LambdaQueryWrapper<TenantDefaultModelEntity>()
-                        .eq(TenantDefaultModelEntity::getTenantId, tenant(tenantId)));
-        Map<ModelType, TenantDefaultModelEntity> out = new EnumMap<>(ModelType.class);
-        for (TenantDefaultModelEntity r : rows) out.put(r.getModelType(), r);
-        return out;
+                        .eq(TenantDefaultModelEntity::getTenantId, normalizeTenantId(tenantId)));
+        Map<ModelType, TenantDefaultModelEntity> defaultsByType = new EnumMap<>(ModelType.class);
+        for (TenantDefaultModelEntity defaultModel : defaults) {
+            defaultsByType.put(defaultModel.getModelType(), defaultModel);
+        }
+        return defaultsByType;
     }
 
     /**
@@ -146,36 +143,32 @@ public class ProviderModelSettingsService {
             throw new AgentException("invalid_default",
                     "provider_name / model_name / model_type must not be null", null);
         }
+        String effectiveTenantId = normalizeTenantId(tenantId);
         defaultMapper.delete(new LambdaQueryWrapper<TenantDefaultModelEntity>()
-                .eq(TenantDefaultModelEntity::getTenantId, tenant(tenantId))
+                .eq(TenantDefaultModelEntity::getTenantId, effectiveTenantId)
                 .eq(TenantDefaultModelEntity::getModelType, modelType));
-        TenantDefaultModelEntity row = new TenantDefaultModelEntity();
-        row.setTenantId(tenant(tenantId));
-        row.setProviderName(providerName);
-        row.setModelName(modelName);
-        row.setModelType(modelType);
-        defaultMapper.insert(row);
-        return row;
+        ProviderModelReference model = new ProviderModelReference(providerName, modelName, modelType);
+        TenantDefaultModelEntity defaultModel = model.newDefault(effectiveTenantId);
+        defaultMapper.insert(defaultModel);
+        return defaultModel;
     }
 
     @Transactional
     public void clearDefault(String tenantId, ModelType modelType) {
         defaultMapper.delete(new LambdaQueryWrapper<TenantDefaultModelEntity>()
-                .eq(TenantDefaultModelEntity::getTenantId, tenant(tenantId))
+                .eq(TenantDefaultModelEntity::getTenantId, normalizeTenantId(tenantId))
                 .eq(TenantDefaultModelEntity::getModelType, modelType));
     }
 
     /**
      * Nuke every enable-setting row for (tenant, provider). Called from the
-     * credential-delete cascade so re-adding the API key lands on a fresh state
-     * — otherwise the previous "启用" toggles resurface the moment the key is
-     * saved again, which is what the user hit ("删除的时候没删干净, 再次添加还是
-     * 之前的").
+     * credential-delete cascade so re-adding the API key starts from a clean,
+     * explicitly disabled state.
      */
     @Transactional
     public int clearProviderSettings(String tenantId, String providerName) {
         return settingMapper.delete(new LambdaQueryWrapper<ProviderModelSettingEntity>()
-                .eq(ProviderModelSettingEntity::getTenantId, tenant(tenantId))
+                .eq(ProviderModelSettingEntity::getTenantId, normalizeTenantId(tenantId))
                 .eq(ProviderModelSettingEntity::getProviderName, providerName));
     }
 
@@ -188,15 +181,15 @@ public class ProviderModelSettingsService {
     @Transactional
     public int clearProviderDefaults(String tenantId, String providerName) {
         return defaultMapper.delete(new LambdaQueryWrapper<TenantDefaultModelEntity>()
-                .eq(TenantDefaultModelEntity::getTenantId, tenant(tenantId))
+                .eq(TenantDefaultModelEntity::getTenantId, normalizeTenantId(tenantId))
                 .eq(TenantDefaultModelEntity::getProviderName, providerName));
     }
 
-    private static String tenant(String t) {
-        return t == null || t.isBlank() ? DEFAULT_TENANT : t;
+    private static String normalizeTenantId(String tenantId) {
+        return tenantId == null || tenantId.isBlank() ? DEFAULT_TENANT : tenantId;
     }
 
-    private static String key(String modelName, ModelType type) {
-        return modelName + "::" + (type == null ? "" : type.name());
+    private static String indexKey(String modelName, ModelType modelType) {
+        return modelName + "::" + (modelType == null ? "" : modelType.name());
     }
 }

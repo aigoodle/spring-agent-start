@@ -31,7 +31,11 @@ import java.util.Map;
  */
 public class CodeNodeExecutor implements NodeExecutor {
 
-    private final JexlEngine jexl = new JexlBuilder().safe(true).silent(true).strict(false).create();
+    private final JexlEngine scriptEngine = new JexlBuilder()
+            .safe(true)
+            .silent(true)
+            .strict(false)
+            .create();
 
     @Override
     public NodeType type() {
@@ -39,28 +43,28 @@ public class CodeNodeExecutor implements NodeExecutor {
     }
 
     @Override
-    public NodeResult execute(NodeDef node, ExecutionContext ctx) {
-        String code = node.getString("code");
-        if (code == null || code.isBlank()) {
+    public NodeResult execute(NodeDef node, ExecutionContext context) {
+        String sourceCode = node.getString("code");
+        if (sourceCode == null || sourceCode.isBlank()) {
             return NodeResult.failure("Code node requires 'code'");
         }
         try {
-            JexlScript script = jexl.createScript(code);
-            JexlContext jctx = buildContext(ctx);
-            Object out = script.execute(jctx);
-            return NodeResult.of(node.getString("outputKey", "result"), out);
-        } catch (Exception e) {
-            return NodeResult.failure("Code node failed: " + e.getMessage());
+            JexlScript script = scriptEngine.createScript(sourceCode);
+            Object returnValue = script.execute(buildScriptContext(context));
+            return NodeResult.of(node.getString("outputKey", "result"), returnValue);
+        } catch (RuntimeException exception) {
+            return NodeResult.failure("Code node failed: " + exception.getMessage());
         }
     }
 
-    private static JexlContext buildContext(ExecutionContext ctx) {
-        MapContext jctx = new MapContext();
-        Map<String, Map<String, Object>> snapshot = ctx.getPool().snapshot();
-        for (Map.Entry<String, Map<String, Object>> e : snapshot.entrySet()) {
-            jctx.set(e.getKey(), new HashMap<>(e.getValue()));
+    private static JexlContext buildScriptContext(ExecutionContext context) {
+        MapContext scriptContext = new MapContext();
+        Map<String, Map<String, Object>> variablesByNode = context.getPool().snapshot();
+        for (Map.Entry<String, Map<String, Object>> nodeVariables : variablesByNode.entrySet()) {
+            scriptContext.set(
+                    nodeVariables.getKey(), new HashMap<>(nodeVariables.getValue()));
         }
-        jctx.set("inputs", new HashMap<>(ctx.getInputs()));
-        return jctx;
+        scriptContext.set("inputs", new HashMap<>(context.getInputs()));
+        return scriptContext;
     }
 }

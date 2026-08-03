@@ -6,7 +6,6 @@ import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.ollama.api.OllamaChatOptions;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -48,22 +47,26 @@ import java.util.Map;
  */
 public final class ChatOptionsFactory {
 
-    private static final Logger log = LoggerFactory.getLogger(ChatOptionsFactory.class);
+    private static final Logger logger = LoggerFactory.getLogger(ChatOptionsFactory.class);
 
-    private ChatOptionsFactory() {}
+    private ChatOptionsFactory() {
+    }
 
     public static ChatOptions buildFromSettings(String providerName, String modelName,
                                                 Map<String, Object> settings) {
-        if (settings == null || settings.isEmpty()) return null;
-        String provider = providerName == null ? "" : providerName.toLowerCase(Locale.ROOT);
-        ChatOptions opts = "ollama".equals(provider)
-                ? buildOllama(settings, modelName)
-                : buildOpenAiCompat(provider, modelName, settings);
-        if (log.isDebugEnabled() && opts != null) {
-            log.debug("Built ChatOptions for provider={} model={} settings={} → {}",
-                    provider, modelName, settings, describe(opts));
+        if (settings == null || settings.isEmpty()) {
+            return null;
         }
-        return opts;
+        String provider = providerName == null ? "" : providerName.toLowerCase(Locale.ROOT);
+        ChatSettingValues values = new ChatSettingValues(settings);
+        ChatOptions options = "ollama".equals(provider)
+                ? buildOllama(values)
+                : buildOpenAiCompatible(provider, values);
+        if (logger.isDebugEnabled()) {
+            logger.debug("Built ChatOptions for provider={} model={} settings={} → {}",
+                    provider, modelName, settings, describe(options));
+        }
+        return options;
     }
 
     /**
@@ -74,46 +77,53 @@ public final class ChatOptionsFactory {
      * {@code Thought:} preamble when reasoning is disabled).
      */
     public static String resolveThinkingMode(Map<String, Object> settings) {
-        if (settings == null || settings.isEmpty()) return null;
-        return normalizeThinkingMode(firstNonNull(settings, "thinkingMode",
-                "enable_thinking", "thinking_mode"));
+        if (settings == null || settings.isEmpty()) {
+            return null;
+        }
+        return new ChatSettingValues(settings).thinkingMode();
     }
 
     /** Compact one-liner for the debug log — full toString is noisy. */
-    private static String describe(ChatOptions opts) {
-        StringBuilder sb = new StringBuilder("{");
-        sb.append("temp=").append(opts.getTemperature());
-        sb.append(", topP=").append(opts.getTopP());
-        sb.append(", maxTokens=").append(opts.getMaxTokens());
-        if (opts instanceof OpenAiChatOptions oa && oa.getExtraBody() != null && !oa.getExtraBody().isEmpty()) {
-            sb.append(", extraBody=").append(oa.getExtraBody());
+    private static String describe(ChatOptions options) {
+        StringBuilder description = new StringBuilder("{");
+        description.append("temp=").append(options.getTemperature());
+        description.append(", topP=").append(options.getTopP());
+        description.append(", maxTokens=").append(options.getMaxTokens());
+        if (options instanceof OpenAiChatOptions openAiOptions
+                && openAiOptions.getExtraBody() != null
+                && !openAiOptions.getExtraBody().isEmpty()) {
+            description.append(", extraBody=").append(openAiOptions.getExtraBody());
         }
-        sb.append("}");
-        return sb.toString();
+        description.append("}");
+        return description.toString();
     }
 
     // ---------------------------------------------------------------- OpenAI
 
-    private static ChatOptions buildOpenAiCompat(String provider, String modelName, Map<String, Object> s) {
-        OpenAiChatOptions.Builder b = OpenAiChatOptions.builder();
-        Double temperature = firstDouble(s, "temperature");
-        if (temperature != null) b.temperature(temperature);
-        Double topP = firstDouble(s, "topP", "top_p");
-        if (topP != null) b.topP(topP);
-        Integer maxTokens = firstInt(s, "maxTokens", "max_tokens");
-        if (maxTokens != null) b.maxTokens(maxTokens);
-        Double presence = firstDouble(s, "presencePenalty", "presence_penalty");
-        if (presence != null) b.presencePenalty(presence);
-        Double frequency = firstDouble(s, "frequencyPenalty", "frequency_penalty");
-        if (frequency != null) b.frequencyPenalty(frequency);
-        List<String> stop = asStringList(firstNonNull(s, "stop", "stop_sequences"));
-        if (stop != null && !stop.isEmpty()) b.stop(stop);
-
-        Map<String, Object> extraBody = buildExtraBody(provider, modelName, s, b);
+    private static ChatOptions buildOpenAiCompatible(String provider, ChatSettingValues settings) {
+        OpenAiChatOptions.Builder builder = OpenAiChatOptions.builder();
+        applyCommonOpenAiOptions(builder, settings);
+        Map<String, Object> extraBody = buildExtraBody(provider, settings, builder);
         if (extraBody != null && !extraBody.isEmpty()) {
-            b.extraBody(extraBody);
+            builder.extraBody(extraBody);
         }
-        return b.build();
+        return builder.build();
+    }
+
+    private static void applyCommonOpenAiOptions(OpenAiChatOptions.Builder builder,
+                                                 ChatSettingValues settings) {
+        Double temperature = settings.decimal("temperature");
+        if (temperature != null) builder.temperature(temperature);
+        Double topP = settings.decimal("topP", "top_p");
+        if (topP != null) builder.topP(topP);
+        Integer maxTokens = settings.integer("maxTokens", "max_tokens");
+        if (maxTokens != null) builder.maxTokens(maxTokens);
+        Double presencePenalty = settings.decimal("presencePenalty", "presence_penalty");
+        if (presencePenalty != null) builder.presencePenalty(presencePenalty);
+        Double frequencyPenalty = settings.decimal("frequencyPenalty", "frequency_penalty");
+        if (frequencyPenalty != null) builder.frequencyPenalty(frequencyPenalty);
+        List<String> stopSequences = settings.stringList("stop", "stop_sequences");
+        if (stopSequences != null && !stopSequences.isEmpty()) builder.stop(stopSequences);
     }
 
     /**
@@ -122,42 +132,48 @@ public final class ChatOptionsFactory {
      * {@code reasoning_effort} field. Returns {@code null} when the caller
      * hasn't set a thinking mode or the vendor has no known toggle.
      */
-    private static Map<String, Object> buildExtraBody(String provider, String modelName,
-                                                     Map<String, Object> s, OpenAiChatOptions.Builder b) {
-        String mode = normalizeThinkingMode(firstNonNull(s, "thinkingMode",
-                "enable_thinking", "thinking_mode"));
+    private static Map<String, Object> buildExtraBody(String provider,
+                                                      ChatSettingValues settings,
+                                                      OpenAiChatOptions.Builder builder) {
+        String thinkingMode = settings.thinkingMode();
         Map<String, Object> extras = new LinkedHashMap<>();
-        Object rawExtra = firstNonNull(s, "extraBody", "extra_body");
-        if (rawExtra instanceof Map<?, ?> m) {
-            for (Map.Entry<?, ?> e : m.entrySet()) {
-                extras.put(String.valueOf(e.getKey()), e.getValue());
+        Object configuredExtras = settings.first("extraBody", "extra_body");
+        if (configuredExtras instanceof Map<?, ?> extraEntries) {
+            for (Map.Entry<?, ?> entry : extraEntries.entrySet()) {
+                extras.put(String.valueOf(entry.getKey()), entry.getValue());
             }
         }
-        Integer thinkingBudget = firstInt(s, "thinkingBudget", "thinking_budget");
+        Integer thinkingBudget = settings.integer("thinkingBudget", "thinking_budget");
         if (thinkingBudget != null) {
             extras.put("thinking_budget", thinkingBudget);
         }
-        Boolean webSearch = asBoolean(firstNonNull(s, "enableWebSearch", "enable_web_search"));
+        Boolean webSearch = settings.bool("enableWebSearch", "enable_web_search");
         if (webSearch != null) {
             extras.put("enable_search", webSearch);
         }
-        Integer seed = firstInt(s, "seed");
-        if (seed != null) extras.put("seed", seed);
-        Double repetitionPenalty = firstDouble(s, "repetitionPenalty", "repetition_penalty");
-        if (repetitionPenalty != null) extras.put("repetition_penalty", repetitionPenalty);
-        if (mode == null) return extras;
+        Integer seed = settings.integer("seed");
+        if (seed != null) {
+            extras.put("seed", seed);
+        }
+        Double repetitionPenalty = settings.decimal("repetitionPenalty", "repetition_penalty");
+        if (repetitionPenalty != null) {
+            extras.put("repetition_penalty", repetitionPenalty);
+        }
+        if (thinkingMode == null) {
+            return extras;
+        }
         switch (provider) {
             case "qwen", "dashscope" ->
-                extras.put("enable_thinking", "enabled".equals(mode));
+                extras.put("enable_thinking", "enabled".equals(thinkingMode));
             case "zhipu", "bigmodel" ->
-                extras.put("thinking", Map.of("type", mode));
+                extras.put("thinking", Map.of("type", thinkingMode));
             case "volcengine", "doubao", "ark" ->
-                extras.put("thinking", Map.of("type", mode));
+                extras.put("thinking", Map.of("type", thinkingMode));
             case "openai" -> {
-                if ("enabled".equals(mode)) {
-                    b.reasoningEffort("medium");
-                } else if ("disabled".equals(mode)) {
-                    b.reasoningEffort("low");
+                if ("enabled".equals(thinkingMode)) {
+                    builder.reasoningEffort("medium");
+                } else if ("disabled".equals(thinkingMode)) {
+                    builder.reasoningEffort("low");
                 }
             }
             case "deepseek" -> {
@@ -178,109 +194,30 @@ public final class ChatOptionsFactory {
 
     // ---------------------------------------------------------------- Ollama
 
-    private static ChatOptions buildOllama(Map<String, Object> s, String modelName) {
-        OllamaChatOptions.Builder b = OllamaChatOptions.builder();
-        Double temperature = firstDouble(s, "temperature");
-        if (temperature != null) b.temperature(temperature);
-        Double topP = firstDouble(s, "topP", "top_p");
-        if (topP != null) b.topP(topP);
-        Integer topK = firstInt(s, "topK", "top_k");
-        if (topK != null && topK > 0) b.topK(topK);
-        Integer maxTokens = firstInt(s, "maxTokens", "max_tokens");
-        if (maxTokens != null) b.numPredict(maxTokens);
-        Double presence = firstDouble(s, "presencePenalty", "presence_penalty");
-        if (presence != null) b.presencePenalty(presence);
-        Double frequency = firstDouble(s, "frequencyPenalty", "frequency_penalty");
-        if (frequency != null) b.frequencyPenalty(frequency);
-        List<String> stop = asStringList(firstNonNull(s, "stop", "stop_sequences"));
-        if (stop != null && !stop.isEmpty()) b.stop(stop);
+    private static ChatOptions buildOllama(ChatSettingValues settings) {
+        OllamaChatOptions.Builder builder = OllamaChatOptions.builder();
+        Double temperature = settings.decimal("temperature");
+        if (temperature != null) builder.temperature(temperature);
+        Double topP = settings.decimal("topP", "top_p");
+        if (topP != null) builder.topP(topP);
+        Integer topK = settings.integer("topK", "top_k");
+        if (topK != null && topK > 0) builder.topK(topK);
+        Integer maxTokens = settings.integer("maxTokens", "max_tokens");
+        if (maxTokens != null) builder.numPredict(maxTokens);
+        Double presencePenalty = settings.decimal("presencePenalty", "presence_penalty");
+        if (presencePenalty != null) builder.presencePenalty(presencePenalty);
+        Double frequencyPenalty = settings.decimal("frequencyPenalty", "frequency_penalty");
+        if (frequencyPenalty != null) builder.frequencyPenalty(frequencyPenalty);
+        List<String> stopSequences = settings.stringList("stop", "stop_sequences");
+        if (stopSequences != null && !stopSequences.isEmpty()) builder.stop(stopSequences);
 
-        String mode = normalizeThinkingMode(firstNonNull(s, "thinkingMode",
-                "enable_thinking", "thinking_mode"));
-        if ("enabled".equals(mode)) {
-            b.enableThinking();
-        } else if ("disabled".equals(mode)) {
-            b.disableThinking();
+        String thinkingMode = settings.thinkingMode();
+        if ("enabled".equals(thinkingMode)) {
+            builder.enableThinking();
+        } else if ("disabled".equals(thinkingMode)) {
+            builder.disableThinking();
         }
-        return b.build();
+        return builder.build();
     }
 
-    // --------------------------------------------------------------- helpers
-
-    /**
-     * Accept the drawer's boolean {@code enable_thinking}, the string
-     * {@code auto/on/off}, or the canonical {@code enabled/disabled}; normalize
-     * to {@code enabled|disabled|null}. {@code null} means "no override" so
-     * the vendor's own default applies.
-     */
-    private static String normalizeThinkingMode(Object raw) {
-        if (raw == null) return null;
-        if (raw instanceof Boolean b) return b ? "enabled" : "disabled";
-        String v = String.valueOf(raw).trim().toLowerCase(Locale.ROOT);
-        if (v.isEmpty() || "auto".equals(v)) return null;
-        return switch (v) {
-            case "true", "on", "enable", "enabled" -> "enabled";
-            case "false", "off", "disable", "disabled" -> "disabled";
-            default -> null;
-        };
-    }
-
-    private static Object firstNonNull(Map<String, Object> s, String... keys) {
-        for (String k : keys) {
-            Object v = s.get(k);
-            if (v != null) return v;
-        }
-        return null;
-    }
-
-    private static Double firstDouble(Map<String, Object> s, String... keys) {
-        Object v = firstNonNull(s, keys);
-        return v == null ? null : asDouble(v);
-    }
-
-    private static Integer firstInt(Map<String, Object> s, String... keys) {
-        Object v = firstNonNull(s, keys);
-        return v == null ? null : asInteger(v);
-    }
-
-    private static Boolean asBoolean(Object v) {
-        if (v == null) return null;
-        if (v instanceof Boolean b) return b;
-        String s = String.valueOf(v).trim().toLowerCase(Locale.ROOT);
-        return switch (s) {
-            case "true", "1", "yes", "on" -> Boolean.TRUE;
-            case "false", "0", "no", "off" -> Boolean.FALSE;
-            default -> null;
-        };
-    }
-
-    private static Double asDouble(Object v) {
-        if (v == null) return null;
-        if (v instanceof Number n) return n.doubleValue();
-        try { return Double.valueOf(String.valueOf(v)); } catch (NumberFormatException e) { return null; }
-    }
-
-    private static Integer asInteger(Object v) {
-        if (v == null) return null;
-        if (v instanceof Number n) return n.intValue();
-        try { return Integer.valueOf(String.valueOf(v).trim()); } catch (NumberFormatException e) { return null; }
-    }
-
-    @SuppressWarnings("unchecked")
-    private static List<String> asStringList(Object v) {
-        if (v == null) return null;
-        if (v instanceof List<?> list) {
-            List<String> out = new ArrayList<>(list.size());
-            for (Object o : list) if (o != null) out.add(String.valueOf(o));
-            return out;
-        }
-        String s = String.valueOf(v).trim();
-        if (s.isEmpty()) return null;
-        List<String> out = new ArrayList<>();
-        for (String part : s.split(",")) {
-            String trimmed = part.trim();
-            if (!trimmed.isEmpty()) out.add(trimmed);
-        }
-        return out;
-    }
 }

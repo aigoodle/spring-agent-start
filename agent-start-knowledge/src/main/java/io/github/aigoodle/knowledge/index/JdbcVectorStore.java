@@ -25,36 +25,51 @@ import java.util.Map;
  */
 public class JdbcVectorStore implements VectorStore {
 
-    private final JdbcTemplate jdbc;
+    private final JdbcTemplate jdbcTemplate;
     private final EmbeddingModel embeddingModel;
-    private final String datasetId;
-    private final String table;
+    private final JdbcVectorStoreConfiguration configuration;
 
-    public JdbcVectorStore(JdbcTemplate jdbc, EmbeddingModel embeddingModel, String datasetId, String table) {
-        this.jdbc = jdbc;
+    public JdbcVectorStore(JdbcTemplate jdbcTemplate,
+                           EmbeddingModel embeddingModel,
+                           JdbcVectorStoreConfiguration configuration) {
+        this.jdbcTemplate = jdbcTemplate;
         this.embeddingModel = embeddingModel;
-        this.datasetId = datasetId;
-        this.table = table;
+        this.configuration = configuration;
+    }
+
+    /** @deprecated Use the configuration-based constructor. */
+    @Deprecated(forRemoval = false)
+    public JdbcVectorStore(JdbcTemplate jdbcTemplate,
+                           EmbeddingModel embeddingModel,
+                           String datasetId,
+                           String tableName) {
+        this(jdbcTemplate, embeddingModel,
+                new JdbcVectorStoreConfiguration(datasetId, tableName));
     }
 
     @Override
     public void add(List<Document> documents) {
-        for (Document doc : documents) {
-            float[] embedding = embeddingModel.embed(doc.getText());
-            jdbc.update("INSERT INTO " + table + " (id, dataset_id, content, metadata_json, embedding) "
+        for (Document document : documents) {
+            float[] embedding = embeddingModel.embed(document.getText());
+            jdbcTemplate.update("INSERT INTO " + configuration.tableName()
+                            + " (id, dataset_id, content, metadata_json, embedding) "
                             + "VALUES (?, ?, ?, ?, ?)",
-                    doc.getId(), datasetId, doc.getText(),
-                    JsonUtils.toJson(doc.getMetadata()), encode(embedding));
+                    document.getId(), configuration.datasetId(), document.getText(),
+                    JsonUtils.toJson(document.getMetadata()), JdbcVectorCodec.encode(embedding));
         }
     }
 
     @Override
-    public void delete(List<String> idList) {
-        if (idList == null || idList.isEmpty()) {
+    public void delete(List<String> documentIds) {
+        if (documentIds == null || documentIds.isEmpty()) {
             return;
         }
-        String placeholders = String.join(",", idList.stream().map(x -> "?").toList());
-        jdbc.update("DELETE FROM " + table + " WHERE id IN (" + placeholders + ")", idList.toArray());
+        String placeholders = String.join(",", documentIds.stream().map(ignored -> "?").toList());
+        Object[] parameters = new Object[documentIds.size() + 1];
+        parameters[0] = configuration.datasetId();
+        System.arraycopy(documentIds.toArray(), 0, parameters, 1, documentIds.size());
+        jdbcTemplate.update("DELETE FROM " + configuration.tableName()
+                + " WHERE dataset_id = ? AND id IN (" + placeholders + ")", parameters);
     }
 
     @Override
@@ -64,64 +79,29 @@ public class JdbcVectorStore implements VectorStore {
 
     @Override
     public List<Document> similaritySearch(SearchRequest request) {
-        float[] query = embeddingModel.embed(request.getQuery());
-        List<Document> scored = new ArrayList<>();
-        jdbc.query("SELECT id, content, metadata_json, embedding FROM " + table + " WHERE dataset_id = ?",
-                rs -> {
-                    float[] vec = decode(rs.getString("embedding"));
-                    double score = cosine(query, vec);
+        float[] queryEmbedding = embeddingModel.embed(request.getQuery());
+        List<Document> matchingDocuments = new ArrayList<>();
+        jdbcTemplate.query("SELECT id, content, metadata_json, embedding FROM "
+                        + configuration.tableName() + " WHERE dataset_id = ?",
+                resultSet -> {
+                    float[] storedEmbedding = JdbcVectorCodec.decode(
+                            resultSet.getString("embedding"));
+                    double score = VectorSimilarity.cosine(queryEmbedding, storedEmbedding);
                     if (score >= request.getSimilarityThreshold()) {
-                        Map<String, Object> metadata = JsonUtils.parseMap(rs.getString("metadata_json"));
-                        scored.add(Document.builder()
-                                .id(rs.getString("id"))
-                                .text(rs.getString("content"))
+                        Map<String, Object> metadata = JsonUtils.parseMap(
+                                resultSet.getString("metadata_json"));
+                        matchingDocuments.add(Document.builder()
+                                .id(resultSet.getString("id"))
+                                .text(resultSet.getString("content"))
                                 .metadata(metadata)
                                 .score(score)
                                 .build());
                     }
-                }, datasetId);
-        scored.sort(Comparator.comparingDouble(d -> -d.getScore()));
-        return scored.size() > request.getTopK() ? scored.subList(0, request.getTopK()) : scored;
-    }
-
-    // ------------------------------------------------------------- helpers
-
-    private static String encode(float[] v) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < v.length; i++) {
-            if (i > 0) {
-                sb.append(',');
-            }
-            sb.append(v[i]);
-        }
-        return sb.toString();
-    }
-
-    private static float[] decode(String s) {
-        if (s == null || s.isEmpty()) {
-            return new float[0];
-        }
-        String[] parts = s.split(",");
-        float[] v = new float[parts.length];
-        for (int i = 0; i < parts.length; i++) {
-            v[i] = Float.parseFloat(parts[i]);
-        }
-        return v;
-    }
-
-    private static double cosine(float[] a, float[] b) {
-        if (a.length == 0 || b.length != a.length) {
-            return 0.0;
-        }
-        double dot = 0, na = 0, nb = 0;
-        for (int i = 0; i < a.length; i++) {
-            dot += a[i] * b[i];
-            na += a[i] * a[i];
-            nb += b[i] * b[i];
-        }
-        if (na == 0 || nb == 0) {
-            return 0.0;
-        }
-        return dot / (Math.sqrt(na) * Math.sqrt(nb));
+                }, configuration.datasetId());
+        matchingDocuments.sort(Comparator.comparingDouble(
+                document -> -document.getScore()));
+        return matchingDocuments.size() > request.getTopK()
+                ? matchingDocuments.subList(0, request.getTopK())
+                : matchingDocuments;
     }
 }

@@ -1,9 +1,7 @@
 package io.github.aigoodle.model.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.aigoodle.common.exception.AgentException;
-import io.github.aigoodle.common.util.JsonUtils;
 import io.github.aigoodle.model.entity.PredefinedModelEntity;
 import io.github.aigoodle.model.entity.ProviderDefinitionEntity;
 import io.github.aigoodle.model.enums.ModelFeature;
@@ -15,13 +13,9 @@ import io.github.aigoodle.model.provider.ModelParameterRule;
 import io.github.aigoodle.model.provider.PredefinedModel;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.EnumMap;
-import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -65,18 +59,20 @@ public class ProviderDefinitionService {
      * Sorted by {@code sortOrder} then name.
      */
     public List<ProviderDefinitionEntity> list(String tenantId) {
-        LambdaQueryWrapper<ProviderDefinitionEntity> q =
+        LambdaQueryWrapper<ProviderDefinitionEntity> query =
                 new LambdaQueryWrapper<ProviderDefinitionEntity>()
                         .eq(ProviderDefinitionEntity::getEnabled, Boolean.TRUE)
                         .in(ProviderDefinitionEntity::getTenantId, effectiveTenants(tenantId))
                         .orderByAsc(ProviderDefinitionEntity::getSortOrder)
                         .orderByAsc(ProviderDefinitionEntity::getName);
-        return providerMapper.selectList(q);
+        return providerMapper.selectList(query);
     }
 
     /** Find a definition by provider {@code name}, respecting tenant scoping. */
     public ProviderDefinitionEntity findByName(String tenantId, String name) {
-        if (name == null) return null;
+        if (name == null) {
+            return null;
+        }
         return providerMapper.selectOne(new LambdaQueryWrapper<ProviderDefinitionEntity>()
                 .eq(ProviderDefinitionEntity::getName, name)
                 .in(ProviderDefinitionEntity::getTenantId, effectiveTenants(tenantId))
@@ -138,24 +134,7 @@ public class ProviderDefinitionService {
         if (entity == null) {
             throw new AgentException("provider_not_found", "No provider definition with id " + id, null);
         }
-        if (patch.containsKey("label"))         entity.setLabel(str(patch.get("label")));
-        if (patch.containsKey("description"))   entity.setDescription(str(patch.get("description")));
-        if (patch.containsKey("icon"))          entity.setIcon(str(patch.get("icon")));
-        if (patch.containsKey("svgIcon"))       entity.setSvgIcon(str(patch.get("svgIcon")));
-        if (patch.containsKey("defaultBaseUrl")) entity.setDefaultBaseUrl(str(patch.get("defaultBaseUrl")));
-        if (patch.containsKey("sortOrder"))     entity.setSortOrder((Integer) patch.get("sortOrder"));
-        if (patch.containsKey("enabled"))       entity.setEnabled(bool(patch.get("enabled")));
-        if (patch.containsKey("supportsRemoteModelListing"))
-            entity.setSupportsRemoteModelListing(bool(patch.get("supportsRemoteModelListing")));
-        if (patch.containsKey("credentialSchema")) {
-            entity.setCredentialSchema(JsonUtils.toJson(patch.get("credentialSchema")));
-        }
-        if (patch.containsKey("defaultParameterRules")) {
-            entity.setDefaultParameterRules(JsonUtils.toJson(patch.get("defaultParameterRules")));
-        }
-        if (patch.containsKey("supportedModelTypes")) {
-            entity.setSupportedModelTypes(JsonUtils.toJson(patch.get("supportedModelTypes")));
-        }
+        ProviderDefinitionPatch.apply(entity, patch);
         providerMapper.updateById(entity);
     }
 
@@ -250,57 +229,23 @@ public class ProviderDefinitionService {
     // ---------------------------------------------------------- JSON codecs
 
     public Set<ModelType> deserializeModelTypes(String json) {
-        if (json == null || json.isBlank()) return EnumSet.noneOf(ModelType.class);
-        List<String> names = JsonUtils.parseList(json, String.class);
-        Set<ModelType> out = EnumSet.noneOf(ModelType.class);
-        for (String n : names) {
-            try {
-                out.add(ModelType.valueOf(n.toUpperCase(Locale.ROOT)));
-            } catch (IllegalArgumentException ignore) {
-                // Skip unknown types — forward-compat for a rolling deploy.
-            }
-        }
-        return out;
+        return ProviderMetadataCodec.modelTypes(json);
     }
 
     public List<CredentialField> deserializeCredentialSchema(String json) {
-        if (json == null || json.isBlank()) return List.of();
-        return JsonUtils.parseList(json, CredentialField.class);
+        return ProviderMetadataCodec.credentialSchema(json);
     }
 
     public Map<ModelType, List<ModelParameterRule>> deserializeParameterRules(String json) {
-        Map<ModelType, List<ModelParameterRule>> out = new EnumMap<>(ModelType.class);
-        if (json == null || json.isBlank()) return out;
-        Map<String, List<ModelParameterRule>> raw = JsonUtils.parse(json,
-                new TypeReference<Map<String, List<ModelParameterRule>>>() {});
-        if (raw == null) return out;
-        for (var e : raw.entrySet()) {
-            try {
-                out.put(ModelType.valueOf(e.getKey().toUpperCase(Locale.ROOT)), e.getValue());
-            } catch (IllegalArgumentException ignore) {
-                // Skip unknown types.
-            }
-        }
-        return out;
+        return ProviderMetadataCodec.parameterRules(json);
     }
 
     public List<ModelParameterRule> deserializeRuleList(String json) {
-        if (json == null || json.isBlank()) return List.of();
-        return JsonUtils.parseList(json, ModelParameterRule.class);
+        return ProviderMetadataCodec.ruleList(json);
     }
 
     public Set<ModelFeature> deserializeFeatures(String json) {
-        if (json == null || json.isBlank()) return Set.of();
-        List<String> raw = JsonUtils.parseList(json, String.class);
-        Set<ModelFeature> out = EnumSet.noneOf(ModelFeature.class);
-        for (String n : raw) {
-            try {
-                out.add(ModelFeature.valueOf(n));
-            } catch (IllegalArgumentException ignore) {
-                // ignore
-            }
-        }
-        return out;
+        return ProviderMetadataCodec.features(json);
     }
 
     // ---------------------------------------------------------- helpers
@@ -309,44 +254,17 @@ public class ProviderDefinitionService {
      * Build a {@link PredefinedModelEntity} from an in-memory {@link PredefinedModel}
      * as shipped by a Java built-in provider. Used by the seeder.
      */
-    public PredefinedModelEntity fromMemory(String providerName, PredefinedModel m, int sortOrder) {
-        PredefinedModelEntity e = new PredefinedModelEntity();
-        e.setTenantId(SYSTEM_TENANT);
-        e.setProviderName(providerName);
-        e.setModel(m.getModel());
-        e.setLabel(m.getLabel() == null ? m.getModel() : m.getLabel());
-        e.setModelType(m.getModelType());
-        e.setContextLength(m.getContextLength());
-        e.setDimensions(m.getDimensions());
-        e.setSortOrder(sortOrder);
-        if (m.getFeatures() != null && !m.getFeatures().isEmpty()) {
-            List<String> names = new ArrayList<>();
-            for (ModelFeature f : m.getFeatures()) names.add(f.name());
-            e.setFeatures(JsonUtils.toJson(names));
-        }
-        if (m.getParameterRules() != null && !m.getParameterRules().isEmpty()) {
-            e.setParameterRules(JsonUtils.toJson(m.getParameterRules()));
-        }
-        return e;
+    public PredefinedModelEntity fromMemory(String providerName, PredefinedModel model, int sortOrder) {
+        return ProviderMetadataCodec.toEntity(providerName, model, sortOrder, SYSTEM_TENANT);
     }
 
     // ---------------------------------------------------------- private
 
     private static Collection<String> effectiveTenants(String tenantId) {
         String tenant = tenantId == null || tenantId.isBlank() ? "default" : tenantId;
-        Map<String, Boolean> out = new LinkedHashMap<>();
-        out.put(SYSTEM_TENANT, true);
-        out.put(tenant, true);
-        return out.keySet();
-    }
-
-    private static String str(Object v) {
-        return v == null ? null : String.valueOf(v);
-    }
-
-    private static Boolean bool(Object v) {
-        if (v == null) return null;
-        if (v instanceof Boolean b) return b;
-        return Boolean.parseBoolean(String.valueOf(v));
+        Map<String, Boolean> tenants = new LinkedHashMap<>();
+        tenants.put(SYSTEM_TENANT, true);
+        tenants.put(tenant, true);
+        return tenants.keySet();
     }
 }

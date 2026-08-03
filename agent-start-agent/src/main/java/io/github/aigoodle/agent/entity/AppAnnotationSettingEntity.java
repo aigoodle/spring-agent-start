@@ -5,26 +5,21 @@ import io.github.aigoodle.common.persistence.BaseEntity;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
-/**
- * Per-app annotation retrieval configuration (Dify parity — the "标注设置" panel).
- * The {@link AppAnnotationEntity} rows hold the QA pairs; this row picks the
- * embedding model + score threshold used to decide whether an incoming query
- * matches an annotation closely enough to serve the canned answer.
- */
+/** Retrieval settings shared by all annotations owned by one application. */
 @Data
 @EqualsAndHashCode(callSuper = true)
 @TableName("app_annotation_settings")
 public class AppAnnotationSettingEntity extends BaseEntity {
 
-    /** FK to {@code apps.id}. */
+    /** Identifier of the application that owns these settings. */
     private String appId;
 
-    /** Minimum similarity score to serve the canned answer. Range 0.0 – 1.0. */
+    /** Minimum similarity score required to use an annotation, from 0.0 to 1.0. */
     private Float scoreThreshold;
 
-    /** Embedding model used to compare a query with annotation questions. */
+    /** Embedding model used to compare questions. */
     private String embeddingModelId;
 
-    /** Global switch for the whole annotation flow on this app. */
+    /** Whether annotation retrieval is enabled for the application. */
     private Boolean enabled;
 }

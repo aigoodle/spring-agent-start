@@ -5,10 +5,7 @@ import io.github.aigoodle.agent.entity.AppModelConfig;
 import io.github.aigoodle.agent.mapper.AgentMapper;
 import io.github.aigoodle.common.exception.AgentException;
 import io.github.aigoodle.common.util.JsonUtils;
-import io.github.aigoodle.knowledge.entity.DatasetEntity;
 import io.github.aigoodle.knowledge.service.DatasetService;
-import lombok.Builder;
-import lombok.Data;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
@@ -17,134 +14,103 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Knowledge-base attachment for {@link AgentEntity}. The list of attached
- * dataset ids lives on the app's {@link AppModelConfig} sidecar (Dify parity)
- * because it's part of the "编排" drawer — no join table. This service
- * enforces cross-tenant isolation (an app can only attach datasets its own
- * tenant owns) and returns hydrated view rows so the console can render chips
- * without a second round trip.
- * <p>
- * Wired only when the knowledge module is on the classpath.
+ * Manages knowledge bases attached to an application model configuration.
+ *
+ * <p>Every read and write passes through the same ownership resolver, so stale or
+ * manually edited sidecars cannot expose datasets from another tenant.</p>
  */
 public class AppDatasetService {
 
     private final AgentMapper agentMapper;
     private final AppModelConfigService modelConfigService;
-    private final DatasetService datasetService;
+    private final OwnedDatasetResolver datasetResolver;
 
-    public AppDatasetService(AgentMapper agentMapper, AppModelConfigService modelConfigService,
+    public AppDatasetService(AgentMapper agentMapper,
+                             AppModelConfigService modelConfigService,
                              DatasetService datasetService) {
         this.agentMapper = agentMapper;
         this.modelConfigService = modelConfigService;
-        this.datasetService = datasetService;
+        this.datasetResolver = new OwnedDatasetResolver(datasetService);
     }
 
-    /** Hydrated list — [{id, name, description}] — for the drawer chips. */
-    public List<AttachedDataset> list(String appId) {
-        requireApp(appId);
-        List<String> ids = attachedIds(appId);
-        List<AttachedDataset> out = new ArrayList<>();
-        for (String id : ids) {
-            DatasetEntity ds = datasetService.get(id);
-            if (ds == null) continue;
-            out.add(AttachedDataset.builder()
-                    .id(ds.getId())
-                    .name(ds.getName())
-                    .description(ds.getDescription())
-                    .indexingTechnique(ds.getIndexingTechnique() == null ? null : ds.getIndexingTechnique().name())
-                    .documentCount(ds.getDocumentCount())
-                    .build());
-        }
-        return out;
+    /** Return hydrated summaries for the datasets currently attached to an app. */
+    public List<AttachedDatasetView> list(String appId) {
+        AgentEntity application = requireApplication(appId);
+        return hydrate(attachedDatasetIds(appId), application.getTenantId());
     }
 
-    /**
-     * Idempotent attach — deduplicates against the current list and rejects
-     * ids from other tenants so the UI surfaces the mistake instead of
-     * silently dropping.
-     */
+    /** Add datasets while retaining the existing order and removing duplicates. */
     @Transactional
-    public List<AttachedDataset> attach(String appId, List<String> datasetIds) {
-        AgentEntity app = requireApp(appId);
-        Set<String> current = new LinkedHashSet<>(attachedIds(appId));
-        for (String id : datasetIds) {
-            if (id == null || id.isBlank()) continue;
-            DatasetEntity ds = datasetService.get(id);
-            if (ds == null) {
-                throw new AgentException("dataset_not_found", "Dataset not found: " + id, null);
-            }
-            if (!java.util.Objects.equals(nz(ds.getTenantId()), nz(app.getTenantId()))) {
-                throw new AgentException("dataset_cross_tenant",
-                        "Dataset " + id + " belongs to a different tenant", null);
-            }
-            current.add(id);
-        }
-        persistIds(app, new ArrayList<>(current));
-        return list(appId);
+    public List<AttachedDatasetView> attach(String appId, List<String> datasetIds) {
+        AgentEntity application = requireApplication(appId);
+        Set<String> combinedIds = new LinkedHashSet<>(attachedDatasetIds(appId));
+        combinedIds.addAll(validateDatasetIds(datasetIds, application.getTenantId()));
+        persistAttachedIds(application, combinedIds);
+        return hydrate(combinedIds, application.getTenantId());
     }
 
-    /** Remove one dataset id from the attached list. Silent no-op if not present. */
+    /** Remove one dataset id. Missing attachments are treated as an idempotent no-op. */
     @Transactional
-    public List<AttachedDataset> detach(String appId, String datasetId) {
-        AgentEntity app = requireApp(appId);
-        List<String> current = new ArrayList<>(attachedIds(appId));
-        current.removeIf(id -> id != null && id.equals(datasetId));
-        persistIds(app, current);
-        return list(appId);
+    public List<AttachedDatasetView> detach(String appId, String datasetId) {
+        AgentEntity application = requireApplication(appId);
+        Set<String> remainingIds = new LinkedHashSet<>(attachedDatasetIds(appId));
+        remainingIds.remove(datasetId);
+        persistAttachedIds(application, remainingIds);
+        return hydrate(remainingIds, application.getTenantId());
     }
 
-    /** Replace the whole list in one call — used by the "save" button on the settings panel. */
+    /** Replace the complete attachment set in the supplied order. */
     @Transactional
-    public List<AttachedDataset> replace(String appId, List<String> datasetIds) {
-        AgentEntity app = requireApp(appId);
-        Set<String> deduped = new LinkedHashSet<>();
-        for (String id : datasetIds == null ? List.<String>of() : datasetIds) {
-            if (id == null || id.isBlank()) continue;
-            DatasetEntity ds = datasetService.get(id);
-            if (ds == null) {
-                throw new AgentException("dataset_not_found", "Dataset not found: " + id, null);
+    public List<AttachedDatasetView> replace(String appId, List<String> datasetIds) {
+        AgentEntity application = requireApplication(appId);
+        Set<String> replacementIds = validateDatasetIds(
+                datasetIds, application.getTenantId());
+        persistAttachedIds(application, replacementIds);
+        return hydrate(replacementIds, application.getTenantId());
+    }
+
+    private Set<String> validateDatasetIds(List<String> datasetIds, String tenantId) {
+        Set<String> validatedIds = new LinkedHashSet<>();
+        for (String datasetId : datasetIds == null ? List.<String>of() : datasetIds) {
+            if (datasetId == null || datasetId.isBlank()) {
+                continue;
             }
-            if (!java.util.Objects.equals(nz(ds.getTenantId()), nz(app.getTenantId()))) {
-                throw new AgentException("dataset_cross_tenant",
-                        "Dataset " + id + " belongs to a different tenant", null);
-            }
-            deduped.add(id);
+            datasetResolver.requireOwned(datasetId, tenantId);
+            validatedIds.add(datasetId);
         }
-        persistIds(app, new ArrayList<>(deduped));
-        return list(appId);
+        return validatedIds;
     }
 
-    private List<String> attachedIds(String appId) {
-        AppModelConfig cfg = modelConfigService.findByAppId(appId);
-        return cfg == null ? List.of() : JsonUtils.parseList(cfg.getDatasetIdsJson(), String.class);
+    private List<AttachedDatasetView> hydrate(Iterable<String> datasetIds, String tenantId) {
+        List<AttachedDatasetView> datasets = new ArrayList<>();
+        for (String datasetId : datasetIds) {
+            datasets.add(AttachedDatasetView.from(
+                    datasetResolver.requireOwned(datasetId, tenantId)));
+        }
+        return datasets;
     }
 
-    private void persistIds(AgentEntity app, List<String> ids) {
+    private List<String> attachedDatasetIds(String appId) {
+        AppModelConfig configuration = modelConfigService.findByAppId(appId);
+        return configuration == null
+                ? List.of()
+                : JsonUtils.parseList(configuration.getDatasetIdsJson(), String.class);
+    }
+
+    private void persistAttachedIds(AgentEntity application, Iterable<String> datasetIds) {
+        List<String> orderedIds = new ArrayList<>();
+        datasetIds.forEach(orderedIds::add);
         AppModelConfig patch = new AppModelConfig();
-        patch.setDatasetIdsJson(JsonUtils.toJson(ids));
-        modelConfigService.upsert(app.getId(), app.getTenantId(), patch);
+        patch.setDatasetIdsJson(JsonUtils.toJson(orderedIds));
+        modelConfigService.upsert(new AppModelConfigRegistration(
+                application.getId(), application.getTenantId(), patch));
     }
 
-    private AgentEntity requireApp(String appId) {
-        AgentEntity app = agentMapper.selectById(appId);
-        if (app == null) {
+    private AgentEntity requireApplication(String appId) {
+        AgentEntity application = agentMapper.selectById(appId);
+        if (application == null) {
             throw new AgentException("agent_not_found", "Agent not found: " + appId, null);
         }
-        return app;
-    }
-
-    private static String nz(String s) {
-        return s == null || s.isBlank() ? "default" : s;
-    }
-
-    /** View row returned to the console — flatter than {@link DatasetEntity}. */
-    @Data
-    @Builder
-    public static class AttachedDataset {
-        private String id;
-        private String name;
-        private String description;
-        private String indexingTechnique;
-        private Integer documentCount;
+        return application;
     }
 }

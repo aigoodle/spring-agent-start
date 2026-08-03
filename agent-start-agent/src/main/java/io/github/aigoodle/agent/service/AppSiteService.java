@@ -14,58 +14,100 @@ import java.util.Base64;
  */
 public class AppSiteService {
 
-    private static final SecureRandom RNG = new SecureRandom();
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
-    private final AppSiteMapper mapper;
+    private final AppSiteMapper siteMapper;
 
-    public AppSiteService(AppSiteMapper mapper) {
-        this.mapper = mapper;
+    public AppSiteService(AppSiteMapper siteMapper) {
+        this.siteMapper = siteMapper;
     }
 
     public AppSiteEntity getByApp(String appId) {
-        AppSiteEntity existing = mapper.selectOne(new LambdaQueryWrapper<AppSiteEntity>()
+        AppSiteEntity existingSite = siteMapper.selectOne(new LambdaQueryWrapper<AppSiteEntity>()
                 .eq(AppSiteEntity::getAppId, appId)
                 .last("LIMIT 1"));
-        if (existing != null) return existing;
-        AppSiteEntity fallback = new AppSiteEntity();
-        fallback.setAppId(appId);
-        fallback.setStatus("normal");
-        return fallback;
+        if (existingSite != null) {
+            return existingSite;
+        }
+        AppSiteEntity defaultSite = new AppSiteEntity();
+        defaultSite.setAppId(appId);
+        defaultSite.setStatus("normal");
+        return defaultSite;
     }
 
     @Transactional
-    public AppSiteEntity save(String appId, AppSiteEntity patch) {
-        AppSiteEntity existing = mapper.selectOne(new LambdaQueryWrapper<AppSiteEntity>()
+    public AppSiteEntity save(String appId, AppSiteEntity siteUpdates) {
+        AppSiteEntity existingSite = siteMapper.selectOne(new LambdaQueryWrapper<AppSiteEntity>()
                 .eq(AppSiteEntity::getAppId, appId)
                 .last("LIMIT 1"));
-        if (existing == null) {
-            patch.setAppId(appId);
-            if (patch.getCode() == null || patch.getCode().isBlank()) patch.setCode(shortCode());
-            if (patch.getStatus() == null) patch.setStatus("normal");
-            mapper.insert(patch);
-            return patch;
+        if (existingSite == null) {
+            initializeNewSite(appId, siteUpdates);
+            siteMapper.insert(siteUpdates);
+            return siteUpdates;
         }
-        if (patch.getTitle() != null) existing.setTitle(patch.getTitle());
-        if (patch.getIcon() != null) existing.setIcon(patch.getIcon());
-        if (patch.getIconBackground() != null) existing.setIconBackground(patch.getIconBackground());
-        if (patch.getIconType() != null) existing.setIconType(patch.getIconType());
-        if (patch.getDescription() != null) existing.setDescription(patch.getDescription());
-        if (patch.getDefaultLanguage() != null) existing.setDefaultLanguage(patch.getDefaultLanguage());
-        if (patch.getCopyright() != null) existing.setCopyright(patch.getCopyright());
-        if (patch.getPrivacyPolicy() != null) existing.setPrivacyPolicy(patch.getPrivacyPolicy());
-        if (patch.getCustomDisclaimer() != null) existing.setCustomDisclaimer(patch.getCustomDisclaimer());
-        if (patch.getChatColorTheme() != null) existing.setChatColorTheme(patch.getChatColorTheme());
-        if (patch.getChatColorThemeInverted() != null) existing.setChatColorThemeInverted(patch.getChatColorThemeInverted());
-        if (patch.getShowWorkflowSteps() != null) existing.setShowWorkflowSteps(patch.getShowWorkflowSteps());
-        if (patch.getUseIconAsAnswerIcon() != null) existing.setUseIconAsAnswerIcon(patch.getUseIconAsAnswerIcon());
-        if (patch.getStatus() != null) existing.setStatus(patch.getStatus());
-        mapper.updateById(existing);
-        return existing;
+        applyUpdates(existingSite, siteUpdates);
+        siteMapper.updateById(existingSite);
+        return existingSite;
     }
 
-    private static String shortCode() {
-        byte[] bytes = new byte[9];
-        RNG.nextBytes(bytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    private static void initializeNewSite(String appId, AppSiteEntity newSite) {
+        newSite.setAppId(appId);
+        if (newSite.getCode() == null || newSite.getCode().isBlank()) {
+            newSite.setCode(generateShortCode());
+        }
+        if (newSite.getStatus() == null) {
+            newSite.setStatus("normal");
+        }
+    }
+
+    private static void applyUpdates(AppSiteEntity site, AppSiteEntity updates) {
+        if (updates.getTitle() != null) {
+            site.setTitle(updates.getTitle());
+        }
+        if (updates.getIcon() != null) {
+            site.setIcon(updates.getIcon());
+        }
+        if (updates.getIconBackground() != null) {
+            site.setIconBackground(updates.getIconBackground());
+        }
+        if (updates.getIconType() != null) {
+            site.setIconType(updates.getIconType());
+        }
+        if (updates.getDescription() != null) {
+            site.setDescription(updates.getDescription());
+        }
+        if (updates.getDefaultLanguage() != null) {
+            site.setDefaultLanguage(updates.getDefaultLanguage());
+        }
+        if (updates.getCopyright() != null) {
+            site.setCopyright(updates.getCopyright());
+        }
+        if (updates.getPrivacyPolicy() != null) {
+            site.setPrivacyPolicy(updates.getPrivacyPolicy());
+        }
+        if (updates.getCustomDisclaimer() != null) {
+            site.setCustomDisclaimer(updates.getCustomDisclaimer());
+        }
+        if (updates.getChatColorTheme() != null) {
+            site.setChatColorTheme(updates.getChatColorTheme());
+        }
+        if (updates.getChatColorThemeInverted() != null) {
+            site.setChatColorThemeInverted(updates.getChatColorThemeInverted());
+        }
+        if (updates.getShowWorkflowSteps() != null) {
+            site.setShowWorkflowSteps(updates.getShowWorkflowSteps());
+        }
+        if (updates.getUseIconAsAnswerIcon() != null) {
+            site.setUseIconAsAnswerIcon(updates.getUseIconAsAnswerIcon());
+        }
+        if (updates.getStatus() != null) {
+            site.setStatus(updates.getStatus());
+        }
+    }
+
+    private static String generateShortCode() {
+        byte[] randomBytes = new byte[9];
+        SECURE_RANDOM.nextBytes(randomBytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
     }
 }

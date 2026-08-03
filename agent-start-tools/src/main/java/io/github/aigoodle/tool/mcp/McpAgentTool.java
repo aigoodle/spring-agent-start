@@ -42,15 +42,17 @@ public class McpAgentTool implements AgentTool {
     }
 
     @Override
-    public Object execute(Map<String, Object> args) {
-        McpSchema.CallToolResult result = client.callTool(new McpSchema.CallToolRequest(name, args));
-        String text = result.content().stream()
-                .filter(c -> c instanceof McpSchema.TextContent)
-                .map(c -> ((McpSchema.TextContent) c).text())
+    public Object execute(Map<String, Object> arguments) {
+        McpSchema.CallToolRequest request = new McpSchema.CallToolRequest(name, arguments);
+        McpSchema.CallToolResult callResult = client.callTool(request);
+        String responseText = callResult.content().stream()
+                .filter(McpSchema.TextContent.class::isInstance)
+                .map(McpSchema.TextContent.class::cast)
+                .map(McpSchema.TextContent::text)
                 .collect(Collectors.joining("\n"));
-        if (Boolean.TRUE.equals(result.isError())) {
-            return "error: " + text;
+        if (Boolean.TRUE.equals(callResult.isError())) {
+            return "error: " + responseText;
         }
-        return text;
+        return responseText;
     }
 }

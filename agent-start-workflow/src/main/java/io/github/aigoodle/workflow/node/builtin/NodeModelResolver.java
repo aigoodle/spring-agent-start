@@ -10,9 +10,6 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.ChatOptions;
 
-import java.util.HashMap;
-import java.util.Map;
-
 /**
  * Resolves a {@link ChatClient} from an LLM-shaped workflow node.
  *
@@ -26,8 +23,8 @@ final class NodeModelResolver {
 
     private NodeModelResolver() {}
 
-    static ChatClient resolve(NodeDef node, ExecutionContext ctx, ModelService modelService) {
-        return modelService.getChatClient(resolveEntityId(node, ctx, modelService));
+    static ChatClient resolve(NodeDef node, ExecutionContext context, ModelService modelService) {
+        return modelService.getChatClient(resolveEntityId(node, context, modelService));
     }
 
     /**
@@ -40,8 +37,8 @@ final class NodeModelResolver {
      * directly skips that whole layer and gives us the raw chunk-by-chunk
      * emission the LLM API actually produces.
      */
-    static ChatModel resolveModel(NodeDef node, ExecutionContext ctx, ModelService modelService) {
-        return modelService.getChatModel(resolveEntityId(node, ctx, modelService));
+    static ChatModel resolveModel(NodeDef node, ExecutionContext context, ModelService modelService) {
+        return modelService.getChatModel(resolveEntityId(node, context, modelService));
     }
 
     /**
@@ -52,54 +49,26 @@ final class NodeModelResolver {
      * {@link ModelService#getChatClient(String) getChatClient(id)} and
      * {@link ModelService#getChatModel(String) getChatModel(id)}.
      */
-    private static String resolveEntityId(NodeDef node, ExecutionContext ctx, ModelService modelService) {
-        Object nested = node.get("model");
-        if (nested instanceof Map<?, ?> map) {
-            String provider = str(map.get("modelProvider"));
-            if (provider == null) provider = str(map.get("providerName"));
-            if (provider == null) provider = str(map.get("provider"));
-            String name = str(map.get("modelName"));
-            if (name == null) name = str(map.get("model"));
-            if (provider != null && name != null) {
-                ModelEntity entity = modelService.findOrMaterialize(
-                        tenantOf(ctx), provider, name, ModelType.LLM);
-                return entity.getId();
-            }
-            // Legacy nested id (already an agent_model.id).
-            String nestedId = str(map.get("modelId"));
-            if (nestedId != null && !nestedId.isBlank() && !isComposite(nestedId)) {
-                return nestedId;
-            }
-        }
-        String provider = node.getString("modelProvider");
-        String name = node.getString("modelName");
-        if (provider != null && name != null) {
+    private static String resolveEntityId(
+            NodeDef node, ExecutionContext context, ModelService modelService) {
+        NodeModelReference modelReference = NodeModelReference.from(node);
+        if (modelReference != null && modelReference.identifiesProviderModel()) {
             ModelEntity entity = modelService.findOrMaterialize(
-                    tenantOf(ctx), provider, name, ModelType.LLM);
+                    tenantOf(context), modelReference.provider(),
+                    modelReference.modelName(), ModelType.LLM);
             return entity.getId();
         }
-        String modelId = node.getString("modelId");
-        if (modelId != null && !modelId.isBlank() && !isComposite(modelId)) {
-            return modelId;
+        if (modelReference != null && modelReference.identifiesEntity()) {
+            return modelReference.entityId();
         }
         throw new IllegalArgumentException(
                 "Node '" + node.getId() + "' has no resolvable model (need modelProvider + modelName)");
     }
 
-    private static boolean isComposite(String s) {
-        return s.contains("::");
-    }
-
     /** Mirror {@code ModelService#tenant()} — blank tenant defaults to {@code "default"}. */
-    private static String tenantOf(ExecutionContext ctx) {
-        String t = ctx == null ? null : ctx.getTenantId();
-        return t == null || t.isBlank() ? "default" : t;
-    }
-
-    private static String str(Object o) {
-        if (o == null) return null;
-        String s = String.valueOf(o).trim();
-        return s.isEmpty() ? null : s;
+    private static String tenantOf(ExecutionContext context) {
+        String tenantId = context == null ? null : context.getTenantId();
+        return tenantId == null || tenantId.isBlank() ? "default" : tenantId;
     }
 
     /**
@@ -119,28 +88,12 @@ final class NodeModelResolver {
      * skip attaching options entirely.
      */
     static ChatOptions perNodeOptions(NodeDef node) {
-        Object nested = node.get("model");
-        if (!(nested instanceof Map<?, ?> map)) {
+        NodeModelReference modelReference = NodeModelReference.from(node);
+        if (modelReference == null || !modelReference.hasCompletionSettings()) {
             return null;
         }
-        String provider = firstString(map, "modelProvider", "providerName", "provider");
-        String name = firstString(map, "modelName", "model");
-        Object cp = map.get("completionParams");
-        if (!(cp instanceof Map<?, ?> cpMap) || cpMap.isEmpty()) {
-            return null;
-        }
-        @SuppressWarnings("unchecked")
-        Map<String, Object> settings = new HashMap<>((Map<String, Object>) cpMap);
-        return ChatOptionsFactory.buildFromSettings(provider, name, settings);
-    }
-
-    private static String firstString(Map<?, ?> map, String... keys) {
-        for (String k : keys) {
-            Object v = map.get(k);
-            if (v == null) continue;
-            String s = String.valueOf(v).trim();
-            if (!s.isEmpty()) return s;
-        }
-        return null;
+        return ChatOptionsFactory.buildFromSettings(
+                modelReference.provider(), modelReference.modelName(),
+                modelReference.completionSettings());
     }
 }

@@ -7,7 +7,7 @@ import lombok.Data;
 
 /**
  * Patch body for {@link DatasetService#update(String, UpdateDatasetRequest)}. All
- * fields are optional — omitted fields keep their current value in the DB.
+ * fields are optional; omitted fields keep their current value in the database.
  */
 @Data
 public class UpdateDatasetRequest {

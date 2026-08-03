@@ -14,36 +14,35 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 
-/**
- * Manage the singleton annotation-retrieval config row per app (Dify parity —
- * "标注设置" panel). GET returns a fresh defaulted row when nothing has been
- * saved yet so the form renders on first open.
- */
+/** REST endpoints for an application's annotation-retrieval settings. */
 @RestController
 @ConditionalOnBean(AppAnnotationSettingService.class)
 @RequestMapping("${spring-agent.web.base-path:}/apps/{appId}/annotation-settings")
 public class AppAnnotationSettingController {
 
-    private final AppAnnotationSettingService service;
+    private final AppAnnotationSettingService settingService;
 
-    public AppAnnotationSettingController(AppAnnotationSettingService service) {
-        this.service = service;
+    public AppAnnotationSettingController(AppAnnotationSettingService settingService) {
+        this.settingService = settingService;
     }
 
     @GetMapping
     public ApiResponse<AppAnnotationSettingEntity> get(@PathVariable String appId) {
-        return ApiResponse.ok(service.getByApp(appId));
+        return ApiResponse.ok(settingService.getByApp(appId));
     }
 
     @PutMapping
-    public ApiResponse<AppAnnotationSettingEntity> save(@PathVariable String appId,
-                                                        @RequestBody AppAnnotationSettingEntity body) {
-        return ApiResponse.ok(service.save(appId, body));
+    public ApiResponse<AppAnnotationSettingEntity> save(
+            @PathVariable String appId,
+            @RequestBody AppAnnotationSettingEntity updates) {
+        return ApiResponse.ok(settingService.save(appId, updates));
     }
 
     @PostMapping("/status")
-    public ApiResponse<AppAnnotationSettingEntity> setStatus(@PathVariable String appId,
-                                                              @RequestBody Map<String, Boolean> body) {
-        return ApiResponse.ok(service.setEnabled(appId, Boolean.TRUE.equals(body.get("enabled"))));
+    public ApiResponse<AppAnnotationSettingEntity> setStatus(
+            @PathVariable String appId,
+            @RequestBody Map<String, Boolean> status) {
+        boolean enabled = Boolean.TRUE.equals(status.get("enabled"));
+        return ApiResponse.ok(settingService.setEnabled(appId, enabled));
     }
 }

@@ -2,8 +2,10 @@ package io.github.aigoodle.trigger.dispatch;
 
 import io.github.aigoodle.common.exception.AgentException;
 
-import java.util.HashMap;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -11,22 +13,33 @@ import java.util.Map;
  */
 public class TriggerDispatcherRegistry {
 
-    private final Map<String, TriggerDispatcher> dispatchers = new HashMap<>();
+    private final Map<String, TriggerDispatcher> dispatchersByTargetType;
 
-    public TriggerDispatcherRegistry(List<TriggerDispatcher> beans) {
-        if (beans != null) {
-            beans.forEach(d -> dispatchers.put(d.targetType().toLowerCase(), d));
+    public TriggerDispatcherRegistry(List<TriggerDispatcher> dispatcherBeans) {
+        Map<String, TriggerDispatcher> registeredDispatchers = new LinkedHashMap<>();
+        if (dispatcherBeans != null) {
+            for (TriggerDispatcher dispatcher : dispatcherBeans) {
+                registeredDispatchers.put(normalize(dispatcher.targetType()), dispatcher);
+            }
         }
+        this.dispatchersByTargetType = Collections.unmodifiableMap(registeredDispatchers);
     }
 
     public TriggerDispatcher get(String targetType) {
-        String key = (targetType == null ? WorkflowTriggerDispatcher.TARGET_TYPE : targetType).toLowerCase();
-        TriggerDispatcher dispatcher = dispatchers.get(key);
+        String resolvedTargetType = targetType == null
+                ? WorkflowTriggerDispatcher.TARGET_TYPE
+                : targetType;
+        TriggerDispatcher dispatcher = dispatchersByTargetType.get(normalize(resolvedTargetType));
         if (dispatcher == null) {
             throw new AgentException("dispatcher_not_found",
-                    "No trigger dispatcher for target type '" + targetType + "' (have: " + dispatchers.keySet() + ")",
+                    "No trigger dispatcher for target type '" + resolvedTargetType
+                            + "' (have: " + dispatchersByTargetType.keySet() + ")",
                     null);
         }
         return dispatcher;
+    }
+
+    private static String normalize(String targetType) {
+        return targetType.toLowerCase(Locale.ROOT);
     }
 }

@@ -1,5 +1,6 @@
 package io.github.aigoodle.workflow.node;
 
+import io.github.aigoodle.workflow.graph.NodeDef;
 import io.github.aigoodle.workflow.graph.NodeType;
 import lombok.Data;
 
@@ -19,4 +20,17 @@ public class StepRecord {
     private long elapsedMillis;
     private boolean failed;
     private String error;
+
+    public static StepRecord completed(NodeDef node, NodeResult result, long elapsedMillis) {
+        StepRecord step = new StepRecord();
+        step.nodeId = node.getId();
+        step.nodeType = node.getType();
+        step.title = node.getTitle();
+        step.outputs = result.getOutputs();
+        step.handle = result.getHandle();
+        step.elapsedMillis = elapsedMillis;
+        step.failed = result.isFailed();
+        step.error = result.getError();
+        return step;
+    }
 }

@@ -4,10 +4,11 @@ import io.github.aigoodle.common.exception.AgentException;
 import io.github.aigoodle.tool.adapter.AgentToolCallback;
 import org.springframework.ai.tool.ToolCallback;
 
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Central registry of all {@link AgentTool}s — statically declared beans plus those
@@ -16,65 +17,77 @@ import java.util.Map;
  */
 public class ToolRegistry {
 
-    private final Map<String, AgentTool> tools = new LinkedHashMap<>();
+    private final Map<String, AgentTool> toolsByName;
 
-    public ToolRegistry(List<AgentTool> toolBeans, List<ToolProvider> providers) {
-        if (toolBeans != null) {
-            toolBeans.forEach(t -> tools.put(t.name(), t));
-        }
-        if (providers != null) {
-            for (ToolProvider p : providers) {
-                List<AgentTool> provided = p.getTools();
-                if (provided != null) {
-                    provided.forEach(t -> tools.put(t.name(), t));
-                }
-            }
-        }
+    public ToolRegistry(List<AgentTool> declaredTools, List<ToolProvider> toolProviders) {
+        Map<String, AgentTool> registeredTools = new LinkedHashMap<>();
+        registerAll(registeredTools, declaredTools);
+        registerProvidedTools(registeredTools, toolProviders);
+        this.toolsByName = Collections.unmodifiableMap(registeredTools);
     }
 
-    public AgentTool get(String name) {
-        AgentTool tool = tools.get(name);
+    public AgentTool get(String toolName) {
+        AgentTool tool = toolsByName.get(toolName);
         if (tool == null) {
             throw new AgentException("tool_not_found",
-                    "No tool named '" + name + "'. Available: " + tools.keySet(), null);
+                    "No tool named '" + toolName + "'. Available: " + toolsByName.keySet(), null);
         }
         return tool;
     }
 
-    public boolean has(String name) {
-        return tools.containsKey(name);
+    public boolean has(String toolName) {
+        return toolsByName.containsKey(toolName);
     }
 
     public List<AgentTool> all() {
-        return new ArrayList<>(tools.values());
+        return List.copyOf(toolsByName.values());
     }
 
     public List<String> names() {
-        return new ArrayList<>(tools.keySet());
+        return List.copyOf(toolsByName.keySet());
     }
 
-    public Object execute(String name, Map<String, Object> args) {
-        return get(name).execute(args == null ? Map.of() : args);
+    public Object execute(String toolName, Map<String, Object> arguments) {
+        return get(toolName).execute(arguments == null ? Map.of() : arguments);
     }
 
     /** All tools adapted to Spring AI callbacks, for handing to a ChatClient/agent. */
     public List<ToolCallback> toolCallbacks() {
-        List<ToolCallback> callbacks = new ArrayList<>();
-        for (AgentTool tool : tools.values()) {
-            callbacks.add(new AgentToolCallback(tool));
-        }
-        return callbacks;
+        return toolsByName.values().stream()
+                .map(AgentToolCallback::new)
+                .map(ToolCallback.class::cast)
+                .toList();
     }
 
     /** Callbacks for a named subset (unknown names are skipped). */
-    public List<ToolCallback> toolCallbacks(List<String> names) {
-        List<ToolCallback> callbacks = new ArrayList<>();
-        for (String name : names) {
-            AgentTool tool = tools.get(name);
-            if (tool != null) {
-                callbacks.add(new AgentToolCallback(tool));
-            }
+    public List<ToolCallback> toolCallbacks(List<String> toolNames) {
+        if (toolNames == null || toolNames.isEmpty()) {
+            return List.of();
         }
-        return callbacks;
+        return toolNames.stream()
+                .map(toolsByName::get)
+                .filter(Objects::nonNull)
+                .map(AgentToolCallback::new)
+                .map(ToolCallback.class::cast)
+                .toList();
+    }
+
+    private static void registerProvidedTools(Map<String, AgentTool> registeredTools,
+                                              List<ToolProvider> toolProviders) {
+        if (toolProviders == null) {
+            return;
+        }
+        for (ToolProvider toolProvider : toolProviders) {
+            registerAll(registeredTools, toolProvider.getTools());
+        }
+    }
+
+    private static void registerAll(Map<String, AgentTool> registeredTools, List<AgentTool> tools) {
+        if (tools == null) {
+            return;
+        }
+        for (AgentTool tool : tools) {
+            registeredTools.put(tool.name(), tool);
+        }
     }
 }

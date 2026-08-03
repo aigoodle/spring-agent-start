@@ -33,4 +33,29 @@ public class TriggerInvocationEntity extends BaseEntity {
 
     /** When this is a replay, the id of the original invocation. */
     private String replayOf;
+
+    public void markRunning() {
+        status = InvocationStatus.RUNNING;
+    }
+
+    public void markCompleted(String dispatchedRunId, String serializedOutputs) {
+        status = InvocationStatus.COMPLETED;
+        runId = dispatchedRunId;
+        outputsJson = serializedOutputs;
+        error = null;
+    }
+
+    public void markFailed(String failureMessage) {
+        status = InvocationStatus.FAILED;
+        error = failureMessage;
+    }
+
+    public void markFailed(String dispatchedRunId,
+                           String serializedOutputs,
+                           String failureMessage) {
+        status = InvocationStatus.FAILED;
+        runId = dispatchedRunId;
+        outputsJson = serializedOutputs;
+        error = failureMessage;
+    }
 }

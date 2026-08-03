@@ -20,39 +20,52 @@ import java.util.List;
  */
 public class McpToolProvider implements ToolProvider {
 
-    private static final Logger log = LoggerFactory.getLogger(McpToolProvider.class);
+    private static final Logger logger = LoggerFactory.getLogger(McpToolProvider.class);
 
-    private final McpClientManager manager;
-    private volatile List<AgentTool> cached;
+    private final McpClientManager clientManager;
+    private volatile List<AgentTool> discoveredTools;
 
-    public McpToolProvider(McpClientManager manager) {
-        this.manager = manager;
+    public McpToolProvider(McpClientManager clientManager) {
+        this.clientManager = clientManager;
     }
 
     @Override
     public List<AgentTool> getTools() {
-        if (cached != null) {
-            return cached;
+        if (discoveredTools != null) {
+            return discoveredTools;
         }
         synchronized (this) {
-            if (cached != null) {
-                return cached;
+            if (discoveredTools == null) {
+                discoveredTools = discoverTools();
             }
-            List<AgentTool> tools = new ArrayList<>();
-            for (McpProperties.Server server : manager.servers()) {
-                try {
-                    McpSyncClient client = manager.client(server);
-                    for (McpSchema.Tool tool : client.listTools().tools()) {
-                        String schema = tool.inputSchema() == null ? null : JsonUtils.toJson(tool.inputSchema());
-                        tools.add(new McpAgentTool(client, tool.name(), tool.description(), schema));
-                    }
-                    log.info("MCP server '{}' contributed {} tool(s)", server.getName(), client.listTools().tools().size());
-                } catch (Exception e) {
-                    log.error("Failed to load tools from MCP server '{}': {}", server.getName(), e.getMessage());
-                }
-            }
-            cached = tools;
-            return tools;
+            return discoveredTools;
         }
+    }
+
+    private List<AgentTool> discoverTools() {
+        List<AgentTool> tools = new ArrayList<>();
+        for (McpProperties.Server server : clientManager.servers()) {
+            try {
+                McpSyncClient client = clientManager.client(server);
+                List<McpSchema.Tool> serverTools = client.listTools().tools();
+                serverTools.stream()
+                        .map(tool -> toAgentTool(client, tool))
+                        .forEach(tools::add);
+                logger.info("MCP server '{}' contributed {} tool(s)",
+                        server.getName(), serverTools.size());
+            } catch (RuntimeException discoveryFailure) {
+                logger.error("Failed to load tools from MCP server '{}': {}",
+                        server.getName(), discoveryFailure.getMessage());
+            }
+        }
+        return List.copyOf(tools);
+    }
+
+    private static AgentTool toAgentTool(McpSyncClient client, McpSchema.Tool tool) {
+        String inputSchema = tool.inputSchema() == null
+                ? null
+                : JsonUtils.toJson(tool.inputSchema());
+        return new McpAgentTool(
+                client, tool.name(), tool.description(), inputSchema);
     }
 }

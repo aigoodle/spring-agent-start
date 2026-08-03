@@ -10,7 +10,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * MVC-flavored replacement for the WebFlux SseBridge — turns a synchronous
+ * MVC counterpart of the WebFlux SSE bridge. It turns a synchronous
  * "producer + listener callbacks" run into a real-time stream of
  * {@link SseEmitter} events.
  * <p>
@@ -22,7 +22,7 @@ public final class SseEmitterBridge {
 
     private static final Logger log = LoggerFactory.getLogger(SseEmitterBridge.class);
 
-    /** Never timeout on server-side — clients disconnect when they're done. */
+    /** No server-side timeout; clients close the stream when they are done. */
     private static final long NO_TIMEOUT = 0L;
 
     private static final ExecutorService PRODUCER_EXECUTOR =
@@ -51,26 +51,26 @@ public final class SseEmitterBridge {
         Emit emit = (name, data) -> {
             try {
                 emitter.send(SseEmitter.event().name(name).data(data));
-            } catch (IOException e) {
-                // Client disconnected — swallow to avoid noise; the producer
-                // will surface any real error via completeWithError().
-                throw new RuntimeException("SSE emit failed: " + e.getMessage(), e);
+            } catch (IOException exception) {
+                // Propagate disconnects to the producer without adding noisy logs here.
+                throw new RuntimeException("SSE emit failed: " + exception.getMessage(), exception);
             }
         };
         PRODUCER_EXECUTOR.execute(() -> {
             try {
                 producer.run(emit);
                 emitter.complete();
-            } catch (Exception e) {
-                log.warn("SSE producer failed: {}", e.getMessage());
+            } catch (Exception exception) {
+                log.warn("SSE producer failed: {}", exception.getMessage());
                 try {
                     emitter.send(SseEmitter.event()
                             .name("error")
-                            .data(Map.of("message", e.getMessage() == null ? "unknown" : e.getMessage())));
-                } catch (IOException ignore) {
+                            .data(Map.of("message", exception.getMessage() == null
+                                    ? "unknown" : exception.getMessage())));
+                } catch (IOException ignored) {
                     // Client already gone; nothing to do.
                 }
-                emitter.completeWithError(e);
+                emitter.completeWithError(exception);
             }
         });
         return emitter;

@@ -83,12 +83,13 @@ public class VolcengineArkModelProvider extends AbstractModelProvider {
 
     @Override
     public ChatModel createChatModel(ModelEndpoint endpoint) {
+        requireApiKey(endpoint);
         OpenAiChatOptions.Builder options = OpenAiChatOptions.builder().model(effectiveModel(endpoint));
-        Double temperature = doubleProperty(endpoint, "temperature");
+        Double temperature = endpoint.decimalProperty("temperature");
         if (temperature != null) {
             options.temperature(temperature);
         }
-        Double topP = doubleProperty(endpoint, "topP");
+        Double topP = endpoint.decimalProperty("topP");
         if (topP != null) {
             options.topP(topP);
         }
@@ -104,6 +105,7 @@ public class VolcengineArkModelProvider extends AbstractModelProvider {
 
     @Override
     public EmbeddingModel createEmbeddingModel(ModelEndpoint endpoint) {
+        requireApiKey(endpoint);
         OpenAiEmbeddingOptions.Builder options = OpenAiEmbeddingOptions.builder()
                 .model(effectiveModel(endpoint));
         Integer dimensions = endpoint.intProperty("dimensions");
@@ -114,12 +116,7 @@ public class VolcengineArkModelProvider extends AbstractModelProvider {
     }
 
     private static OpenAiApi buildApi(ModelEndpoint endpoint) {
-        if (endpoint.getApiKey() == null || endpoint.getApiKey().isBlank()) {
-            throw new IllegalArgumentException("Provider 'volcengine' requires an api key");
-        }
-        String baseUrl = endpoint.propertyOrDefault("baseUrl",
-                endpoint.getBaseUrl() != null && !endpoint.getBaseUrl().isBlank()
-                        ? endpoint.getBaseUrl() : DEFAULT_BASE_URL);
+        String baseUrl = endpoint.resolveBaseUrl(DEFAULT_BASE_URL);
         return OpenAiApi.builder()
                 .apiKey(endpoint.getApiKey())
                 .baseUrl(baseUrl)
@@ -145,15 +142,4 @@ public class VolcengineArkModelProvider extends AbstractModelProvider {
                 .dimensions(dim).build();
     }
 
-    private static Double doubleProperty(ModelEndpoint endpoint, String key) {
-        String v = endpoint.property(key);
-        if (v == null || v.isBlank()) {
-            return null;
-        }
-        try {
-            return Double.valueOf(v);
-        } catch (NumberFormatException e) {
-            return null;
-        }
-    }
 }

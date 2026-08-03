@@ -22,13 +22,15 @@ public class EndNodeExecutor implements NodeExecutor {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    public NodeResult execute(NodeDef node, ExecutionContext ctx) {
+    public NodeResult execute(NodeDef node, ExecutionContext context) {
         NodeResult result = NodeResult.empty();
-        Object outputs = node.get("outputs");
-        if (outputs instanceof Map<?, ?> map) {
-            for (Map.Entry<String, Object> e : ((Map<String, Object>) map).entrySet()) {
-                result.output(e.getKey(), VariableResolver.render(String.valueOf(e.getValue()), ctx.getPool()));
+        Object configuredOutputs = node.get("outputs");
+        if (configuredOutputs instanceof Map<?, ?> outputs) {
+            for (Map.Entry<?, ?> output : outputs.entrySet()) {
+                String outputName = String.valueOf(output.getKey());
+                String outputTemplate = String.valueOf(output.getValue());
+                result.output(
+                        outputName, VariableResolver.render(outputTemplate, context.getPool()));
             }
         }
         return result;

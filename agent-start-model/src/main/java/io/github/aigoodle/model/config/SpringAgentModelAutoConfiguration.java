@@ -17,8 +17,10 @@ import io.github.aigoodle.model.registry.ModelProviderRegistry;
 import io.github.aigoodle.model.runtime.ModelInstanceFactory;
 import io.github.aigoodle.model.service.CredentialCodec;
 import io.github.aigoodle.model.service.ModelService;
+import io.github.aigoodle.model.service.ModelConnectionTester;
 import io.github.aigoodle.model.service.PromptTemplateService;
 import io.github.aigoodle.model.service.ProviderCredentialService;
+import io.github.aigoodle.model.service.ProviderCatalogClient;
 import io.github.aigoodle.model.service.ProviderDefinitionSeeder;
 import io.github.aigoodle.model.service.ProviderDefinitionService;
 import io.github.aigoodle.model.service.ProviderModelSettingsService;
@@ -94,15 +96,32 @@ public class SpringAgentModelAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    public ProviderCatalogClient providerCatalogClient(ModelProviderRegistry registry,
+                                                       ProviderCredentialService credentialService,
+                                                       CredentialCodec codec) {
+        return new ProviderCatalogClient(registry, credentialService, codec);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ModelConnectionTester modelConnectionTester(ModelProviderRegistry registry,
+                                                       ModelInstanceFactory instanceFactory) {
+        return new ModelConnectionTester(registry, instanceFactory);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     public ModelService modelService(ModelMapper modelMapper,
                                      ProviderCredentialService credentialService,
                                      CredentialCodec codec,
                                      ModelProviderRegistry registry,
-                                     ModelInstanceFactory instanceFactory,
-                                     ProviderDefinitionService definitionService,
-                                     ProviderModelSettingsService settingsService) {
+                                       ModelInstanceFactory instanceFactory,
+                                       ProviderDefinitionService definitionService,
+                                       ProviderModelSettingsService settingsService,
+                                       ModelConnectionTester connectionTester,
+                                       ProviderCatalogClient providerCatalogClient) {
         return new ModelService(modelMapper, credentialService, codec, registry, instanceFactory,
-                definitionService, settingsService);
+                definitionService, settingsService, connectionTester, providerCatalogClient);
     }
 
     @Bean

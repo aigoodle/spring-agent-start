@@ -17,10 +17,10 @@ import java.util.Map;
  */
 public class JdbcAgentMemory implements AgentMemory {
 
-    private final AgentMessageMapper mapper;
+    private final AgentMessageMapper messageMapper;
 
-    public JdbcAgentMemory(AgentMessageMapper mapper) {
-        this.mapper = mapper;
+    public JdbcAgentMemory(AgentMessageMapper messageMapper) {
+        this.messageMapper = messageMapper;
     }
 
     @Override
@@ -28,17 +28,19 @@ public class JdbcAgentMemory implements AgentMemory {
         if (conversationId == null) {
             return List.of();
         }
-        List<AgentMessageEntity> rows = mapper.selectList(new LambdaQueryWrapper<AgentMessageEntity>()
+        List<AgentMessageEntity> storedMessages = messageMapper.selectList(new LambdaQueryWrapper<AgentMessageEntity>()
                 .eq(AgentMessageEntity::getConversationId, conversationId)
                 .orderByDesc(AgentMessageEntity::getSeq)
                 .last("limit " + Math.max(1, maxMessages)));
-        List<AgentMessage> messages = new ArrayList<>();
-        // rows are newest-first; reverse to oldest-first
-        for (int i = rows.size() - 1; i >= 0; i--) {
-            AgentMessageEntity r = rows.get(i);
-            messages.add(new AgentMessage(AgentMessage.Role.valueOf(r.getRole()), r.getContent()));
+        List<AgentMessage> conversationMessages = new ArrayList<>(storedMessages.size());
+        // Stored messages are newest-first; callers consume them oldest-first.
+        for (int index = storedMessages.size() - 1; index >= 0; index--) {
+            AgentMessageEntity storedMessage = storedMessages.get(index);
+            conversationMessages.add(new AgentMessage(
+                    AgentMessage.Role.valueOf(storedMessage.getRole()),
+                    storedMessage.getContent()));
         }
-        return messages;
+        return conversationMessages;
     }
 
     @Override
@@ -47,20 +49,20 @@ public class JdbcAgentMemory implements AgentMemory {
         if (conversationId == null) {
             return;
         }
-        Long maxSeq = mapper.selectList(new LambdaQueryWrapper<AgentMessageEntity>()
+        long latestSequence = messageMapper.selectList(new LambdaQueryWrapper<AgentMessageEntity>()
                         .select(AgentMessageEntity::getSeq)
                         .eq(AgentMessageEntity::getConversationId, conversationId)
                         .orderByDesc(AgentMessageEntity::getSeq)
                         .last("limit 1"))
                 .stream().map(AgentMessageEntity::getSeq).findFirst().orElse(0L);
 
-        AgentMessageEntity entity = new AgentMessageEntity();
-        entity.setConversationId(conversationId);
-        entity.setAgentId(agentId);
-        entity.setRole(message.role().name());
-        entity.setContent(message.content());
-        entity.setSeq(maxSeq + 1);
-        mapper.insert(entity);
+        AgentMessageEntity storedMessage = new AgentMessageEntity();
+        storedMessage.setConversationId(conversationId);
+        storedMessage.setAgentId(agentId);
+        storedMessage.setRole(message.role().name());
+        storedMessage.setContent(message.content());
+        storedMessage.setSeq(latestSequence + 1);
+        messageMapper.insert(storedMessage);
     }
 
     /**
@@ -72,37 +74,49 @@ public class JdbcAgentMemory implements AgentMemory {
         if (agentId == null) {
             return List.of();
         }
-        int cap = Math.min(200, Math.max(1, limit));
-        List<AgentMessageEntity> rows = mapper.selectList(new LambdaQueryWrapper<AgentMessageEntity>()
+        int conversationLimit = Math.min(200, Math.max(1, limit));
+        List<AgentMessageEntity> storedMessages = messageMapper.selectList(new LambdaQueryWrapper<AgentMessageEntity>()
                 .eq(AgentMessageEntity::getAgentId, agentId)
                 .orderByDesc(AgentMessageEntity::getCreatedAt));
-        Map<String, AgentMessageEntity> latestByConv = new LinkedHashMap<>();
-        Map<String, AgentMessageEntity> firstUserByConv = new LinkedHashMap<>();
-        for (AgentMessageEntity r : rows) {
-            latestByConv.putIfAbsent(r.getConversationId(), r);
-            if ("USER".equalsIgnoreCase(r.getRole())) {
+        Map<String, AgentMessageEntity> latestMessageByConversation = new LinkedHashMap<>();
+        Map<String, AgentMessageEntity> firstUserMessageByConversation = new LinkedHashMap<>();
+        for (AgentMessageEntity storedMessage : storedMessages) {
+            latestMessageByConversation.putIfAbsent(
+                    storedMessage.getConversationId(), storedMessage);
+            if ("USER".equalsIgnoreCase(storedMessage.getRole())) {
                 // Rows come newest-first, so overwriting means the earliest user
                 // message per conversation wins after the whole loop.
-                firstUserByConv.put(r.getConversationId(), r);
+                firstUserMessageByConversation.put(
+                        storedMessage.getConversationId(), storedMessage);
             }
         }
-        List<ConversationSummary> out = new ArrayList<>();
-        for (Map.Entry<String, AgentMessageEntity> e : latestByConv.entrySet()) {
-            AgentMessageEntity first = firstUserByConv.get(e.getKey());
-            String preview = first == null ? "" : truncate(first.getContent());
-            String updatedAt = e.getValue().getCreatedAt() == null ? null : e.getValue().getCreatedAt().toString();
-            out.add(new ConversationSummary(e.getKey(), preview, updatedAt));
-            if (out.size() >= cap) {
+        List<ConversationSummary> conversationSummaries = new ArrayList<>();
+        for (Map.Entry<String, AgentMessageEntity> entry
+                : latestMessageByConversation.entrySet()) {
+            String conversationId = entry.getKey();
+            AgentMessageEntity firstUserMessage =
+                    firstUserMessageByConversation.get(conversationId);
+            String preview = firstUserMessage == null
+                    ? "" : truncate(firstUserMessage.getContent());
+            AgentMessageEntity latestMessage = entry.getValue();
+            String updatedAt = latestMessage.getCreatedAt() == null
+                    ? null : latestMessage.getCreatedAt().toString();
+            conversationSummaries.add(
+                    new ConversationSummary(conversationId, preview, updatedAt));
+            if (conversationSummaries.size() >= conversationLimit) {
                 break;
             }
         }
-        return out;
+        return conversationSummaries;
     }
 
-    private static String truncate(String s) {
-        if (s == null) {
+    private static String truncate(String text) {
+        if (text == null) {
             return "";
         }
-        return s.length() > 80 ? s.substring(0, 80) + "…" : s;
+        int maximumLength = 80;
+        return text.length() <= maximumLength
+                ? text
+                : text.substring(0, maximumLength - 1) + "…";
     }
 }

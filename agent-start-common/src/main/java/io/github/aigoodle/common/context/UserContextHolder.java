@@ -1,6 +1,7 @@
 package io.github.aigoodle.common.context;
 
 import java.util.Optional;
+import java.util.function.Supplier;
 
 /**
  * 当前登录用户的线程级持有器 —— spring-agent-start 各模块获取"当前是谁在调用"的
@@ -126,12 +127,12 @@ public final class UserContextHolder {
      * 的调用点，避免调用方漏判 null。
      */
     public static CurrentUser require() {
-        CurrentUser u = HOLDER.get();
-        if (u == null) {
+        CurrentUser currentUser = HOLDER.get();
+        if (currentUser == null) {
             throw new IllegalStateException(
                     "No CurrentUser in context — host application must set it in its login filter before invoking spring-agent-start APIs");
         }
-        return u;
+        return currentUser;
     }
 
     // ============================================================ 便捷取值
@@ -141,22 +142,24 @@ public final class UserContextHolder {
      * spring-agent-start 内部所有"按租户过滤"的查询都应通过此方法拿租户键。
      */
     public static String currentTenantId() {
-        CurrentUser u = HOLDER.get();
-        if (u == null) return DEFAULT_TENANT;
-        String t = u.getTenantId();
-        return (t == null || t.isBlank()) ? DEFAULT_TENANT : t;
+        CurrentUser currentUser = HOLDER.get();
+        if (currentUser == null) {
+            return DEFAULT_TENANT;
+        }
+        String tenantId = currentUser.getTenantId();
+        return (tenantId == null || tenantId.isBlank()) ? DEFAULT_TENANT : tenantId;
     }
 
     /** 取当前用户 id；未登录返回 {@code null}。 */
     public static String currentUserId() {
-        CurrentUser u = HOLDER.get();
-        return u == null ? null : u.getUserId();
+        CurrentUser currentUser = HOLDER.get();
+        return currentUser == null ? null : currentUser.getUserId();
     }
 
     /** 取当前用户名；未登录返回 {@code null}。 */
     public static String currentUsername() {
-        CurrentUser u = HOLDER.get();
-        return u == null ? null : u.getUsername();
+        CurrentUser currentUser = HOLDER.get();
+        return currentUser == null ? null : currentUser.getUsername();
     }
 
     /** 是否已登录（== ThreadLocal 里有值）。 */
@@ -176,10 +179,14 @@ public final class UserContextHolder {
      * }</pre>
      * 依赖 reactor-core：仅在调用方类路径已有 reactor 时才会触发 —— common 模块没有硬依赖。
      */
-    public static Optional<CurrentUser> getReactive(reactor.util.context.ContextView ctx) {
-        if (ctx == null || !ctx.hasKey(CONTEXT_KEY)) return Optional.empty();
-        Object val = ctx.get(CONTEXT_KEY);
-        return val instanceof CurrentUser cu ? Optional.of(cu) : Optional.empty();
+    public static Optional<CurrentUser> getReactive(reactor.util.context.ContextView context) {
+        if (context == null || !context.hasKey(CONTEXT_KEY)) {
+            return Optional.empty();
+        }
+        Object contextValue = context.get(CONTEXT_KEY);
+        return contextValue instanceof CurrentUser currentUser
+                ? Optional.of(currentUser)
+                : Optional.empty();
     }
 
     // ============================================================ 测试 / 临时切换
@@ -192,12 +199,46 @@ public final class UserContextHolder {
      * }</pre>
      */
     public static void runAs(CurrentUser user, Runnable action) {
-        CurrentUser previous = HOLDER.get();
-        try {
-            set(user);
+        try (ContextScope ignored = openScope(user)) {
             action.run();
-        } finally {
-            set(previous);
+        }
+    }
+
+    /**
+     * Run a value-producing operation with the supplied user and restore the
+     * previous context afterwards.
+     */
+    public static <T> T callAs(CurrentUser user, Supplier<T> action) {
+        try (ContextScope ignored = openScope(user)) {
+            return action.get();
+        }
+    }
+
+    /**
+     * Bind a user until the returned scope is closed. Intended for explicit
+     * try-with-resources blocks and nested context switching.
+     */
+    public static ContextScope openScope(CurrentUser user) {
+        CurrentUser previousUser = HOLDER.get();
+        set(user);
+        return new ContextScope(previousUser);
+    }
+
+    public static final class ContextScope implements AutoCloseable {
+
+        private final CurrentUser previousUser;
+        private boolean closed;
+
+        private ContextScope(CurrentUser previousUser) {
+            this.previousUser = previousUser;
+        }
+
+        @Override
+        public void close() {
+            if (!closed) {
+                set(previousUser);
+                closed = true;
+            }
         }
     }
 }

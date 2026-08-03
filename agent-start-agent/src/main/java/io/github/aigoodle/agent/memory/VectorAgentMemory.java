@@ -21,21 +21,26 @@ import java.util.Map;
  */
 public class VectorAgentMemory implements AgentMemory {
 
+    private static final String DEFAULT_DATASET_NAME = "agent-memory";
+
     private final KnowledgeService knowledgeService;
     private final DatasetService datasetService;
     private final String embeddingModelId;
     private final String datasetName;
-    private final AgentMemory fallback;
+    private final AgentMemory fallbackMemory;
 
     private volatile String datasetId;
 
     public VectorAgentMemory(KnowledgeService knowledgeService, DatasetService datasetService,
-                             String embeddingModelId, String datasetName, AgentMemory fallback) {
+                             String embeddingModelId, String datasetName,
+                             AgentMemory fallbackMemory) {
         this.knowledgeService = knowledgeService;
         this.datasetService = datasetService;
         this.embeddingModelId = embeddingModelId;
-        this.datasetName = datasetName == null ? "agent-memory" : datasetName;
-        this.fallback = fallback;
+        this.datasetName = datasetName == null || datasetName.isBlank()
+                ? DEFAULT_DATASET_NAME
+                : datasetName;
+        this.fallbackMemory = fallbackMemory;
     }
 
     @Override
@@ -44,57 +49,68 @@ public class VectorAgentMemory implements AgentMemory {
             return;
         }
         // name = conversationId so retrieval can filter by documentName metadata
-        knowledgeService.addText(datasetId(), conversationId, "[" + message.role() + "] " + message.content());
-        if (fallback != null) {
-            fallback.append(conversationId, agentId, message);
+        knowledgeService.addText(getOrCreateDatasetId(), conversationId,
+                "[" + message.role() + "] " + message.content());
+        if (fallbackMemory != null) {
+            fallbackMemory.append(conversationId, agentId, message);
         }
     }
 
     @Override
     public List<AgentMessage> load(String conversationId, int maxMessages) {
-        return fallback != null ? fallback.load(conversationId, maxMessages) : List.of();
+        return fallbackMemory != null
+                ? fallbackMemory.load(conversationId, maxMessages)
+                : List.of();
     }
 
     @Override
     public List<AgentMessage> recall(String conversationId, String query, int maxMessages) {
+        if (conversationId == null || conversationId.isBlank()) {
+            return List.of();
+        }
         if (query == null || query.isBlank()) {
             return load(conversationId, maxMessages);
         }
-        List<RetrievedSegment> segments = knowledgeService.retrieve(datasetId(),
+        int resultLimit = Math.max(1, maxMessages);
+        List<RetrievedSegment> matchingSegments = knowledgeService.retrieve(
+                getOrCreateDatasetId(),
                 RetrievalRequest.builder()
                         .query(query)
-                        .topK(maxMessages)
+                        .topK(resultLimit)
                         .metadataFilter(Map.of("documentName", conversationId))
                         .build());
-        return segments.stream().map(s -> parse(s.getContent())).toList();
+        return matchingSegments.stream()
+                .map(RetrievedSegment::getContent)
+                .map(VectorAgentMemory::parseMessage)
+                .toList();
     }
 
-    private String datasetId() {
+    private String getOrCreateDatasetId() {
         if (datasetId == null) {
             synchronized (this) {
                 if (datasetId == null) {
-                    DatasetEntity ds = datasetService.create(CreateDatasetRequest.builder()
+                    DatasetEntity memoryDataset = datasetService.create(CreateDatasetRequest.builder()
                             .tenantId("default").name(datasetName)
                             .embeddingModelId(embeddingModelId)
                             .indexingTechnique(IndexingTechnique.HIGH_QUALITY)
                             .build());
-                    datasetId = ds.getId();
+                    datasetId = memoryDataset.getId();
                 }
             }
         }
         return datasetId;
     }
 
-    private static AgentMessage parse(String content) {
+    private static AgentMessage parseMessage(String content) {
         if (content != null && content.startsWith("[")) {
-            int end = content.indexOf(']');
-            if (end > 0) {
-                String role = content.substring(1, end).trim();
-                String text = content.substring(end + 1).strip();
+            int closingBracket = content.indexOf(']');
+            if (closingBracket > 0) {
+                String roleName = content.substring(1, closingBracket).trim();
+                String messageText = content.substring(closingBracket + 1).strip();
                 try {
-                    return new AgentMessage(AgentMessage.Role.valueOf(role), text);
-                } catch (IllegalArgumentException ignored) {
-                    // fall through
+                    return new AgentMessage(AgentMessage.Role.valueOf(roleName), messageText);
+                } catch (IllegalArgumentException unknownRole) {
+                    // Preserve unrecognized legacy content as a user message.
                 }
             }
         }

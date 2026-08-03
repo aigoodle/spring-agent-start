@@ -25,38 +25,38 @@ public class NodeDef {
     }
 
     public String getString(String key) {
-        Object v = data.get(key);
-        return v == null ? null : String.valueOf(v);
+        Object value = data.get(key);
+        return value == null ? null : String.valueOf(value);
     }
 
     public String getString(String key, String defaultValue) {
-        String v = getString(key);
-        return v == null ? defaultValue : v;
+        String value = getString(key);
+        return value == null ? defaultValue : value;
     }
 
     public int getInt(String key, int defaultValue) {
-        Object v = data.get(key);
-        if (v instanceof Number n) {
-            return n.intValue();
+        Object value = data.get(key);
+        if (value instanceof Number number) {
+            return number.intValue();
         }
         try {
-            return v == null ? defaultValue : Integer.parseInt(String.valueOf(v));
-        } catch (NumberFormatException e) {
+            return value == null ? defaultValue : Integer.parseInt(String.valueOf(value));
+        } catch (NumberFormatException exception) {
             return defaultValue;
         }
     }
 
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> getMapList(String key) {
-        Object v = data.get(key);
-        return v instanceof List ? (List<Map<String, Object>>) v : List.of();
+        Object value = data.get(key);
+        return value instanceof List ? (List<Map<String, Object>>) value : List.of();
     }
 
     public static NodeDef of(String id, NodeType type) {
-        NodeDef n = new NodeDef();
-        n.setId(id);
-        n.setType(type);
-        return n;
+        NodeDef node = new NodeDef();
+        node.setId(id);
+        node.setType(type);
+        return node;
     }
 
     public NodeDef with(String key, Object value) {

@@ -30,4 +30,14 @@ class CostComputationTest {
     void nullUsageCostsZero() {
         assertEquals(0L, service.costMicros("gpt-4o-mini", null));
     }
+
+    @Test
+    void missingPricingTableCostsZero() {
+        ObservabilityProperties properties = new ObservabilityProperties();
+        properties.setPricing(null);
+        LlmMetricsService metricsService = new LlmMetricsService(null, properties);
+
+        assertEquals(0L, metricsService.costMicros(
+                "gpt-4o-mini", new TokenUsage(1000, 1000, 2000)));
+    }
 }

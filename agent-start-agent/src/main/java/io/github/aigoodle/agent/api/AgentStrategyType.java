@@ -1,16 +1,14 @@
 package io.github.aigoodle.agent.api;
 
-/**
- * The reasoning strategy an agent uses.
- */
+/** The reasoning strategy an agent uses. */
 public enum AgentStrategyType {
 
-    /** Manual Thought→Action→Observation loop with text parsing (works on any model). */
+    /** Manual thought-action-observation loop that works with text-only models. */
     REACT,
 
-    /** Native tool-calling: the model decides tool calls, Spring AI runs the loop. */
+    /** Native tool calling delegated to the model and Spring AI. */
     FUNCTION_CALLING,
 
-    /** Plan first (decompose into steps), then execute each step, then synthesize. */
+    /** Plan the work, execute each step, and synthesize a final response. */
     PLAN_EXECUTE
 }

@@ -1,6 +1,8 @@
 package io.github.aigoodle.web.controller;
 
 import io.github.aigoodle.model.entity.PromptTemplateEntity;
+import io.github.aigoodle.model.service.PromptTemplateDraft;
+import io.github.aigoodle.model.service.PromptTemplatePatch;
 import io.github.aigoodle.model.service.PromptTemplateService;
 import io.github.aigoodle.web.common.ApiResponse;
 import io.github.aigoodle.web.dto.PromptTemplateRequest;
@@ -28,57 +30,62 @@ import java.util.Map;
 @RequestMapping("${spring-agent.web.base-path:}/prompt-templates")
 public class PromptTemplateController {
 
-    private final PromptTemplateService service;
+    private final PromptTemplateService promptTemplateService;
     private final PromptReferenceScanner referenceScanner;
 
-    public PromptTemplateController(PromptTemplateService service,
-                                    ObjectProvider<PromptReferenceScanner> scanner) {
-        this.service = service;
-        this.referenceScanner = scanner.getIfAvailable();
+    public PromptTemplateController(PromptTemplateService promptTemplateService,
+                                    ObjectProvider<PromptReferenceScanner> referenceScannerProvider) {
+        this.promptTemplateService = promptTemplateService;
+        this.referenceScanner = referenceScannerProvider.getIfAvailable();
     }
 
     @GetMapping
     public ApiResponse<List<PromptTemplateEntity>> list(
             @RequestParam(required = false) String tenantId,
             @RequestParam(required = false) String category) {
-        return ApiResponse.ok(service.list(tenantId, category));
+        return ApiResponse.ok(promptTemplateService.list(tenantId, category));
     }
 
     @GetMapping("/{id}")
     public ApiResponse<PromptTemplateEntity> get(@PathVariable String id) {
-        return ApiResponse.ok(service.require(id));
+        return ApiResponse.ok(promptTemplateService.require(id));
     }
 
     @PostMapping
-    public ApiResponse<PromptTemplateEntity> create(@RequestBody PromptTemplateRequest req) {
-        return ApiResponse.ok(service.create(req.getTenantId(), req.getName(), req.getCategory(),
-                req.getDescription(), req.getContent(), req.getTags()));
+    public ApiResponse<PromptTemplateEntity> create(@RequestBody PromptTemplateRequest request) {
+        return ApiResponse.ok(promptTemplateService.create(new PromptTemplateDraft(
+                request.getTenantId(), request.getName(), request.getCategory(),
+                request.getDescription(), request.getContent(), request.getTags())));
     }
 
     @PutMapping("/{id}")
     public ApiResponse<PromptTemplateEntity> update(@PathVariable String id,
-                                                     @RequestBody PromptTemplateRequest req) {
-        return ApiResponse.ok(service.update(id, req.getName(), req.getCategory(),
-                req.getDescription(), req.getContent(), req.getTags()));
+                                                     @RequestBody PromptTemplateRequest request) {
+        return ApiResponse.ok(promptTemplateService.update(id, new PromptTemplatePatch(
+                request.getName(), request.getCategory(), request.getDescription(),
+                request.getContent(), request.getTags())));
     }
 
     @DeleteMapping("/{id}")
     public ApiResponse<Void> delete(@PathVariable String id) {
-        service.delete(id);
+        promptTemplateService.delete(id);
         return ApiResponse.ok();
     }
 
     /** Variables referenced by a template — useful for previewing what needs filling in. */
     @GetMapping("/{id}/variables")
     public ApiResponse<List<String>> variables(@PathVariable String id) {
-        return ApiResponse.ok(service.variablesOf(service.require(id).getContent()));
+        return ApiResponse.ok(promptTemplateService.variablesOf(
+                promptTemplateService.require(id).getContent()));
     }
 
     /** Render a template against a supplied variable map — for a "preview" button. */
     @PostMapping("/{id}/render")
     public ApiResponse<Map<String, Object>> render(@PathVariable String id,
-                                                    @RequestBody(required = false) Map<String, Object> vars) {
-        String rendered = service.render(service.require(id).getContent(), vars == null ? Map.of() : vars);
+                                                    @RequestBody(required = false) Map<String, Object> variables) {
+        String rendered = promptTemplateService.render(
+                promptTemplateService.require(id).getContent(),
+                variables == null ? Map.of() : variables);
         return ApiResponse.ok(Map.of("rendered", rendered));
     }
 
@@ -90,7 +97,7 @@ public class PromptTemplateController {
      */
     @GetMapping("/{id}/references")
     public ApiResponse<List<Map<String, Object>>> references(@PathVariable String id) {
-        service.require(id); // 404 if template gone
+        promptTemplateService.require(id); // 404 if template gone
         return ApiResponse.ok(referenceScanner == null ? List.of() : referenceScanner.findUsingTemplate(id));
     }
 }

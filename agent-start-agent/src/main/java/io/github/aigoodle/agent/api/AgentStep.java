@@ -2,10 +2,7 @@ package io.github.aigoodle.agent.api;
 
 import lombok.Data;
 
-/**
- * One step in an agent's reasoning trace (a ReAct thought/action/observation, a tool
- * call, or the final answer) — captured for observability and explainability.
- */
+/** One observable step in an agent's reasoning and tool-execution trace. */
 @Data
 public class AgentStep {
 
@@ -21,9 +18,29 @@ public class AgentStep {
     private String content;
 
     public static AgentStep of(Kind kind, String content) {
-        AgentStep s = new AgentStep();
-        s.kind = kind;
-        s.content = content;
-        return s;
+        AgentStep step = new AgentStep();
+        step.kind = kind;
+        step.content = content;
+        return step;
+    }
+
+    public static AgentStep action(String toolName, String toolInput) {
+        return action(toolName, toolInput, null);
+    }
+
+    public static AgentStep action(String toolName, String toolInput, String thought) {
+        AgentStep step = new AgentStep();
+        step.kind = Kind.ACTION;
+        step.action = toolName;
+        step.actionInput = toolInput;
+        step.thought = thought;
+        return step;
+    }
+
+    public static AgentStep observation(String result) {
+        AgentStep step = new AgentStep();
+        step.kind = Kind.OBSERVATION;
+        step.observation = result;
+        return step;
     }
 }

@@ -5,9 +5,7 @@ import io.github.aigoodle.common.persistence.BaseEntity;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
-/**
- * A persisted conversation message backing {@code JdbcAgentMemory}.
- */
+/** A persisted conversation message used by JDBC-backed agent memory. */
 @Data
 @EqualsAndHashCode(callSuper = true)
 @TableName("messages")
@@ -15,13 +13,13 @@ public class AgentMessageEntity extends BaseEntity {
 
     private String conversationId;
 
-    /** Optional owner of the conversation — {@code null} for ad-hoc definition runs. */
+    /** Owning agent ID, or {@code null} for an ad-hoc definition run. */
     private String agentId;
 
     private String role;
 
     private String content;
 
-    /** Monotonic sequence within a conversation for stable ordering. */
+    /** Monotonic sequence number used for stable conversation ordering. */
     private Long seq;
 }

@@ -39,9 +39,9 @@ public class NodeResult {
     }
 
     public static NodeResult failure(String error) {
-        NodeResult r = new NodeResult();
-        r.setFailed(true);
-        r.setError(error);
-        return r;
+        NodeResult result = new NodeResult();
+        result.failed = true;
+        result.error = error;
+        return result;
     }
 }

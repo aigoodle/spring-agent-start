@@ -2,6 +2,7 @@ package io.github.aigoodle.tool.builtin;
 
 import io.github.aigoodle.tool.AbstractAgentTool;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -15,9 +16,11 @@ import java.util.Map;
  */
 public class HttpGetTool extends AbstractAgentTool {
 
-    private static final int MAX_LEN = 8_000;
-    private final HttpClient client = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(10)).build();
+    private static final int MAX_RESPONSE_LENGTH = 8_000;
+
+    private final HttpClient httpClient = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .build();
 
     @Override
     public String name() {
@@ -35,22 +38,25 @@ public class HttpGetTool extends AbstractAgentTool {
     }
 
     @Override
-    public Object execute(Map<String, Object> args) {
-        String url = str(args, "url");
+    public Object execute(Map<String, Object> arguments) {
+        String url = stringArgument(arguments, "url");
         if (url == null || url.isBlank()) {
             return "error: missing 'url'";
         }
         try {
-            HttpResponse<String> resp = client.send(
+            HttpResponse<String> response = httpClient.send(
                     HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(20)).GET().build(),
                     HttpResponse.BodyHandlers.ofString());
-            String body = resp.body();
-            if (body != null && body.length() > MAX_LEN) {
-                body = body.substring(0, MAX_LEN) + "...[truncated]";
+            String responseBody = response.body();
+            if (responseBody != null && responseBody.length() > MAX_RESPONSE_LENGTH) {
+                responseBody = responseBody.substring(0, MAX_RESPONSE_LENGTH) + "...[truncated]";
             }
-            return "status=" + resp.statusCode() + "\n" + body;
-        } catch (Exception e) {
-            return "error: " + e.getMessage();
+            return "status=" + response.statusCode() + "\n" + responseBody;
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return "error: HTTP request interrupted";
+        } catch (IOException | IllegalArgumentException requestFailure) {
+            return "error: " + requestFailure.getMessage();
         }
     }
 }

@@ -16,59 +16,71 @@ import java.util.Map;
  */
 public class ProviderCredentialService {
 
-    private final ProviderCredentialMapper mapper;
-    private final CredentialCodec codec;
+    private static final String DEFAULT_TENANT = "default";
 
-    public ProviderCredentialService(ProviderCredentialMapper mapper, CredentialCodec codec) {
-        this.mapper = mapper;
-        this.codec = codec;
+    private final ProviderCredentialMapper credentialMapper;
+    private final CredentialCodec credentialCodec;
+
+    public ProviderCredentialService(
+            ProviderCredentialMapper credentialMapper, CredentialCodec credentialCodec) {
+        this.credentialMapper = credentialMapper;
+        this.credentialCodec = credentialCodec;
     }
 
     @Transactional
+    public ProviderCredentialEntity save(ProviderCredentialRegistration registration) {
+        ProviderCredentialEntity credential = new ProviderCredentialEntity();
+        credential.setTenantId(defaultTenant(registration.tenantId()));
+        credential.setProviderName(registration.providerName());
+        credential.setCredentialName(defaultCredentialName(registration));
+        credential.setEncryptedConfig(credentialCodec.encode(registration.credentials()));
+        credential.setEnabled(Boolean.TRUE);
+        credentialMapper.insert(credential);
+        return credential;
+    }
+
+    /** @deprecated use {@link #save(ProviderCredentialRegistration)}. */
+    @Deprecated
+    @Transactional
     public ProviderCredentialEntity save(String tenantId, String providerName, String credentialName,
                                          Map<String, Object> credentials) {
-        ProviderCredentialEntity entity = new ProviderCredentialEntity();
-        entity.setTenantId(tenantId == null ? "default" : tenantId);
-        entity.setProviderName(providerName);
-        entity.setCredentialName(credentialName == null ? providerName : credentialName);
-        entity.setEncryptedConfig(codec.encode(credentials));
-        entity.setEnabled(Boolean.TRUE);
-        mapper.insert(entity);
-        return entity;
+        return save(new ProviderCredentialRegistration(
+                tenantId, providerName, credentialName, credentials));
     }
 
     @Transactional
     public void update(String id, Map<String, Object> credentials) {
-        ProviderCredentialEntity entity = require(id);
-        entity.setEncryptedConfig(codec.encode(credentials));
-        mapper.updateById(entity);
+        ProviderCredentialEntity credential = require(id);
+        credential.setEncryptedConfig(credentialCodec.encode(credentials));
+        credentialMapper.updateById(credential);
     }
 
     public ProviderCredentialEntity get(String id) {
-        return mapper.selectById(id);
+        return credentialMapper.selectById(id);
     }
 
     public ProviderCredentialEntity require(String id) {
-        ProviderCredentialEntity entity = mapper.selectById(id);
-        if (entity == null) {
+        ProviderCredentialEntity credential = credentialMapper.selectById(id);
+        if (credential == null) {
             throw new AgentException("credential_not_found", "Provider credential not found: " + id, null);
         }
-        return entity;
+        return credential;
     }
 
     public Map<String, Object> decodeCredentials(String id) {
-        return codec.decode(require(id).getEncryptedConfig());
+        return credentialCodec.decode(require(id).getEncryptedConfig());
     }
 
     public List<ProviderCredentialEntity> listByProvider(String tenantId, String providerName) {
-        return mapper.selectList(new LambdaQueryWrapper<ProviderCredentialEntity>()
-                .eq(ProviderCredentialEntity::getTenantId, tenantId == null ? "default" : tenantId)
-                .eq(ProviderCredentialEntity::getProviderName, providerName));
+        return credentialMapper.selectList(new LambdaQueryWrapper<ProviderCredentialEntity>()
+                .eq(ProviderCredentialEntity::getTenantId, defaultTenant(tenantId))
+                .eq(ProviderCredentialEntity::getProviderName, providerName)
+                .orderByAsc(ProviderCredentialEntity::getCreatedAt));
     }
 
     @Transactional
     public void delete(String id) {
-        mapper.deleteById(id);
+        credentialMapper.deleteById(id);
     }
 
     // ------------------------------------------------------- primary credential
@@ -98,19 +110,14 @@ public class ProviderCredentialService {
                                                   Map<String, Object> patch) {
         ProviderCredentialEntity existing = findPrimary(tenantId, providerName);
         if (existing == null) {
-            return save(tenantId, providerName, providerName + "-primary",
-                    patch == null ? new HashMap<>() : patch);
+            return save(new ProviderCredentialRegistration(
+                    tenantId, providerName, providerName + "-primary",
+                    CredentialPatchMerger.merge(Map.of(), patch)));
         }
-        Map<String, Object> merged = codec.decode(existing.getEncryptedConfig());
-        if (patch != null) {
-            for (Map.Entry<String, Object> e : patch.entrySet()) {
-                if (e.getValue() != null && !(e.getValue() instanceof String s && s.isEmpty())) {
-                    merged.put(e.getKey(), e.getValue());
-                }
-            }
-        }
-        existing.setEncryptedConfig(codec.encode(merged));
-        mapper.updateById(existing);
+        Map<String, Object> mergedCredentials = CredentialPatchMerger.merge(
+                credentialCodec.decode(existing.getEncryptedConfig()), patch);
+        existing.setEncryptedConfig(credentialCodec.encode(mergedCredentials));
+        credentialMapper.updateById(existing);
         return existing;
     }
 
@@ -118,7 +125,7 @@ public class ProviderCredentialService {
     public void deletePrimary(String tenantId, String providerName) {
         ProviderCredentialEntity existing = findPrimary(tenantId, providerName);
         if (existing != null) {
-            mapper.deleteById(existing.getId());
+            credentialMapper.deleteById(existing.getId());
         }
     }
 
@@ -131,6 +138,17 @@ public class ProviderCredentialService {
         if (entity == null) {
             return new HashMap<>();
         }
-        return codec.obfuscate(codec.decode(entity.getEncryptedConfig()), secretKeys);
+        return credentialCodec.obfuscate(
+                credentialCodec.decode(entity.getEncryptedConfig()), secretKeys);
+    }
+
+    private static String defaultTenant(String tenantId) {
+        return tenantId == null || tenantId.isBlank() ? DEFAULT_TENANT : tenantId;
+    }
+
+    private static String defaultCredentialName(ProviderCredentialRegistration registration) {
+        return registration.credentialName() == null || registration.credentialName().isBlank()
+                ? registration.providerName()
+                : registration.credentialName();
     }
 }

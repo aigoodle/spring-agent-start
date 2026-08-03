@@ -39,12 +39,14 @@ public class AutomationDemoController {
                                              @RequestParam String targetId,
                                              @RequestParam String path,
                                              @RequestParam(required = false) String token) {
-        TriggerEntity t = triggerService.create(CreateTriggerRequest.builder()
+        TriggerEntity trigger = triggerService.create(CreateTriggerRequest.builder()
                 .name(name).type(TriggerType.WEBHOOK)
                 .targetType(targetType).targetId(targetId)
                 .config(token == null ? Map.of("path", path) : Map.of("path", path, "token", token))
                 .enabled(true).build());
-        return Map.of("triggerId", t.getId(), "webhookUrl", "/triggers/webhook/" + path);
+        return Map.of(
+                "triggerId", trigger.getId(),
+                "webhookUrl", "/triggers/webhook/" + path);
     }
 
     @GetMapping("/automation/triggers/{id}/invocations")

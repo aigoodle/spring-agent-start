@@ -17,6 +17,9 @@ import java.util.List;
  */
 public class TagService {
 
+    private static final String DEFAULT_TENANT_ID = "default";
+    private static final String DEFAULT_TARGET_TYPE = "app";
+
     private final TagMapper tagMapper;
     private final TagBindingMapper bindingMapper;
 
@@ -27,40 +30,40 @@ public class TagService {
 
     public List<TagEntity> list(String tenantId, String type) {
         return tagMapper.selectList(new LambdaQueryWrapper<TagEntity>()
-                .eq(TagEntity::getTenantId, tenantId == null ? "default" : tenantId)
+                .eq(TagEntity::getTenantId, valueOrDefault(tenantId, DEFAULT_TENANT_ID))
                 .eq(type != null, TagEntity::getType, type)
                 .orderByAsc(TagEntity::getName));
     }
 
-    public TagEntity require(String id) {
-        TagEntity e = tagMapper.selectById(id);
-        if (e == null) {
-            throw new AgentException("tag_not_found", "Tag not found: " + id, null);
+    public TagEntity require(String tagId) {
+        TagEntity tag = tagMapper.selectById(tagId);
+        if (tag == null) {
+            throw new AgentException("tag_not_found", "Tag not found: " + tagId, null);
         }
-        return e;
+        return tag;
     }
 
     @Transactional
-    public TagEntity create(TagEntity entity) {
-        if (entity.getType() == null) entity.setType("app");
-        if (entity.getTenantId() == null) entity.setTenantId("default");
-        tagMapper.insert(entity);
-        return entity;
+    public TagEntity create(TagEntity tag) {
+        tag.setType(valueOrDefault(tag.getType(), DEFAULT_TARGET_TYPE));
+        tag.setTenantId(valueOrDefault(tag.getTenantId(), DEFAULT_TENANT_ID));
+        tagMapper.insert(tag);
+        return tag;
     }
 
     @Transactional
-    public TagEntity rename(String id, String name) {
-        TagEntity e = require(id);
-        e.setName(name);
-        tagMapper.updateById(e);
-        return e;
+    public TagEntity rename(String tagId, String name) {
+        TagEntity tag = require(tagId);
+        tag.setName(name);
+        tagMapper.updateById(tag);
+        return tag;
     }
 
     @Transactional
-    public void delete(String id) {
-        tagMapper.deleteById(id);
+    public void delete(String tagId) {
         bindingMapper.delete(new LambdaQueryWrapper<TagBindingEntity>()
-                .eq(TagBindingEntity::getTagId, id));
+                .eq(TagBindingEntity::getTagId, tagId));
+        tagMapper.deleteById(tagId);
     }
 
     // ---------------------------------------------------------------- bindings
@@ -73,16 +76,24 @@ public class TagService {
 
     @Transactional
     public void bind(String tagId, String targetId, String targetType) {
-        TagBindingEntity existing = bindingMapper.selectOne(new LambdaQueryWrapper<TagBindingEntity>()
+        TagEntity tag = require(tagId);
+        String resolvedTargetType = valueOrDefault(targetType, DEFAULT_TARGET_TYPE);
+        TagBindingEntity existingBinding = bindingMapper.selectOne(
+                new LambdaQueryWrapper<TagBindingEntity>()
                 .eq(TagBindingEntity::getTagId, tagId)
                 .eq(TagBindingEntity::getTargetId, targetId)
+                .eq(TagBindingEntity::getTargetType, resolvedTargetType)
                 .last("LIMIT 1"));
-        if (existing != null) return;
-        TagBindingEntity fresh = new TagBindingEntity();
-        fresh.setTagId(tagId);
-        fresh.setTargetId(targetId);
-        fresh.setTargetType(targetType == null ? "app" : targetType);
-        bindingMapper.insert(fresh);
+        if (existingBinding != null) {
+            return;
+        }
+
+        TagBindingEntity newBinding = new TagBindingEntity();
+        newBinding.setTenantId(valueOrDefault(tag.getTenantId(), DEFAULT_TENANT_ID));
+        newBinding.setTagId(tagId);
+        newBinding.setTargetId(targetId);
+        newBinding.setTargetType(resolvedTargetType);
+        bindingMapper.insert(newBinding);
     }
 
     @Transactional
@@ -90,5 +101,9 @@ public class TagService {
         bindingMapper.delete(new LambdaQueryWrapper<TagBindingEntity>()
                 .eq(TagBindingEntity::getTagId, tagId)
                 .eq(TagBindingEntity::getTargetId, targetId));
+    }
+
+    private static String valueOrDefault(String value, String defaultValue) {
+        return value == null || value.isBlank() ? defaultValue : value;
     }
 }

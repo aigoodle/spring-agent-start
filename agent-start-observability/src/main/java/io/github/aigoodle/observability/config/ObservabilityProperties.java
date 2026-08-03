@@ -2,7 +2,7 @@ package io.github.aigoodle.observability.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -54,14 +54,14 @@ public class ObservabilityProperties {
     }
 
     private static Map<String, ModelPrice> defaultPricing() {
-        Map<String, ModelPrice> p = new HashMap<>();
-        p.put("gpt-4o", new ModelPrice(0.0025, 0.01));
-        p.put("gpt-4o-mini", new ModelPrice(0.00015, 0.0006));
-        p.put("gpt-4.1", new ModelPrice(0.002, 0.008));
-        p.put("gpt-4.1-mini", new ModelPrice(0.0004, 0.0016));
-        p.put("deepseek-chat", new ModelPrice(0.00027, 0.0011));
-        p.put("text-embedding-3-small", new ModelPrice(0.00002, 0.0));
-        return p;
+        Map<String, ModelPrice> defaultPrices = new LinkedHashMap<>();
+        defaultPrices.put("gpt-4o", new ModelPrice(0.0025, 0.01));
+        defaultPrices.put("gpt-4o-mini", new ModelPrice(0.00015, 0.0006));
+        defaultPrices.put("gpt-4.1", new ModelPrice(0.002, 0.008));
+        defaultPrices.put("gpt-4.1-mini", new ModelPrice(0.0004, 0.0016));
+        defaultPrices.put("deepseek-chat", new ModelPrice(0.00027, 0.0011));
+        defaultPrices.put("text-embedding-3-small", new ModelPrice(0.00002, 0.0));
+        return defaultPrices;
     }
 
     public boolean isEnabled() {
@@ -85,6 +85,6 @@ public class ObservabilityProperties {
     }
 
     public void setPricing(Map<String, ModelPrice> pricing) {
-        this.pricing = pricing;
+        this.pricing = pricing == null ? new LinkedHashMap<>() : new LinkedHashMap<>(pricing);
     }
 }

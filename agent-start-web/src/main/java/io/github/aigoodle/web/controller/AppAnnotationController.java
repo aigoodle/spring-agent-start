@@ -15,54 +15,48 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-/**
- * REST facade over {@link AppAnnotationService} — the "标注" tab in the app
- * design drawer talks to these endpoints. Kept as a separate controller from
- * {@link AgentController} because the annotation feature is optional and can
- * be composed in / out independently.
- */
+/** REST endpoints for application-owned answer annotations. */
 @RestController
 @ConditionalOnBean(AppAnnotationService.class)
 @RequestMapping("${spring-agent.web.base-path:}/apps/{appId}/annotations")
 public class AppAnnotationController {
 
-    private final AppAnnotationService service;
+    private final AppAnnotationService annotationService;
 
-    public AppAnnotationController(AppAnnotationService service) {
-        this.service = service;
+    public AppAnnotationController(AppAnnotationService annotationService) {
+        this.annotationService = annotationService;
     }
 
     @GetMapping
     public ApiResponse<List<AppAnnotationEntity>> list(@PathVariable String appId) {
-        return ApiResponse.ok(service.list(appId));
+        return ApiResponse.ok(annotationService.list(appId));
     }
 
     @PostMapping
     public ApiResponse<AppAnnotationEntity> create(@PathVariable String appId,
-                                                   @RequestBody AppAnnotationEntity body) {
-        // Trust the URL over the body — the app is scoped by the route.
-        body.setAppId(appId);
-        body.setId(null);
-        return ApiResponse.ok(service.create(body));
+                                                   @RequestBody AppAnnotationEntity annotation) {
+        annotation.setAppId(appId);
+        annotation.setId(null);
+        return ApiResponse.ok(annotationService.create(annotation));
     }
 
     @PutMapping("/{id}")
     public ApiResponse<AppAnnotationEntity> update(@PathVariable String appId,
                                                    @PathVariable String id,
-                                                   @RequestBody AppAnnotationEntity patch) {
-        return ApiResponse.ok(service.update(id, patch));
+                                                   @RequestBody AppAnnotationEntity updates) {
+        return ApiResponse.ok(annotationService.update(appId, id, updates));
     }
 
     @DeleteMapping("/{id}")
     public ApiResponse<Void> delete(@PathVariable String appId, @PathVariable String id) {
-        service.delete(id);
+        annotationService.delete(appId, id);
         return ApiResponse.ok();
     }
 
-    /** Manual +1 endpoint — useful for the debug drawer to simulate a hit. */
+    /** Records a manually triggered annotation hit. */
     @PostMapping("/{id}/hit")
     public ApiResponse<Void> hit(@PathVariable String appId, @PathVariable String id) {
-        service.bumpHit(id);
+        annotationService.recordHit(appId, id);
         return ApiResponse.ok();
     }
 }

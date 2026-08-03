@@ -24,11 +24,13 @@ public class SpringAgentObservabilityAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public LlmMetricsService llmMetricsService(LlmCallRecordMapper mapper, ObservabilityProperties properties) {
-        return new LlmMetricsService(mapper, properties);
+    public LlmMetricsService llmMetricsService(LlmCallRecordMapper callRecordMapper,
+                                               ObservabilityProperties observabilityProperties) {
+        return new LlmMetricsService(callRecordMapper, observabilityProperties);
     }
 
     @Bean
+    @ConditionalOnMissingBean(name = "meteringChatModelDecorator")
     @ConditionalOnProperty(prefix = "spring-agent.observability", name = "enabled",
             havingValue = "true", matchIfMissing = true)
     public ChatModelDecorator meteringChatModelDecorator(LlmMetricsService metricsService) {
