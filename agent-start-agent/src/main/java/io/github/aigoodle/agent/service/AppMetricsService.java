@@ -1,89 +1,57 @@
 package io.github.aigoodle.agent.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import io.github.aigoodle.agent.entity.AgentMessageEntity;
-import io.github.aigoodle.agent.mapper.AgentMessageMapper;
+import io.github.aigoodle.memory.*;
+import io.github.aigoodle.agent.entity.AgentEntity;
+import io.github.aigoodle.agent.mapper.AgentMapper;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/** Derives an application's conversation metrics from its persisted messages. */
+/** Derives application activity from the canonical memory store. */
 public class AppMetricsService {
+    private static final int METRICS_SCAN_LIMIT = 1000;
+    private final MemoryManager memoryManager;
+    private final AgentMapper agentMapper;
 
-    private static final String USER_ROLE = "USER";
-    private static final String ASSISTANT_ROLE = "ASSISTANT";
-
-    private final AgentMessageMapper messageMapper;
-
-    public AppMetricsService(AgentMessageMapper messageMapper) {
-        this.messageMapper = messageMapper;
+    public AppMetricsService(MemoryManager memoryManager, AgentMapper agentMapper) {
+        this.memoryManager = memoryManager;
+        this.agentMapper = agentMapper;
     }
 
     public AppMetricsView summarize(String appId) {
-        List<AgentMessageEntity> messages = messageMapper.selectList(
-                new LambdaQueryWrapper<AgentMessageEntity>()
-                        .eq(AgentMessageEntity::getAgentId, appId));
-
+        AgentEntity app = agentMapper.selectById(appId);
+        String tenantId = app == null || app.getTenantId() == null ? "default" : app.getTenantId();
+        List<MemoryItem> messages = memoryManager.recall(new MemoryQuery(
+                tenantId, appId, null, null, Set.of(MemoryTier.SHORT_TERM), METRICS_SCAN_LIMIT));
         MetricsAccumulator metrics = new MetricsAccumulator();
         messages.forEach(metrics::include);
         return metrics.toView(appId, messages.size());
     }
 
     private static final class MetricsAccumulator {
-
         private final Set<String> conversationIds = new HashSet<>();
         private int userMessageCount;
         private int assistantMessageCount;
-        private LocalDateTime mostRecentActivity;
+        private Instant mostRecentActivity;
 
-        void include(AgentMessageEntity message) {
-            if (message.getConversationId() != null) {
-                conversationIds.add(message.getConversationId());
-            }
-            countRole(message.getRole());
-            includeActivityTime(activityTime(message));
+        void include(MemoryItem message) {
+            if (message.conversationId() != null) conversationIds.add(message.conversationId());
+            if (message.role() == MemoryRole.USER) userMessageCount++;
+            else if (message.role() == MemoryRole.ASSISTANT) assistantMessageCount++;
+            if (message.createdAt() != null && (mostRecentActivity == null
+                    || message.createdAt().isAfter(mostRecentActivity))) mostRecentActivity = message.createdAt();
         }
 
         AppMetricsView toView(String appId, int totalMessageCount) {
-            int conversationCount = conversationIds.size();
-            return AppMetricsView.builder()
-                    .appId(appId)
-                    .totalConversations(conversationCount)
-                    .totalMessages(totalMessageCount)
-                    .userMessages(userMessageCount)
-                    .assistantMessages(assistantMessageCount)
-                    .avgInteractionsPerConversation(averageUserTurns(conversationCount))
-                    .lastActivityAt(mostRecentActivity == null ? null : mostRecentActivity.toString())
-                    .build();
-        }
-
-        private void countRole(String role) {
-            if (USER_ROLE.equalsIgnoreCase(role)) {
-                userMessageCount++;
-            } else if (ASSISTANT_ROLE.equalsIgnoreCase(role)) {
-                assistantMessageCount++;
-            }
-        }
-
-        private void includeActivityTime(LocalDateTime activityTime) {
-            if (activityTime != null
-                    && (mostRecentActivity == null || activityTime.isAfter(mostRecentActivity))) {
-                mostRecentActivity = activityTime;
-            }
-        }
-
-        private double averageUserTurns(int conversationCount) {
-            if (conversationCount == 0) {
-                return 0.0;
-            }
-            double average = (double) userMessageCount / conversationCount;
-            return Math.round(average * 100.0) / 100.0;
-        }
-
-        private static LocalDateTime activityTime(AgentMessageEntity message) {
-            return message.getUpdatedAt() != null ? message.getUpdatedAt() : message.getCreatedAt();
+            int conversations = conversationIds.size();
+            double average = conversations == 0 ? 0.0
+                    : Math.round((double) userMessageCount / conversations * 100.0) / 100.0;
+            return AppMetricsView.builder().appId(appId).totalConversations(conversations)
+                    .totalMessages(totalMessageCount).userMessages(userMessageCount)
+                    .assistantMessages(assistantMessageCount).avgInteractionsPerConversation(average)
+                    .lastActivityAt(mostRecentActivity == null ? null : mostRecentActivity.toString()).build();
         }
     }
 }

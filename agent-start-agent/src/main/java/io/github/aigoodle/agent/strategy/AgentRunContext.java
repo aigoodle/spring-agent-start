@@ -6,12 +6,17 @@ import io.github.aigoodle.agent.api.AgentStep;
 import io.github.aigoodle.agent.hitl.ApprovalGate;
 import io.github.aigoodle.agent.hitl.AutoApproveGate;
 import io.github.aigoodle.tool.AgentTool;
+import io.github.aigoodle.tool.execution.ToolExecutionContext;
+import io.github.aigoodle.tool.execution.ToolExecutionGateway;
 import lombok.Builder;
 import lombok.Data;
 import org.springframework.ai.chat.client.ChatClient;
 
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
+import java.time.Instant;
+import java.util.function.BooleanSupplier;
 
 /** All resolved collaborators and inputs required to execute one agent turn. */
 @Data
@@ -23,6 +28,11 @@ public class AgentRunContext {
     private AgentDefinition definition;
     private String query;
     private String conversationId;
+    private String runId;
+    private Instant deadline;
+
+    @Builder.Default
+    private BooleanSupplier active = () -> true;
 
     @Builder.Default
     private List<AgentMessage> history = List.of();
@@ -34,6 +44,9 @@ public class AgentRunContext {
 
     @Builder.Default
     private ApprovalGate approvalGate = DEFAULT_APPROVAL_GATE;
+
+    @Builder.Default
+    private ToolExecutionGateway toolExecutionGateway = ToolExecutionGateway.direct();
 
     /** Receives each completed reasoning step when step streaming is enabled. */
     private Consumer<AgentStep> stepListener;
@@ -54,6 +67,31 @@ public class AgentRunContext {
     /** Falls back to the starter's opt-in approval policy when no custom gate is supplied. */
     public ApprovalGate getApprovalGate() {
         return approvalGate == null ? DEFAULT_APPROVAL_GATE : approvalGate;
+    }
+
+    public ToolExecutionGateway getToolExecutionGateway() {
+        return toolExecutionGateway == null ? ToolExecutionGateway.direct() : toolExecutionGateway;
+    }
+
+    /** Executes through the shared governance boundary with run identity attached. */
+    public Object executeTool(AgentTool tool, Map<String, Object> arguments) {
+        checkActive();
+        AgentDefinition agent = getDefinition();
+        return getToolExecutionGateway().execute(tool, arguments,
+                new ToolExecutionContext(runId,
+                        agent == null ? null : agent.getTenantId(),
+                        agent == null ? null : agent.getId(), conversationId, Map.of()));
+    }
+
+    /** Cooperative guard used before model and tool boundaries. */
+    public void checkActive() {
+        if (Thread.currentThread().isInterrupted()
+                || (active != null && !active.getAsBoolean())) {
+            throw AgentRunInterruptedException.cancelled(runId);
+        }
+        if (deadline != null && !Instant.now().isBefore(deadline)) {
+            throw AgentRunInterruptedException.timedOut(runId);
+        }
     }
 
     public boolean isTokenStreamingEnabled() {

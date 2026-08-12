@@ -24,10 +24,12 @@ public class FunctionCallingStrategy implements AgentStrategy {
 
     @Override
     public AgentResponse run(AgentRunContext context) {
+        context.checkActive();
         AgentResponse response = AgentResponse.forConversation(context.getConversationId());
 
         List<ToolCallback> callbacks = toolCallbacks.create(context, response);
         String finalAnswer = chatExchange.exchange(context, callbacks);
+        context.checkActive();
 
         response.complete(finalAnswer);
         AgentStep finalStep = AgentStep.of(AgentStep.Kind.FINAL, finalAnswer);

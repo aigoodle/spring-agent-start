@@ -6,7 +6,7 @@
 
     <parent>
         <groupId>io.github.aigoodle</groupId>
-        <artifactId>agent-start</artifactId>
+        <artifactId>spring-agent-start</artifactId>
         <version>0.1.0</version>
     </parent>
 
@@ -20,6 +20,10 @@
         bridge, chat DTOs, and workflow/agent generators.</description>
 
     <dependencies>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-memory</artifactId>
+        </dependency>
         <!-- Shared envelope + common utilities (ApiResponse, ApiErrorCode).
              agent-start-web ships the MVC-style CRUD surface; this module reuses
              its shared classes rather than duplicating them. -->

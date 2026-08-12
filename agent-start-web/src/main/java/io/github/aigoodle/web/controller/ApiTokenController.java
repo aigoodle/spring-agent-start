@@ -23,7 +23,7 @@ import java.util.Map;
  */
 @RestController
 @ConditionalOnBean(ApiTokenService.class)
-@RequestMapping("${spring-agent.web.base-path:}/apps/{appId}/api-tokens")
+@RequestMapping("/apps/{appId}/api-tokens")
 public class ApiTokenController {
 
     private final ApiTokenService service;

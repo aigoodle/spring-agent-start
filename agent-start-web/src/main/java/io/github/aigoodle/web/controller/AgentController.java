@@ -27,7 +27,7 @@ import java.util.Map;
 /** Agent application metadata, configuration and tool-discovery endpoints. */
 @RestController
 @ConditionalOnBean(AgentService.class)
-@RequestMapping("${spring-agent.web.base-path:}/agents")
+@RequestMapping("/agents")
 public class AgentController {
 
     private final AgentService agentService;

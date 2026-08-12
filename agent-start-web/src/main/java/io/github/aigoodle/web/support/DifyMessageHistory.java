@@ -1,57 +1,44 @@
 package io.github.aigoodle.web.support;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import io.github.aigoodle.agent.entity.AgentMessageEntity;
-import io.github.aigoodle.agent.mapper.AgentMessageMapper;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import io.github.aigoodle.agent.entity.ConversationEntity;
+import io.github.aigoodle.agent.service.ConversationService;
+import io.github.aigoodle.memory.MemoryItem;
+import io.github.aigoodle.memory.MemoryManager;
+import io.github.aigoodle.memory.MemoryRole;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 
-/** Provides ordered message rows and lightweight conversation-title generation. */
+/** Provides Dify history views from the canonical memory module. */
 @Component
-@ConditionalOnClass(AgentMessageMapper.class)
 public final class DifyMessageHistory {
-
     private static final int TITLE_SCAN_SIZE = 20;
     private static final int MAX_TITLE_LENGTH = 60;
+    private static final int MAX_HISTORY_SIZE = 500;
 
-    private final AgentMessageMapper messageMapper;
+    private final MemoryManager memoryManager;
+    private final ConversationService conversationService;
 
-    public DifyMessageHistory(AgentMessageMapper messageMapper) {
-        this.messageMapper = messageMapper;
+    public DifyMessageHistory(MemoryManager memoryManager, ConversationService conversationService) {
+        this.memoryManager = memoryManager;
+        this.conversationService = conversationService;
     }
 
-    public List<AgentMessageEntity> findAll(String conversationId) {
-        return messageMapper.selectList(baseQuery(conversationId));
+    public List<MemoryItem> findAll(String conversationId) {
+        ConversationEntity conversation = conversationService.require(conversationId);
+        return memoryManager.history(conversation.getTenantId(), conversation.getAppId(),
+                conversationId, MAX_HISTORY_SIZE);
     }
 
     public String suggestTitle(String conversationId) {
-        List<AgentMessageEntity> recentMessages = messageMapper.selectList(
-                baseQuery(conversationId).last("limit " + TITLE_SCAN_SIZE));
-        for (AgentMessageEntity message : recentMessages) {
-            if (isNonEmptyUserMessage(message)) {
-                return abbreviate(message.getContent().trim());
-            }
-        }
-        return null;
-    }
-
-    private static LambdaQueryWrapper<AgentMessageEntity> baseQuery(String conversationId) {
-        return new LambdaQueryWrapper<AgentMessageEntity>()
-                .eq(AgentMessageEntity::getConversationId, conversationId)
-                .orderByAsc(AgentMessageEntity::getSeq);
-    }
-
-    private static boolean isNonEmptyUserMessage(AgentMessageEntity message) {
-        return "USER".equalsIgnoreCase(message.getRole())
-                && message.getContent() != null
-                && !message.getContent().isBlank();
+        return findAll(conversationId).stream().limit(TITLE_SCAN_SIZE)
+                .filter(item -> item.role() == MemoryRole.USER)
+                .map(MemoryItem::content).filter(content -> content != null && !content.isBlank())
+                .findFirst().map(String::trim).map(DifyMessageHistory::abbreviate).orElse(null);
     }
 
     private static String abbreviate(String title) {
         return title.length() > MAX_TITLE_LENGTH
-                ? title.substring(0, MAX_TITLE_LENGTH) + "…"
-                : title;
+                ? title.substring(0, MAX_TITLE_LENGTH - 1) + "…" : title;
     }
 }

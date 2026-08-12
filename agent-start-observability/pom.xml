@@ -6,7 +6,7 @@
 
     <parent>
         <groupId>io.github.aigoodle</groupId>
-        <artifactId>agent-start</artifactId>
+        <artifactId>spring-agent-start</artifactId>
         <version>0.1.0</version>
     </parent>
 
@@ -16,6 +16,10 @@
         for aggregation, with optional Micrometer metrics. Plugs into the model module via ChatModelDecorator.</description>
 
     <dependencies>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-agent</artifactId>
+        </dependency>
         <dependency>
             <groupId>io.github.aigoodle</groupId>
             <artifactId>agent-start-model</artifactId>

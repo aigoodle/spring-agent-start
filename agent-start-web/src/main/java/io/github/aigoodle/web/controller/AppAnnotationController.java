@@ -18,7 +18,7 @@ import java.util.List;
 /** REST endpoints for application-owned answer annotations. */
 @RestController
 @ConditionalOnBean(AppAnnotationService.class)
-@RequestMapping("${spring-agent.web.base-path:}/apps/{appId}/annotations")
+@RequestMapping("/apps/{appId}/annotations")
 public class AppAnnotationController {
 
     private final AppAnnotationService annotationService;

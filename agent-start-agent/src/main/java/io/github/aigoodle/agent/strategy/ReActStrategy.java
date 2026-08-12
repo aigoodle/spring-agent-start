@@ -1,11 +1,13 @@
 package io.github.aigoodle.agent.strategy;
 
 import io.github.aigoodle.agent.api.AgentDefinition;
+import io.github.aigoodle.agent.api.AgentCheckpoint;
 import io.github.aigoodle.agent.api.AgentMessage;
 import io.github.aigoodle.agent.api.AgentResponse;
 import io.github.aigoodle.agent.api.AgentStep;
 import io.github.aigoodle.agent.api.AgentStrategyType;
 import io.github.aigoodle.agent.hitl.ApprovalGate;
+import io.github.aigoodle.agent.runtime.AgentResumeCommand;
 import io.github.aigoodle.common.util.JsonUtils;
 import io.github.aigoodle.tool.AgentTool;
 import org.slf4j.Logger;
@@ -31,7 +33,7 @@ import java.util.regex.Pattern;
  * Streaming protocol classification is delegated to {@link ReActStreamingResponse}
  * so the main loop reads in the same order as the conversation it implements.</p>
  */
-public class ReActStrategy implements AgentStrategy {
+public class ReActStrategy implements ResumableAgentStrategy {
 
     private static final Logger log = LoggerFactory.getLogger(ReActStrategy.class);
 
@@ -54,13 +56,55 @@ public class ReActStrategy implements AgentStrategy {
     @Override
     public AgentResponse run(AgentRunContext context) {
         AgentDefinition definition = context.getDefinition();
-        Map<String, AgentTool> toolsByName = indexTools(context.getTools());
         AgentResponse response = newResponse(context);
         boolean hideThought = thinkingIsDisabled(definition);
         List<Message> messages = createConversation(context, definition, hideThought);
+        return runLoop(context, response, messages, 1, hideThought);
+    }
+
+    @Override
+    public AgentResponse resume(AgentRunContext context, AgentResponse paused,
+                                AgentResumeCommand command) {
+        if (paused.getStatus() != AgentResponse.Status.AWAITING_APPROVAL
+                || paused.getPendingApproval() == null || paused.getCheckpoint() == null) {
+            throw new IllegalArgumentException("Agent response has no resumable approval checkpoint");
+        }
+        if (!paused.getPendingApproval().getApprovalId().equals(command.approvalId())) {
+            throw new IllegalArgumentException("Approval id does not match the paused checkpoint");
+        }
+        ReActCheckpoint checkpoint = JsonUtils.parse(
+                paused.getCheckpoint().stateJson(), ReActCheckpoint.class);
+        List<Message> messages = checkpoint.messages().stream()
+                .map(ReActStrategy::toSpringMessage)
+                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+        Map<String, AgentTool> toolsByName = indexTools(context.getTools());
+        AgentTool tool = toolsByName.get(checkpoint.toolName());
+        String observation;
+        if (command.decision() == AgentResumeCommand.Decision.DENY) {
+            observation = "Tool '" + checkpoint.toolName() + "' was denied by the approver.";
+        } else if (tool == null) {
+            observation = "error: unknown tool '" + checkpoint.toolName() + "'. Available: "
+                    + toolsByName.keySet();
+        } else {
+            observation = invoke(tool, checkpoint.toolInput(), context);
+        }
+        paused.setPendingApproval(null);
+        paused.setCheckpoint(null);
+        recordObservation(paused, observation, context);
+        messages.add(new UserMessage("Observation: " + observation));
+        return runLoop(context, paused, messages, checkpoint.iteration() + 1,
+                thinkingIsDisabled(context.getDefinition()));
+    }
+
+    private AgentResponse runLoop(AgentRunContext context, AgentResponse response,
+                                  List<Message> messages, int firstIteration,
+                                  boolean hideThought) {
+        AgentDefinition definition = context.getDefinition();
+        Map<String, AgentTool> toolsByName = indexTools(context.getTools());
         ChatOptions chatOptions = AgentChatOptionsFactory.build(definition);
 
-        for (int iteration = 1; iteration <= definition.getMaxIterations(); iteration++) {
+        for (int iteration = firstIteration; iteration <= definition.getMaxIterations(); iteration++) {
+            context.checkActive();
             response.setIterations(iteration);
             String modelOutput = generateModelOutput(context, messages, chatOptions, hideThought);
             log.debug("ReAct iteration {} output: {}", iteration, modelOutput);
@@ -85,7 +129,8 @@ public class ReActStrategy implements AgentStrategy {
             ToolExecution execution = executeTool(
                     toolsByName, toolName, toolInput, definition, context);
             if (execution.awaitingApproval()) {
-                return awaitApproval(response, toolName, toolInput, context);
+                messages.add(new AssistantMessage(modelOutput));
+                return awaitApproval(response, toolName, toolInput, iteration, messages, context);
             }
 
             recordObservation(response, execution.observation(), context);
@@ -129,6 +174,7 @@ public class ReActStrategy implements AgentStrategy {
                                               List<Message> messages,
                                               ChatOptions chatOptions,
                                               boolean hideThought) {
+        context.checkActive();
         var request = context.getChatClient().prompt().messages(messages);
         if (chatOptions != null) {
             request = request.options(chatOptions);
@@ -155,7 +201,7 @@ public class ReActStrategy implements AgentStrategy {
                     + "'. Available: " + toolsByName.keySet());
         }
         if (!definition.getApprovalRequiredTools().contains(toolName)) {
-            return ToolExecution.completed(invoke(tool, toolInput));
+            return ToolExecution.completed(invoke(tool, toolInput, context));
         }
 
         ApprovalGate.Decision decision = context.getApprovalGate().review(
@@ -168,17 +214,17 @@ public class ReActStrategy implements AgentStrategy {
             case PENDING -> ToolExecution.pendingApproval();
             case DENY -> ToolExecution.completed(
                     "Tool '" + toolName + "' was denied by the approver.");
-            case APPROVE -> ToolExecution.completed(invoke(tool, toolInput));
+            case APPROVE -> ToolExecution.completed(invoke(tool, toolInput, context));
         };
     }
 
-    private static String invoke(AgentTool tool, String toolInput) {
+    private static String invoke(AgentTool tool, String toolInput, AgentRunContext context) {
         try {
             Map<String, Object> arguments = JsonUtils.parseMap(toolInput);
             if (arguments == null || arguments.isEmpty()) {
                 arguments = Map.of("input", toolInput);
             }
-            Object result = tool.execute(arguments);
+            Object result = context.executeTool(tool, arguments);
             return result == null ? "" : String.valueOf(result);
         } catch (Exception exception) {
             return "error: " + exception.getMessage();
@@ -208,10 +254,17 @@ public class ReActStrategy implements AgentStrategy {
     private static AgentResponse awaitApproval(AgentResponse response,
                                                String toolName,
                                                String toolInput,
+                                               int iteration,
+                                               List<Message> messages,
                                                AgentRunContext context) {
         AgentResponse.PendingApproval pendingApproval = AgentResponse.PendingApproval.forTool(
                 UUID.randomUUID().toString(), toolName, toolInput);
         response.awaitApproval(pendingApproval);
+        ReActCheckpoint checkpoint = new ReActCheckpoint(iteration,
+                messages.stream().map(ReActStrategy::toAgentMessage).toList(),
+                toolName, toolInput);
+        response.setCheckpoint(new AgentCheckpoint(
+                AgentStrategyType.REACT.name(), JsonUtils.toJson(checkpoint)));
 
         AgentStep approvalStep = AgentStep.of(AgentStep.Kind.APPROVAL,
                 "awaiting approval for tool '" + toolName + "'");
@@ -280,6 +333,16 @@ public class ReActStrategy implements AgentStrategy {
         };
     }
 
+    private static AgentMessage toAgentMessage(Message message) {
+        if (message instanceof AssistantMessage) {
+            return AgentMessage.assistant(message.getText());
+        }
+        if (message instanceof SystemMessage) {
+            return AgentMessage.system(message.getText());
+        }
+        return AgentMessage.user(message.getText());
+    }
+
     private static String firstLine(String value) {
         String strippedValue = value.strip();
         int lineBreak = strippedValue.indexOf('\n');
@@ -305,5 +368,9 @@ public class ReActStrategy implements AgentStrategy {
         private static ToolExecution pendingApproval() {
             return new ToolExecution(null, true);
         }
+    }
+
+    private record ReActCheckpoint(int iteration, List<AgentMessage> messages,
+                                   String toolName, String toolInput) {
     }
 }

@@ -1,7 +1,9 @@
 package io.github.aigoodle.agent.api;
 
 import lombok.Builder;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -12,6 +14,8 @@ import java.util.Set;
 /** Resolved runtime configuration, independent of its persistence representation. */
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class AgentDefinition {
 
     private static final int DEFAULT_MAX_ITERATIONS = 6;

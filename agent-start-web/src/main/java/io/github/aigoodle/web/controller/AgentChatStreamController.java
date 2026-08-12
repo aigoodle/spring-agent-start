@@ -33,7 +33,7 @@ import java.util.Map;
 @RestController
 @ConditionalOnClass(SseEmitter.class)
 @ConditionalOnBean(AgentService.class)
-@RequestMapping("${spring-agent.web.base-path:}/agents")
+@RequestMapping("/agents")
 public class AgentChatStreamController {
 
     private final AgentService agentService;

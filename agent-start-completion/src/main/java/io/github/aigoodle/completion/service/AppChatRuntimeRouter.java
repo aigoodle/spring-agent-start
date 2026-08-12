@@ -1,7 +1,7 @@
 package io.github.aigoodle.completion.service;
 
 import io.github.aigoodle.agent.entity.AgentEntity;
-import io.github.aigoodle.agent.memory.AgentMemory;
+import io.github.aigoodle.memory.MemoryManager;
 import io.github.aigoodle.common.exception.AgentException;
 import io.github.aigoodle.completion.common.SseBridge;
 import io.github.aigoodle.completion.dto.openai.OpenAIChatRequest;
@@ -14,16 +14,16 @@ final class AppChatRuntimeRouter {
 
     private final AgentChatGenerator agentGenerator;
     private final ObjectProvider<WorkflowService> workflowServiceProvider;
-    private final ObjectProvider<AgentMemory> agentMemoryProvider;
+    private final ObjectProvider<MemoryManager> memoryManagerProvider;
 
     private volatile WorkflowChatGenerator workflowGenerator;
 
     AppChatRuntimeRouter(AgentChatGenerator agentGenerator,
                          ObjectProvider<WorkflowService> workflowServiceProvider,
-                         ObjectProvider<AgentMemory> agentMemoryProvider) {
+                         ObjectProvider<MemoryManager> memoryManagerProvider) {
         this.agentGenerator = agentGenerator;
         this.workflowServiceProvider = workflowServiceProvider;
-        this.agentMemoryProvider = agentMemoryProvider;
+        this.memoryManagerProvider = memoryManagerProvider;
     }
 
     OpenAIChatResponse generateBlocking(AgentEntity application, OpenAIChatRequest request) {
@@ -66,6 +66,6 @@ final class AppChatRuntimeRouter {
                     "A flow-mode app requires agent-start-workflow on the classpath.",
                     null);
         }
-        return new WorkflowChatGenerator(workflowService, agentMemoryProvider.getIfAvailable());
+        return new WorkflowChatGenerator(workflowService, memoryManagerProvider.getIfAvailable());
     }
 }

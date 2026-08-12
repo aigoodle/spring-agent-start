@@ -3,10 +3,9 @@
 --   apps                    ← was agent_definition (智能体应用) — lean metadata
 --   app_model_configs       ← 1:1 sidecar carrying prompt / model params /
 --                              retrieval / agent behaviour (Dify parity)
---   messages                ← was agent_chat_message
 --   app_annotations         ← per-app QA overrides
 --   app_annotation_settings ← retrieval config for annotations
---   conversations           ← chat sessions grouping messages under an app
+--   conversations           ← chat session metadata under an app
 --   api_tokens              ← per-app API access tokens
 --   app_sites               ← published widget / hosted site config
 --   tags / tag_bindings     ← tenant-scoped organisational tags
@@ -106,22 +105,6 @@ CREATE TABLE IF NOT EXISTS app_model_configs (
 
 CREATE INDEX IF NOT EXISTS idx_app_model_config_app ON app_model_configs (app_id);
 
-CREATE TABLE IF NOT EXISTS messages (
-    id              VARCHAR(64) NOT NULL,
-    tenant_id       VARCHAR(64) NOT NULL DEFAULT 'default',
-    conversation_id VARCHAR(64) NOT NULL,
-    agent_id        VARCHAR(64),
-    role            VARCHAR(16),
-    content         TEXT,
-    seq             BIGINT,
-    created_at      TIMESTAMP,
-    updated_at      TIMESTAMP,
-    PRIMARY KEY (id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_chat_conversation ON messages (conversation_id, seq);
-CREATE INDEX IF NOT EXISTS idx_chat_agent_conv ON messages (agent_id, conversation_id);
-
 -- User-authored QA overrides surfaced in the "日志与标注" drawer tab. When a
 -- chat query hits `question`, `content` is returned verbatim (bypassing the
 -- LLM). Ranking + hit-count bump is wired in a follow-up pass.
@@ -155,7 +138,7 @@ CREATE TABLE IF NOT EXISTS app_annotation_settings (
 );
 CREATE INDEX IF NOT EXISTS idx_annotation_setting_app ON app_annotation_settings (app_id);
 
--- Chat sessions grouping messages under an app. The messages table already
+-- Chat-session metadata; message content lives in agent-start-memory.
 -- holds conversation_id — this row carries user-visible metadata.
 CREATE TABLE IF NOT EXISTS conversations (
     id                VARCHAR(64) NOT NULL,
@@ -174,6 +157,46 @@ CREATE TABLE IF NOT EXISTS conversations (
     PRIMARY KEY (id)
 );
 CREATE INDEX IF NOT EXISTS idx_conversation_app ON conversations (app_id);
+
+-- Durable agent execution state. A run remains queryable after the request or
+-- JVM that started it has gone away; version is used for optimistic transitions.
+CREATE TABLE IF NOT EXISTS agent_runs (
+    id                VARCHAR(64) NOT NULL,
+    tenant_id         VARCHAR(64) NOT NULL DEFAULT 'default',
+    agent_id          VARCHAR(64) NOT NULL,
+    conversation_id   VARCHAR(64),
+    status            VARCHAR(32) NOT NULL,
+    definition_json   TEXT,
+    request_json      TEXT,
+    response_json     TEXT,
+    error             TEXT,
+    version           BIGINT NOT NULL DEFAULT 0,
+    event_sequence    BIGINT NOT NULL DEFAULT 0,
+    started_at        TIMESTAMP,
+    finished_at       TIMESTAMP,
+    created_at        TIMESTAMP,
+    updated_at        TIMESTAMP,
+    PRIMARY KEY (id)
+);
+CREATE INDEX IF NOT EXISTS idx_agent_run_agent_created ON agent_runs (agent_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_agent_run_conversation ON agent_runs (conversation_id);
+CREATE INDEX IF NOT EXISTS idx_agent_run_status ON agent_runs (status);
+
+-- Append-only projection source consumed by SSE clients, observability adapters
+-- and future checkpoint/replay support. sequence_no is monotonic within a run.
+CREATE TABLE IF NOT EXISTS agent_run_events (
+    id            VARCHAR(64) NOT NULL,
+    tenant_id     VARCHAR(64) NOT NULL DEFAULT 'default',
+    run_id        VARCHAR(64) NOT NULL,
+    sequence_no   BIGINT NOT NULL,
+    event_type    VARCHAR(64) NOT NULL,
+    payload_json  TEXT,
+    created_at    TIMESTAMP,
+    updated_at    TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE (run_id, sequence_no)
+);
+CREATE INDEX IF NOT EXISTS idx_agent_run_event_stream ON agent_run_events (run_id, sequence_no);
 
 -- Per-app API access tokens. Value is generated server-side on create.
 CREATE TABLE IF NOT EXISTS api_tokens (

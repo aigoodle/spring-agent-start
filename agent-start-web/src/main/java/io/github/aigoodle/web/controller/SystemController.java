@@ -2,7 +2,6 @@ package io.github.aigoodle.web.controller;
 
 import io.github.aigoodle.web.common.ApiResponse;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
@@ -13,7 +12,6 @@ import java.util.Map;
  * navigation items whose backing module wasn't imported).
  */
 @RestController
-@RequestMapping("${spring-agent.web.base-path:}")
 public class SystemController {
 
     @GetMapping("/health")

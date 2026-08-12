@@ -1,11 +1,14 @@
 package io.github.aigoodle.workflow.engine;
 
 import io.github.aigoodle.model.service.ModelService;
+import io.github.aigoodle.memory.MemoryItem;
+import io.github.aigoodle.memory.MemoryManager;
+import io.github.aigoodle.memory.MemoryRole;
+import io.github.aigoodle.memory.MemoryTier;
 import io.github.aigoodle.workflow.graph.EdgeDef;
 import io.github.aigoodle.workflow.graph.NodeDef;
 import io.github.aigoodle.workflow.graph.NodeType;
 import io.github.aigoodle.workflow.graph.WorkflowGraph;
-import io.github.aigoodle.workflow.memory.WorkflowConversationMemory;
 import io.github.aigoodle.workflow.node.NodeExecutor;
 import io.github.aigoodle.workflow.node.builtin.EndNodeExecutor;
 import io.github.aigoodle.workflow.node.builtin.LlmNodeExecutor;
@@ -20,6 +23,7 @@ import org.springframework.ai.chat.messages.UserMessage;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -31,7 +35,7 @@ import static org.mockito.Mockito.when;
 /**
  * Verifies that when the designer's LLM node card enables the memory window
  * (({@code memory.window.enabled = true})) the executor loads prior turns from
- * the injected {@link WorkflowConversationMemory} and interleaves them between
+ * the injected {@link MemoryManager} and interleaves them between
  * the SYSTEM prompt and the fresh USER prompt — Dify parity.
  */
 class LlmNodeMemoryTest {
@@ -56,14 +60,12 @@ class LlmNodeMemoryTest {
         when(modelService.getChatClient("m1")).thenReturn(client);
 
         // A tiny in-memory implementation of the SPI — no agent-module dependency.
-        WorkflowConversationMemory memory = (conversationId, max) -> {
-            assertEquals("conv-1", conversationId, "conversationId must be threaded to memory");
-            return List.of(
-                    new WorkflowConversationMemory.ConversationTurn("user", "who won the 2018 world cup?"),
-                    new WorkflowConversationMemory.ConversationTurn("assistant", "France."),
-                    new WorkflowConversationMemory.ConversationTurn("user", "and 2022?"),
-                    new WorkflowConversationMemory.ConversationTurn("assistant", "Argentina."));
-        };
+        MemoryManager memory = mock(MemoryManager.class);
+        when(memory.history("default", null, "conv-1", 10)).thenReturn(List.of(
+                item("1", MemoryRole.USER, "who won the 2018 world cup?"),
+                item("2", MemoryRole.ASSISTANT, "France."),
+                item("3", MemoryRole.USER, "and 2022?"),
+                item("4", MemoryRole.ASSISTANT, "Argentina.")));
 
         LlmNodeExecutor llm = new LlmNodeExecutor(modelService, null, memory);
         List<NodeExecutor> execs = List.of(new StartNodeExecutor(), new EndNodeExecutor(), llm);
@@ -121,9 +123,7 @@ class LlmNodeMemoryTest {
 
         // If the executor asks memory anyway, this throws — the assertion is
         // therefore "we never got here" via a normal successful run.
-        WorkflowConversationMemory memory = (conversationId, max) -> {
-            throw new AssertionError("memory should not be consulted when window.enabled=false");
-        };
+        MemoryManager memory = mock(MemoryManager.class);
 
         LlmNodeExecutor llm = new LlmNodeExecutor(modelService, null, memory);
         WorkflowEngine engine = new WorkflowEngine(new NodeExecutorRegistry(
@@ -162,9 +162,7 @@ class LlmNodeMemoryTest {
         ModelService modelService = mock(ModelService.class);
         when(modelService.getChatClient("m1")).thenReturn(client);
 
-        WorkflowConversationMemory memory = (conversationId, max) -> {
-            throw new AssertionError("no conversation id → no memory load");
-        };
+        MemoryManager memory = mock(MemoryManager.class);
 
         LlmNodeExecutor llm = new LlmNodeExecutor(modelService, null, memory);
         WorkflowEngine engine = new WorkflowEngine(new NodeExecutorRegistry(
@@ -184,5 +182,9 @@ class LlmNodeMemoryTest {
         assertTrue(r.isSuccess(), r.getError());
         assertEquals(1, captured.get().size(),
                 "conversationId=null must skip memory even when the window is enabled");
+    }
+    private static MemoryItem item(String id, MemoryRole role, String content) {
+        return new MemoryItem(id, "default", null, "conv-1", MemoryTier.SHORT_TERM,
+                role, content, .5, Instant.now(), null, 0, Map.of());
     }
 }

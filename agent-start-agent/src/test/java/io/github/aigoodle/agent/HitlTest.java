@@ -5,6 +5,8 @@ import io.github.aigoodle.agent.api.AgentResponse;
 import io.github.aigoodle.agent.hitl.ApprovalGate;
 import io.github.aigoodle.agent.strategy.AgentRunContext;
 import io.github.aigoodle.agent.strategy.ReActStrategy;
+import io.github.aigoodle.agent.runtime.AgentResumeCommand;
+import io.github.aigoodle.common.util.JsonUtils;
 import io.github.aigoodle.agent.support.ScriptedChatModel;
 import io.github.aigoodle.tool.builtin.CalculatorTool;
 import org.junit.jupiter.api.Test;
@@ -72,5 +74,33 @@ class HitlTest {
 
         assertEquals(AgentResponse.Status.COMPLETED, response.getStatus());
         assertTrue(response.getText().toLowerCase().contains("denied"));
+    }
+
+    @Test
+    void resumesFromSerializedCheckpointWithoutRepeatingThePendingModelTurn() {
+        ReActStrategy strategy = new ReActStrategy();
+        AgentRunContext context = context(tc -> ApprovalGate.Decision.PENDING);
+        AgentResponse paused = strategy.run(context);
+        AgentResponse restored = JsonUtils.parse(JsonUtils.toJson(paused), AgentResponse.class);
+
+        AgentResponse completed = strategy.resume(context, restored,
+                new AgentResumeCommand(restored.getPendingApproval().getApprovalId(),
+                        AgentResumeCommand.Decision.APPROVE));
+
+        assertEquals(AgentResponse.Status.COMPLETED, completed.getStatus());
+        assertTrue(completed.getText().contains("4"));
+        assertNull(completed.getCheckpoint());
+        assertNull(completed.getPendingApproval());
+        assertEquals(2, completed.getIterations());
+    }
+
+    @Test
+    void rejectsAnApprovalForAStaleCheckpoint() {
+        ReActStrategy strategy = new ReActStrategy();
+        AgentRunContext context = context(tc -> ApprovalGate.Decision.PENDING);
+        AgentResponse paused = strategy.run(context);
+
+        assertThrows(IllegalArgumentException.class, () -> strategy.resume(context, paused,
+                new AgentResumeCommand("another-approval", AgentResumeCommand.Decision.APPROVE)));
     }
 }

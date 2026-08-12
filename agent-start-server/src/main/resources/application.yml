@@ -50,11 +50,6 @@ spring-agent:
   web:
     # CORS wide open by default so a Vite dev server (or any origin) can hit it.
     allowed-origins: ["*"]
-    # Base path 置空 —— 所有控制器只挂在 CONTROLLER_PATH_PREFIX (/agent-start)
-    # 下。前端 vite 代理 /api → 去掉 /api → 命中 /agent-start/xxx，与
-    # @aigoodle/ui 模块内 apiBase='/api/agent-start' 完全对齐。切勿再填 /api/v1，
-    # 否则会拼成 /agent-start/api/v1/xxx（api 位置错乱，前端就 404）。
-    base-path: ""
   model:
     # AES-GCM key used to encrypt provider credentials at rest. CHANGE THIS in prod.
     encryption-secret: ${AGENT_SECRET:demo-secret-change-me}

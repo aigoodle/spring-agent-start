@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** REST endpoint for conversation activity derived from an application's messages. */
 @RestController
 @ConditionalOnBean(AppMetricsService.class)
-@RequestMapping("${spring-agent.web.base-path:}/apps/{appId}/metrics")
+@RequestMapping("/apps/{appId}/metrics")
 public class AppMetricsController {
 
     private final AppMetricsService metricsService;

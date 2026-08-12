@@ -23,7 +23,7 @@ import java.util.Map;
  */
 @RestController
 @ConditionalOnBean(TagService.class)
-@RequestMapping("${spring-agent.web.base-path:}/tags")
+@RequestMapping("/tags")
 public class TagController {
 
     private final TagService service;

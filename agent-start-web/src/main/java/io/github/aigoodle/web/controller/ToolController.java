@@ -20,7 +20,7 @@ import java.util.Map;
  */
 @RestController
 @ConditionalOnBean(ToolRegistry.class)
-@RequestMapping("${spring-agent.web.base-path:}/tools")
+@RequestMapping("/tools")
 public class ToolController {
 
     private final ToolRegistry toolRegistry;

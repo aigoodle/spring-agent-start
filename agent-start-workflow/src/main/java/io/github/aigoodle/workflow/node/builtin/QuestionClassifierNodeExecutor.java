@@ -2,6 +2,7 @@ package io.github.aigoodle.workflow.node.builtin;
 
 import io.github.aigoodle.model.service.ModelService;
 import io.github.aigoodle.model.service.PromptTemplateService;
+import io.github.aigoodle.memory.MemoryManager;
 import io.github.aigoodle.workflow.graph.NodeDef;
 import io.github.aigoodle.workflow.graph.NodeType;
 import io.github.aigoodle.workflow.node.ExecutionContext;
@@ -10,6 +11,9 @@ import io.github.aigoodle.workflow.node.NodeResult;
 import io.github.aigoodle.workflow.variable.VariableResolver;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.prompt.ChatOptions;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.UserMessage;
+import java.util.ArrayList;
 
 /**
  * Classifies the input into one of several classes using an LLM, then branches on the
@@ -21,15 +25,23 @@ public class QuestionClassifierNodeExecutor implements NodeExecutor {
 
     private final ModelService modelService;
     private final ClassifierPromptBuilder promptBuilder;
+    private final MemoryManager memoryManager;
 
     public QuestionClassifierNodeExecutor(ModelService modelService) {
-        this(modelService, null);
+        this(modelService, null, null);
     }
 
     public QuestionClassifierNodeExecutor(ModelService modelService,
                                            PromptTemplateService promptTemplateService) {
+        this(modelService, promptTemplateService, null);
+    }
+
+    public QuestionClassifierNodeExecutor(ModelService modelService,
+                                           PromptTemplateService promptTemplateService,
+                                           MemoryManager memoryManager) {
         this.modelService = modelService;
         this.promptBuilder = new ClassifierPromptBuilder(promptTemplateService);
+        this.memoryManager = memoryManager;
     }
 
     @Override
@@ -52,9 +64,11 @@ public class QuestionClassifierNodeExecutor implements NodeExecutor {
         String query = VariableResolver.render(
                 node.getString("query", "{{#sys.query#}}"), context.getPool());
 
-        ChatClient.ChatClientRequestSpec request = chatClient.prompt()
-                .system(promptBuilder.build(node, categorySet))
-                .user(query);
+        var messages = new ArrayList<org.springframework.ai.chat.messages.Message>();
+        messages.add(new SystemMessage(promptBuilder.build(node, categorySet)));
+        messages.addAll(WorkflowMemoryMessages.load(memoryManager, node, context));
+        messages.add(new UserMessage(query));
+        ChatClient.ChatClientRequestSpec request = chatClient.prompt().messages(messages);
         ChatOptions nodeOptions = NodeModelResolver.perNodeOptions(node);
         if (nodeOptions != null) {
             request = request.options(nodeOptions);

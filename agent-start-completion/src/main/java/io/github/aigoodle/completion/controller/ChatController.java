@@ -17,7 +17,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
@@ -33,7 +32,6 @@ import java.util.concurrent.Executors;
 /** Reactive OpenAI/Dify chat facade plus console conversation-history endpoints. */
 @RestController
 @ConditionalOnBean(AppGenerateService.class)
-@RequestMapping("${spring-agent.web.base-path:}")
 public class ChatController {
 
     private static final Scheduler BLOCKING_SCHEDULER = Schedulers.fromExecutorService(

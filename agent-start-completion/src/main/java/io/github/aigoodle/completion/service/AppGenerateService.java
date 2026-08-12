@@ -1,7 +1,7 @@
 package io.github.aigoodle.completion.service;
 
 import io.github.aigoodle.agent.entity.AgentEntity;
-import io.github.aigoodle.agent.memory.AgentMemory;
+import io.github.aigoodle.memory.MemoryManager;
 import io.github.aigoodle.agent.service.AgentService;
 import io.github.aigoodle.agent.service.ConversationService;
 import io.github.aigoodle.completion.common.SseBridge;
@@ -32,13 +32,13 @@ public class AppGenerateService {
     public AppGenerateService(AgentService agentService,
                               ObjectProvider<WorkflowService> workflowServiceProvider,
                               ObjectProvider<ConversationService> conversationServiceProvider,
-                              ObjectProvider<AgentMemory> agentMemoryProvider) {
+                              ObjectProvider<MemoryManager> memoryManagerProvider) {
         this.agentService = agentService;
         this.requestInitializer = new ChatRequestInitializer(conversationServiceProvider, log);
         this.runtimeRouter = new AppChatRuntimeRouter(
                 new AgentChatGenerator(agentService),
                 workflowServiceProvider,
-                agentMemoryProvider);
+                memoryManagerProvider);
     }
 
     public OpenAIChatResponse generateBlocking(String appId, OpenAIChatRequest request) {

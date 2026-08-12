@@ -6,7 +6,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 /**
- * A chat session grouping many {@link AgentMessageEntity} rows under one app.
+ * A chat session whose message content is owned by {@code agent-start-memory}.
  * Ported from the legacy {@code conversations} table (Dify parity). The
  * {@code messages} table already carries {@code conversation_id} — this row
  * gives the frontend a place to attach names, pin flags, summaries and audit

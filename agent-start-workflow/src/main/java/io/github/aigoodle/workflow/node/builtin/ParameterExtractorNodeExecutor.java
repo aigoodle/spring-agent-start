@@ -1,6 +1,7 @@
 package io.github.aigoodle.workflow.node.builtin;
 
 import io.github.aigoodle.model.service.ModelService;
+import io.github.aigoodle.memory.MemoryManager;
 import io.github.aigoodle.workflow.graph.NodeDef;
 import io.github.aigoodle.workflow.graph.NodeType;
 import io.github.aigoodle.workflow.node.ExecutionContext;
@@ -9,6 +10,9 @@ import io.github.aigoodle.workflow.node.NodeResult;
 import io.github.aigoodle.workflow.variable.VariableResolver;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.prompt.ChatOptions;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.UserMessage;
+import java.util.ArrayList;
 
 /**
  * Asks an LLM to pull structured fields out of a free-form input, mirroring Dify's
@@ -33,9 +37,15 @@ import org.springframework.ai.chat.prompt.ChatOptions;
 public class ParameterExtractorNodeExecutor implements NodeExecutor {
 
     private final ModelService modelService;
+    private final MemoryManager memoryManager;
 
     public ParameterExtractorNodeExecutor(ModelService modelService) {
+        this(modelService, null);
+    }
+
+    public ParameterExtractorNodeExecutor(ModelService modelService, MemoryManager memoryManager) {
         this.modelService = modelService;
+        this.memoryManager = memoryManager;
     }
 
     @Override
@@ -61,7 +71,7 @@ public class ParameterExtractorNodeExecutor implements NodeExecutor {
         String systemPrompt = ParameterExtractionPromptBuilder.build(node, context, parameterSet);
 
         try {
-            String modelResponse = invokeModel(chatClient, node, systemPrompt, query);
+            String modelResponse = invokeModel(chatClient, node, context, systemPrompt, query);
             return parameterSet.resultFrom(modelResponse);
         } catch (Exception extractionFailure) {
             // Extraction is non-fatal; every declared output remains addressable as null.
@@ -69,11 +79,13 @@ public class ParameterExtractorNodeExecutor implements NodeExecutor {
         }
     }
 
-    private static String invokeModel(ChatClient chatClient, NodeDef node,
-                                      String systemPrompt, String query) {
-        ChatClient.ChatClientRequestSpec request = chatClient.prompt()
-                .system(systemPrompt)
-                .user(query);
+    private String invokeModel(ChatClient chatClient, NodeDef node, ExecutionContext context,
+                               String systemPrompt, String query) {
+        var messages = new ArrayList<org.springframework.ai.chat.messages.Message>();
+        messages.add(new SystemMessage(systemPrompt));
+        messages.addAll(WorkflowMemoryMessages.load(memoryManager, node, context));
+        messages.add(new UserMessage(query));
+        ChatClient.ChatClientRequestSpec request = chatClient.prompt().messages(messages);
         ChatOptions nodeOptions = NodeModelResolver.perNodeOptions(node);
         if (nodeOptions != null) {
             request = request.options(nodeOptions);

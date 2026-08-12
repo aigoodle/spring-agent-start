@@ -58,6 +58,7 @@ final class AgentStreamEventPayloads {
                                         long startedAt) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("task_id", taskId);
+        payload.put("run_id", response.getRunId());
         payload.put("app_id", application.getId());
         payload.put("conversation_id", response.getConversationId());
         payload.put("status", response.getStatus() == null ? null : response.getStatus().name());
@@ -66,6 +67,15 @@ final class AgentStreamEventPayloads {
         payload.put("total_steps", response.getSteps() == null ? 0 : response.getSteps().size());
         payload.put("pending_approval", response.getPendingApproval());
         payload.put("error", response.getError());
+        return payload;
+    }
+
+    static Map<String, Object> approvalRequired(String taskId, AgentResponse response) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("task_id", taskId);
+        payload.put("run_id", response.getRunId());
+        payload.put("conversation_id", response.getConversationId());
+        payload.put("approval", response.getPendingApproval());
         return payload;
     }
 }

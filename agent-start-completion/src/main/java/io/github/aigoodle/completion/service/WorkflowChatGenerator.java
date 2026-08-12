@@ -1,8 +1,7 @@
 package io.github.aigoodle.completion.service;
 
-import io.github.aigoodle.agent.api.AgentMessage;
 import io.github.aigoodle.agent.entity.AgentEntity;
-import io.github.aigoodle.agent.memory.AgentMemory;
+import io.github.aigoodle.memory.MemoryManager;
 import io.github.aigoodle.common.exception.AgentException;
 import io.github.aigoodle.completion.common.SseBridge;
 import io.github.aigoodle.completion.dto.openai.OpenAIChatRequest;
@@ -18,11 +17,11 @@ public class WorkflowChatGenerator {
     private static final Logger logger = LoggerFactory.getLogger(WorkflowChatGenerator.class);
 
     private final WorkflowService workflowService;
-    private final AgentMemory agentMemory;
+    private final MemoryManager memoryManager;
 
-    public WorkflowChatGenerator(WorkflowService workflowService, AgentMemory agentMemory) {
+    public WorkflowChatGenerator(WorkflowService workflowService, MemoryManager memoryManager) {
         this.workflowService = workflowService;
-        this.agentMemory = agentMemory;
+        this.memoryManager = memoryManager;
     }
 
     public OpenAIChatResponse generateBlocking(AgentEntity application, OpenAIChatRequest request) {
@@ -32,7 +31,7 @@ public class WorkflowChatGenerator {
         requireSuccess(runResult);
 
         String answer = WorkflowAnswerExtractor.extract(runResult);
-        appendHistory(application.getId(), chatContext.conversationId(),
+        appendHistory(application.getTenantId(), application.getId(), chatContext.conversationId(),
                 request.lastUserMessage(), answer);
         return OpenAIChatResponse.completion(request.getModel(), answer);
     }
@@ -61,7 +60,7 @@ public class WorkflowChatGenerator {
 
         String persistedAnswer = streamSession.complete(runResult);
         if (runResult.isSuccess()) {
-            appendHistory(
+            appendHistory(application.getTenantId(),
                     application.getId(),
                     chatContext.conversationId(),
                     request.lastUserMessage(),
@@ -69,18 +68,13 @@ public class WorkflowChatGenerator {
         }
     }
 
-    private void appendHistory(String appId, String conversationId,
+    private void appendHistory(String tenantId, String appId, String conversationId,
                                String userQuery, String answer) {
-        if (agentMemory == null || conversationId == null || conversationId.isBlank()) {
+        if (memoryManager == null || conversationId == null || conversationId.isBlank()) {
             return;
         }
         try {
-            if (userQuery != null && !userQuery.isEmpty()) {
-                agentMemory.append(conversationId, appId, AgentMessage.user(userQuery));
-            }
-            if (answer != null && !answer.isEmpty()) {
-                agentMemory.append(conversationId, appId, AgentMessage.assistant(answer));
-            }
+            memoryManager.rememberExchange(tenantId, appId, conversationId, userQuery, answer);
         } catch (RuntimeException historyFailure) {
             logger.debug("Workflow chat history write skipped: {}", historyFailure.getMessage());
         }

@@ -17,7 +17,7 @@ import java.util.Map;
 /** REST endpoints for an application's annotation-retrieval settings. */
 @RestController
 @ConditionalOnBean(AppAnnotationSettingService.class)
-@RequestMapping("${spring-agent.web.base-path:}/apps/{appId}/annotation-settings")
+@RequestMapping("/apps/{appId}/annotation-settings")
 public class AppAnnotationSettingController {
 
     private final AppAnnotationSettingService settingService;

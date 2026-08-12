@@ -30,18 +30,19 @@ final class PlannedStepExecutor {
         String argumentsJson = inputMatch.find() ? inputMatch.group(1).strip() : "{}";
         recordAction(response, context, toolName, argumentsJson);
 
-        String observation = invokeTool(tools.get(toolName), toolName, argumentsJson);
+        String observation = invokeTool(tools.get(toolName), toolName, argumentsJson, context);
         recordObservation(response, context, observation);
         return observation;
     }
 
-    private static String invokeTool(AgentTool tool, String toolName, String argumentsJson) {
+    private static String invokeTool(AgentTool tool, String toolName, String argumentsJson,
+                                     AgentRunContext context) {
         if (tool == null) {
             return "error: unknown tool '" + toolName + "'";
         }
         try {
             Map<String, Object> arguments = JsonUtils.parseMap(argumentsJson);
-            Object result = tool.execute(arguments == null ? Map.of() : arguments);
+            Object result = context.executeTool(tool, arguments == null ? Map.of() : arguments);
             return result == null ? "" : String.valueOf(result);
         } catch (Exception exception) {
             return "error: " + exception.getMessage();

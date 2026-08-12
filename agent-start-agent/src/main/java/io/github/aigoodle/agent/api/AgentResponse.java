@@ -18,11 +18,16 @@ public class AgentResponse {
     }
 
     private Status status = Status.COMPLETED;
+    /** Stable id of the durable execution that produced this response. */
+    private String runId;
     private String text;
     private String conversationId;
     private final List<AgentStep> steps = new ArrayList<>();
     private int iterations;
     private String error;
+
+    /** Opaque, strategy-owned state persisted only while execution is paused. */
+    private AgentCheckpoint checkpoint;
 
     /** Set when {@link Status#AWAITING_APPROVAL}: the tool call awaiting a human decision. */
     private PendingApproval pendingApproval;
@@ -45,6 +50,7 @@ public class AgentResponse {
         this.text = answer;
         this.error = null;
         this.pendingApproval = null;
+        this.checkpoint = null;
         return this;
     }
 
@@ -62,6 +68,7 @@ public class AgentResponse {
                 + " iterations without a final answer.";
         this.error = null;
         this.pendingApproval = null;
+        this.checkpoint = null;
         return this;
     }
 

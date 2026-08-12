@@ -6,7 +6,7 @@ import io.github.aigoodle.workflow.chat.ChatFluxHandle;
 import io.github.aigoodle.workflow.chat.ChatStreamSink;
 import io.github.aigoodle.workflow.graph.NodeDef;
 import io.github.aigoodle.workflow.graph.NodeType;
-import io.github.aigoodle.workflow.memory.WorkflowConversationMemory;
+import io.github.aigoodle.memory.MemoryManager;
 import io.github.aigoodle.workflow.node.ExecutionContext;
 import io.github.aigoodle.workflow.node.NodeExecutor;
 import io.github.aigoodle.workflow.node.NodeResult;
@@ -46,7 +46,7 @@ public class LlmNodeExecutor implements NodeExecutor {
 
     public LlmNodeExecutor(ModelService modelService,
                            PromptTemplateService promptTemplateService,
-                           WorkflowConversationMemory conversationMemory) {
+                           MemoryManager conversationMemory) {
         this.modelService = modelService;
         this.conversationBuilder = new LlmConversationBuilder(
                 promptTemplateService, conversationMemory);

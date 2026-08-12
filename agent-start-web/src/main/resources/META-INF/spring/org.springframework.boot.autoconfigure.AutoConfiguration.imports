@@ -1,3 +1,2 @@
 io.github.aigoodle.web.config.SpringAgentWebAutoConfiguration
 io.github.aigoodle.web.config.SpringAgentOpenApiConfig
-io.github.aigoodle.web.config.WorkflowMemoryBridgeAutoConfiguration

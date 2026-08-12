@@ -26,7 +26,7 @@ import java.util.Map;
 /** Document ingestion, inspection and reindexing endpoints for datasets. */
 @RestController
 @ConditionalOnBean(KnowledgeService.class)
-@RequestMapping("${spring-agent.web.base-path:}/datasets")
+@RequestMapping("/datasets")
 public class DatasetDocumentController {
 
     private final KnowledgeService knowledgeService;

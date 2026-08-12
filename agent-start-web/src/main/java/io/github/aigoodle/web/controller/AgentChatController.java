@@ -24,7 +24,7 @@ import java.util.List;
  */
 @RestController
 @ConditionalOnBean(AgentService.class)
-@RequestMapping("${spring-agent.web.base-path:}/agents")
+@RequestMapping("/agents")
 public class AgentChatController {
 
     private final AgentService agentService;

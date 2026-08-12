@@ -237,10 +237,17 @@ public class WorkflowService {
     private WorkflowRunResult executeStored(String workflowId, Map<String, Object> inputs,
                                             String conversationId, Consumer<StepRecord> stepListener,
                                             ChatStreamSink chatSink) {
-        WorkflowGraph graph = graphOf(require(workflowId));
+        WorkflowEntity workflow = require(workflowId);
+        WorkflowGraph graph = graphOf(workflow);
+        Map<String, Object> scopedInputs = new java.util.HashMap<>();
+        if (inputs != null) scopedInputs.putAll(inputs);
+        scopedInputs.putIfAbsent("_memory_owner_id",
+                workflow.getAppId() == null ? workflowId : workflow.getAppId());
+        scopedInputs.putIfAbsent("_memory_tenant_id",
+                workflow.getTenantId() == null ? "default" : workflow.getTenantId());
         WorkflowRunResult result = workflowEngine.run(
-                graph, inputs, conversationId, stepListener, chatSink);
-        runStore.recordStoredRun(workflowId, conversationId, inputs, result);
+                graph, scopedInputs, conversationId, stepListener, chatSink);
+        runStore.recordStoredRun(workflowId, conversationId, scopedInputs, result);
         return result;
     }
 

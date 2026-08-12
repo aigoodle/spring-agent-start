@@ -1,7 +1,7 @@
 package io.github.aigoodle.workflow.node.builtin;
 
 import io.github.aigoodle.agent.api.*;
-import io.github.aigoodle.agent.service.AgentService;
+import io.github.aigoodle.agent.runtime.AgentRuntime;
 import io.github.aigoodle.workflow.graph.NodeDef;
 import io.github.aigoodle.workflow.graph.NodeType;
 import io.github.aigoodle.workflow.node.ExecutionContext;
@@ -14,10 +14,10 @@ import java.util.Locale;
 
 /** Workflow adapter for the complete agent runtime (strategy, tools, HITL and memory). */
 public class AgentNodeExecutor implements NodeExecutor {
-    private final AgentService agentService;
+    private final AgentRuntime agentRuntime;
 
-    public AgentNodeExecutor(AgentService agentService) {
-        this.agentService = agentService;
+    public AgentNodeExecutor(AgentRuntime agentRuntime) {
+        this.agentRuntime = agentRuntime;
     }
 
     @Override
@@ -46,7 +46,7 @@ public class AgentNodeExecutor implements NodeExecutor {
                     .memoryWindow(node.getInt("memoryWindow", 20))
                     .build();
             String query = VariableResolver.render(node.getString("query", "{{#sys.query#}}"), context.getPool());
-            AgentResponse response = agentService.runDefinition(definition, AgentRequest.builder()
+            AgentResponse response = agentRuntime.run(definition, AgentRequest.builder()
                     .query(query).conversationId(context.getConversationId()).variables(context.getInputs()).build());
             if (response.getStatus() != AgentResponse.Status.COMPLETED) {
                 return NodeResult.failure("Agent run ended with status " + response.getStatus());

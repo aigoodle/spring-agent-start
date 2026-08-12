@@ -25,7 +25,8 @@ ecosystem, so you can drop enterprise-grade agent capabilities into an existing 
 | `agent-start-model` | `io.github.aigoodle:agent-start-model` | common | Model providers, encrypted credentials, model instance factory, chat/embedding runtime |
 | `agent-start-knowledge` | `io.github.aigoodle:agent-start-knowledge` | model | Datasets, document ingestion, template chunking, vector + keyword hybrid retrieval |
 | `agent-start-tools` | `io.github.aigoodle:agent-start-tools` | model | Tool/connector SPI, built-in tools (calculator, time, HTTP), Spring AI `ToolCallback` adapter, **MCP client** (stdio + HTTP) |
-| `agent-start-agent` | `io.github.aigoodle:agent-start-agent` | model, tools, *(knowledge optional)* | Agent runtime: strategies (ReAct, function-calling, plan-execute), JDBC + semantic vector memory, multi-agent delegation, human-in-the-loop approval |
+| `agent-start-memory` | `io.github.aigoodle:agent-start-memory` | common | Layered working, short-term and long-term memory with TTL, promotion and hybrid ranking |
+| `agent-start-agent` | `io.github.aigoodle:agent-start-agent` | model, tools, memory, *(knowledge optional)* | Agent runtime: strategies (ReAct, function-calling, plan-execute), multi-agent delegation, human-in-the-loop approval |
 | `agent-start-trigger` | `io.github.aigoodle:agent-start-trigger` | workflow | Triggers/automation: webhook, cron and event triggers driving workflows async, with invocation history + replay |
 | `agent-start-observability` | `io.github.aigoodle:agent-start-observability` | model | LLMOps: per-call token + cost + latency metering for every LLM call, persisted, with aggregation by model |
 | `agent-start-workflow` | `io.github.aigoodle:agent-start-workflow` | model, *(knowledge + tools optional)* | DAG engine, nodes (LLM, agent, tool, condition, HTTP, template, classifier, knowledge), workflow persistence |
@@ -252,7 +253,7 @@ config, no code changes elsewhere.
 Implemented and tested: model management, knowledge/RAG, workflow orchestration, the
 **tool/connector ecosystem** (`Tool` SPI + built-in tools + Spring AI `ToolCallback` adapter + a
 `ToolProvider` plug-point for MCP/OpenAPI/plugin sources), and an **enterprise agent runtime**
-(ReAct + function-calling strategies, JDBC-persisted conversation memory, multi-agent delegation,
+(ReAct + function-calling strategies, layered conversation memory, multi-agent delegation,
 human-in-the-loop tool approval). A unified **PostgreSQL** deployment is supported, including a
 self-contained JDBC vector store (no pgvector extension required).
 
@@ -260,8 +261,9 @@ Triggers/automation (webhook, cron, event → async workflow runs with history +
 **LLMOps** (per-call token/cost/latency metering, persisted and aggregated per model) are also
 implemented and tested.
 
-The agent runtime also includes a **plan-execute** strategy and **semantic vector memory**
-(`spring-agent.agent.memory=vector`, backed by the knowledge module).
+The agent runtime also includes a **plan-execute** strategy. All conversational state is owned by
+`agent-start-memory`: bounded working memory, TTL-based short-term history and cross-session
+long-term recall. Replace its `MemoryStore` SPI to add a vector or remote memory backend.
 
 **MCP client** is supported too: configure stdio or HTTP MCP servers under
 `spring-agent.tools.mcp.servers[*]` and their tools join the registry automatically

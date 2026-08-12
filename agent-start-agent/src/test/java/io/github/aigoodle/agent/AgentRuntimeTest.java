@@ -1,12 +1,11 @@
 package io.github.aigoodle.agent;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.github.aigoodle.agent.api.AgentRequest;
 import io.github.aigoodle.agent.api.AgentResponse;
 import io.github.aigoodle.agent.api.AgentStrategyType;
 import io.github.aigoodle.agent.entity.AgentEntity;
-import io.github.aigoodle.agent.entity.AgentMessageEntity;
-import io.github.aigoodle.agent.mapper.AgentMessageMapper;
+import io.github.aigoodle.agent.runtime.AgentRunStatus;
+import io.github.aigoodle.memory.MemoryManager;
 import io.github.aigoodle.agent.service.AgentService;
 import io.github.aigoodle.agent.service.CreateAgentRequest;
 import io.github.aigoodle.agent.support.ScriptedChatProvider;
@@ -38,7 +37,7 @@ class AgentRuntimeTest {
     @Autowired
     private AgentService agentService;
     @Autowired
-    private AgentMessageMapper messageMapper;
+    private MemoryManager memoryManager;
 
     @Value("${ollama.base-url}")
     private String ollamaBaseUrl;
@@ -73,8 +72,16 @@ class AgentRuntimeTest {
 
         AgentResponse r = agentService.run(agent.getId(), AgentRequest.of("what is 6*7?"));
         assertTrue(r.isCompleted(), r.getError());
+        assertNotNull(r.getRunId());
         assertEquals("42", r.getText());
         assertTrue(r.getSteps().stream().anyMatch(s -> "calculator".equals(s.getAction())));
+        var persistedRun = agentService.findRun(r.getRunId()).orElseThrow();
+        assertEquals(AgentRunStatus.COMPLETED, persistedRun.status());
+        assertEquals(agent.getId(), persistedRun.agentId());
+        assertNotNull(persistedRun.definitionJson());
+        assertEquals(List.of("RUN_CREATED", "RUN_RUNNING", "TOOL_SUCCEEDED", "RUN_COMPLETED"),
+                agentService.runEvents(r.getRunId(), 0, 10).stream()
+                        .map(event -> event.type()).toList());
     }
 
     @Test
@@ -121,9 +128,8 @@ class AgentRuntimeTest {
                 AgentRequest.builder().query("hello two").conversationId(conv).build());
         assertEquals(conv, r2.getConversationId());
 
-        Long count = messageMapper.selectCount(new LambdaQueryWrapper<AgentMessageEntity>()
-                .eq(AgentMessageEntity::getConversationId, conv));
-        assertEquals(4L, count, "two runs should persist user+assistant messages each");
+        assertEquals(4, memoryManager.history("ag", agent.getId(), conv, 20).size(),
+                "two runs should persist user+assistant messages each in agent-start-memory");
     }
 
     @Test

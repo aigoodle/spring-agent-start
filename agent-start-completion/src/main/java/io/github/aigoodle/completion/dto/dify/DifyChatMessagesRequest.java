@@ -39,6 +39,11 @@ public class DifyChatMessagesRequest {
     @JsonProperty("auto_generate_name")
     private Boolean autoGenerateName;
 
+    /** spring-agent-start extension: maximum active Agent execution duration. */
+    @JsonProperty("timeout_ms")
+    @JsonAlias({"timeoutMillis"})
+    private Long timeoutMillis;
+
     @JsonProperty("debug")
     @JsonAlias({"debug_mode", "debugMode"})
     private Boolean debug;

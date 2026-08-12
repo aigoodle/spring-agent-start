@@ -34,6 +34,7 @@ public class PlanExecuteStrategy implements AgentStrategy {
 
     @Override
     public AgentResponse run(AgentRunContext context) {
+        context.checkActive();
         Map<String, AgentTool> tools = new LinkedHashMap<>();
         context.getTools().forEach(tool -> tools.put(tool.name(), tool));
         ChatClient chatClient = context.getChatClient();
@@ -44,11 +45,13 @@ public class PlanExecuteStrategy implements AgentStrategy {
 
         String planOutput = call(chatClient, systemMessage, context.getHistory(),
                 PlanExecutePrompts.planning(context.getQuery()), chatOptions);
+        context.checkActive();
         List<String> plannedSteps = planParser.parse(planOutput, context.getQuery());
         recordPlan(response, context, plannedSteps);
 
         StringBuilder scratchpad = new StringBuilder();
         for (int index = 0; index < plannedSteps.size(); index++) {
+            context.checkActive();
             String plannedStep = plannedSteps.get(index);
             String stepOutput = call(chatClient, systemMessage, List.of(),
                     PlanExecutePrompts.executeStep(plannedStep), chatOptions);
@@ -59,6 +62,7 @@ public class PlanExecuteStrategy implements AgentStrategy {
 
         String finalAnswer = call(chatClient, systemMessage, List.of(),
                 PlanExecutePrompts.synthesize(context.getQuery(), scratchpad), chatOptions);
+        context.checkActive();
         AgentStep finalStep = AgentStep.of(AgentStep.Kind.FINAL, finalAnswer);
         response.addStep(finalStep);
         context.publishStep(finalStep);

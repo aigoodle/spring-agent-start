@@ -1,9 +1,14 @@
 package io.github.aigoodle.agent.config;
 
 import io.github.aigoodle.agent.hitl.ApprovalGate;
+import io.github.aigoodle.agent.context.AgentContextEngine;
+import io.github.aigoodle.agent.context.DefaultAgentContextEngine;
+import io.github.aigoodle.agent.context.AgentContextCompactor;
+import io.github.aigoodle.agent.context.ExtractiveAgentContextCompactor;
 import io.github.aigoodle.agent.hitl.AutoApproveGate;
 import io.github.aigoodle.agent.mapper.AgentMapper;
-import io.github.aigoodle.agent.mapper.AgentMessageMapper;
+import io.github.aigoodle.agent.mapper.AgentRunEventMapper;
+import io.github.aigoodle.agent.mapper.AgentRunMapper;
 import io.github.aigoodle.agent.mapper.ApiTokenMapper;
 import io.github.aigoodle.agent.mapper.AppAnnotationMapper;
 import io.github.aigoodle.agent.mapper.AppAnnotationSettingMapper;
@@ -12,10 +17,6 @@ import io.github.aigoodle.agent.mapper.AppSiteMapper;
 import io.github.aigoodle.agent.mapper.ConversationMapper;
 import io.github.aigoodle.agent.mapper.TagBindingMapper;
 import io.github.aigoodle.agent.mapper.TagMapper;
-import io.github.aigoodle.agent.memory.AgentMemory;
-import io.github.aigoodle.agent.memory.JdbcAgentMemory;
-import io.github.aigoodle.agent.memory.LayeredAgentMemory;
-import io.github.aigoodle.agent.memory.VectorAgentMemory;
 import io.github.aigoodle.agent.service.AgentService;
 import io.github.aigoodle.agent.service.ApiTokenService;
 import io.github.aigoodle.agent.service.AppAnnotationService;
@@ -26,6 +27,10 @@ import io.github.aigoodle.agent.service.AppModelConfigService;
 import io.github.aigoodle.agent.service.AppSiteService;
 import io.github.aigoodle.agent.service.ConversationService;
 import io.github.aigoodle.agent.service.TagService;
+import io.github.aigoodle.agent.runtime.AgentRunStore;
+import io.github.aigoodle.agent.runtime.JdbcAgentRunStore;
+import io.github.aigoodle.agent.runtime.AgentRunToolExecutionListener;
+import io.github.aigoodle.agent.runtime.AgentRunObserver;
 import io.github.aigoodle.agent.strategy.AgentStrategy;
 import io.github.aigoodle.agent.strategy.AgentStrategyRegistry;
 import io.github.aigoodle.agent.strategy.FunctionCallingStrategy;
@@ -38,6 +43,8 @@ import io.github.aigoodle.model.service.ModelService;
 import io.github.aigoodle.memory.MemoryManager;
 import io.github.aigoodle.memory.config.SpringAgentMemoryAutoConfiguration;
 import io.github.aigoodle.tool.ToolRegistry;
+import io.github.aigoodle.tool.execution.ToolExecutionGateway;
+import io.github.aigoodle.tool.execution.ToolExecutionListener;
 import io.github.aigoodle.tool.config.SpringAgentToolsAutoConfiguration;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -83,27 +90,6 @@ public class SpringAgentAgentAutoConfiguration {
     }
 
     @Bean
-    @ConditionalOnMissingBean(AgentMemory.class)
-    public AgentMemory agentMemory(MemoryManager manager, AgentMessageMapper mapper) {
-        return new LayeredAgentMemory(manager, new JdbcAgentMemory(mapper));
-    }
-
-    /** Semantic long-term memory, active with {@code spring-agent.agent.memory=vector} and the knowledge module. */
-    @Configuration(proxyBeanMethods = false)
-    @ConditionalOnClass(KnowledgeService.class)
-    @ConditionalOnProperty(prefix = "spring-agent.agent", name = "memory", havingValue = "vector")
-    static class VectorMemoryConfiguration {
-        @Bean
-        @ConditionalOnMissingBean(AgentMemory.class)
-        @ConditionalOnBean({KnowledgeService.class, DatasetService.class})
-        public AgentMemory vectorAgentMemory(KnowledgeService knowledgeService, DatasetService datasetService,
-                                              AgentMessageMapper messageMapper, AgentProperties properties) {
-            return new VectorAgentMemory(knowledgeService, datasetService, properties.getEmbeddingModelId(),
-                    properties.getMemoryDatasetName(), new JdbcAgentMemory(messageMapper));
-        }
-    }
-
-    @Bean
     @ConditionalOnMissingBean
     public ApprovalGate approvalGate() {
         return new AutoApproveGate();
@@ -117,12 +103,41 @@ public class SpringAgentAgentAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    public AgentRunStore agentRunStore(AgentRunMapper runMapper, AgentRunEventMapper eventMapper) {
+        return new JdbcAgentRunStore(runMapper, eventMapper);
+    }
+
+    @Bean
+    public ToolExecutionListener agentRunToolExecutionListener(AgentRunStore runStore) {
+        return new AgentRunToolExecutionListener(runStore);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public AgentContextCompactor agentContextCompactor() {
+        return new ExtractiveAgentContextCompactor();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public AgentContextEngine agentContextEngine(MemoryManager memory, AgentProperties properties,
+                                                 AgentContextCompactor compactor) {
+        return new DefaultAgentContextEngine(memory, properties, compactor);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     public AgentService agentService(AgentMapper agentMapper, AppModelConfigService modelConfigService,
                                      ModelService modelService, ToolRegistry toolRegistry,
                                      AgentStrategyRegistry strategyRegistry,
-                                     AgentMemory memory, ApprovalGate approvalGate) {
+                                     MemoryManager memory, ApprovalGate approvalGate,
+                                     AgentRunStore runStore,
+                                     ToolExecutionGateway toolExecutionGateway,
+                                     AgentContextEngine contextEngine,
+                                     List<AgentRunObserver> runObservers) {
         return new AgentService(agentMapper, modelConfigService, modelService, toolRegistry,
-                strategyRegistry, memory, approvalGate);
+                strategyRegistry, memory, approvalGate, runStore, toolExecutionGateway,
+                contextEngine, runObservers);
     }
 
     @Bean
@@ -133,15 +148,15 @@ public class SpringAgentAgentAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public AppMetricsService appMetricsService(AgentMessageMapper messageMapper) {
-        return new AppMetricsService(messageMapper);
+    public AppMetricsService appMetricsService(MemoryManager memoryManager, AgentMapper agentMapper) {
+        return new AppMetricsService(memoryManager, agentMapper);
     }
 
     @Bean
     @ConditionalOnMissingBean
     public ConversationService conversationService(ConversationMapper conversationMapper,
-                                                    AgentMessageMapper messageMapper) {
-        return new ConversationService(conversationMapper, messageMapper);
+                                                    MemoryManager memoryManager) {
+        return new ConversationService(conversationMapper, memoryManager);
     }
 
     @Bean

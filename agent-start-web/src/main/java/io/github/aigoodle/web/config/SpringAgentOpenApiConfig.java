@@ -9,7 +9,6 @@ import io.swagger.v3.oas.models.servers.Server;
 import io.swagger.v3.oas.models.tags.Tag;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 
 import java.util.List;
@@ -24,18 +23,11 @@ import java.util.List;
  */
 @AutoConfiguration
 @ConditionalOnClass(name = "org.springdoc.core.models.GroupedOpenApi")
-@EnableConfigurationProperties(SpringAgentWebProperties.class)
 public class SpringAgentOpenApiConfig {
 
     @Bean
-    public OpenAPI springAgentOpenApi(SpringAgentWebProperties properties) {
-        // Effective client URL = CONTROLLER_PATH_PREFIX ("/agent-start") + base-path.
-        // base-path is expected to be empty ("") in the standard setup so URLs
-        // land as /agent-start/xxx (matching the frontend's /api/agent-start after the
-        // dev proxy strips /api). If someone still sets base-path, keep the old
-        // concatenation so the swagger URL reflects the actual routes.
-        String basePath = properties.getBasePath() == null ? "" : properties.getBasePath();
-        String serverUrl = SpringAgentWebAutoConfiguration.CONTROLLER_PATH_PREFIX + basePath;
+    public OpenAPI springAgentOpenApi() {
+        String serverUrl = SpringAgentWebAutoConfiguration.CONTROLLER_PATH_PREFIX;
         return new OpenAPI()
                 .info(new Info()
                         .title("spring-agent-start REST API")

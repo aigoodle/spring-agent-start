@@ -1,6 +1,7 @@
 package io.github.aigoodle.tool;
 
 import java.util.Map;
+import java.time.Duration;
 
 /**
  * A callable capability an agent or workflow can invoke. Implementations are
@@ -25,6 +26,16 @@ public interface AgentTool {
      */
     default String inputSchema() {
         return "{\"type\":\"object\",\"properties\":{},\"additionalProperties\":true}";
+    }
+
+    /** Whether the same arguments may be retried without duplicating side effects. */
+    default boolean idempotent() {
+        return false;
+    }
+
+    /** Optional per-tool timeout; {@code null} uses the gateway default. */
+    default Duration timeout() {
+        return null;
     }
 
     /** Run the tool. {@code args} are the parsed JSON arguments from the model. */

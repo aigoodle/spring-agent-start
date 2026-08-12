@@ -21,6 +21,7 @@ public final class DifyChatAdapter {
         OpenAIChatRequest request = new OpenAIChatRequest();
         request.setStream(Boolean.TRUE);
         request.setConversationId(source.getConversationId());
+        request.setTimeoutMillis(source.getTimeoutMillis());
         Map<String, Object> inputs = source.getInputs();
         request.setData(inputs == null ? new HashMap<>() : new HashMap<>(inputs));
         if (source.getUser() != null && !source.getUser().isBlank()) {

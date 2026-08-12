@@ -12,6 +12,8 @@ public class MemoryProperties {
     private double recencyWeight = 0.35;
     private double relevanceWeight = 0.45;
     private double importanceWeight = 0.20;
+    private double accessWeight = 0.10;
+    private boolean extractionEnabled = true;
 
     public int getWorkingCapacity() { return workingCapacity; }
     public void setWorkingCapacity(int value) { workingCapacity = value; }
@@ -25,4 +27,8 @@ public class MemoryProperties {
     public void setRelevanceWeight(double value) { relevanceWeight = value; }
     public double getImportanceWeight() { return importanceWeight; }
     public void setImportanceWeight(double value) { importanceWeight = value; }
+    public double getAccessWeight() { return accessWeight; }
+    public void setAccessWeight(double value) { accessWeight = value; }
+    public boolean isExtractionEnabled() { return extractionEnabled; }
+    public void setExtractionEnabled(boolean value) { extractionEnabled = value; }
 }

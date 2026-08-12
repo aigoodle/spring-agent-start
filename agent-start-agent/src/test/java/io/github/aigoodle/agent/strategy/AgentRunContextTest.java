@@ -6,9 +6,11 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class AgentRunContextTest {
 
@@ -74,5 +76,31 @@ class AgentRunContextTest {
             context.publishStep(AgentStep.of(AgentStep.Kind.FINAL, "done"));
             context.publishToken("done");
         }).doesNotThrowAnyException();
+    }
+
+    @Test
+    void rejectsWorkAfterDeadline() {
+        AgentRunContext context = AgentRunContext.builder()
+                .runId("run-timeout")
+                .deadline(Instant.now().minusMillis(1))
+                .build();
+
+        assertThatThrownBy(context::checkActive)
+                .isInstanceOf(AgentRunInterruptedException.class)
+                .satisfies(error -> assertThat(
+                        ((AgentRunInterruptedException) error).isTimedOut()).isTrue());
+    }
+
+    @Test
+    void rejectsWorkWhenDurableRunWasCancelled() {
+        AgentRunContext context = AgentRunContext.builder()
+                .runId("run-cancelled")
+                .active(() -> false)
+                .build();
+
+        assertThatThrownBy(context::checkActive)
+                .isInstanceOf(AgentRunInterruptedException.class)
+                .satisfies(error -> assertThat(
+                        ((AgentRunInterruptedException) error).isTimedOut()).isFalse());
     }
 }

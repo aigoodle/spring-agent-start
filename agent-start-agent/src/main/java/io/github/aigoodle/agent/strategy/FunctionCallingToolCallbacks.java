@@ -64,7 +64,7 @@ final class FunctionCallingToolCallbacks {
 
         private Object executeSafely(Map<String, Object> arguments) {
             try {
-                return target.execute(arguments);
+                return context.executeTool(target, arguments);
             } catch (Exception exception) {
                 return "error: " + exception.getMessage();
             }

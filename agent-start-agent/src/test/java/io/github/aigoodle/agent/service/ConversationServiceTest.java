@@ -1,7 +1,7 @@
 package io.github.aigoodle.agent.service;
 
 import io.github.aigoodle.agent.entity.ConversationEntity;
-import io.github.aigoodle.agent.mapper.AgentMessageMapper;
+import io.github.aigoodle.memory.MemoryManager;
 import io.github.aigoodle.agent.mapper.ConversationMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -24,7 +24,7 @@ class ConversationServiceTest {
         when(conversationMapper.selectById(existingConversation.getId()))
                 .thenReturn(existingConversation);
         ConversationService conversationService = new ConversationService(
-                conversationMapper, mock(AgentMessageMapper.class));
+                conversationMapper, mock(MemoryManager.class));
 
         ConversationEntity resolvedConversation = conversationService.ensure(
                 existingConversation.getId(), "app-1", "tenant-1", "New title");
@@ -38,7 +38,7 @@ class ConversationServiceTest {
     void createsConversationWithNormalizedTenantAndBoundedTitle() {
         ConversationMapper conversationMapper = mock(ConversationMapper.class);
         ConversationService conversationService = new ConversationService(
-                conversationMapper, mock(AgentMessageMapper.class));
+                conversationMapper, mock(MemoryManager.class));
         String firstMessage = "A".repeat(100);
 
         ConversationEntity conversation = conversationService.ensure(

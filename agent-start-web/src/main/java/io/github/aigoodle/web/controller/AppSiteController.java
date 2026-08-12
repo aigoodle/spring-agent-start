@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @ConditionalOnBean(AppSiteService.class)
-@RequestMapping("${spring-agent.web.base-path:}/apps/{appId}/site")
+@RequestMapping("/apps/{appId}/site")
 public class AppSiteController {
 
     private final AppSiteService service;

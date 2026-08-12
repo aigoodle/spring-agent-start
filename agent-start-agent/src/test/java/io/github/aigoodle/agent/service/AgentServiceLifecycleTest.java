@@ -6,7 +6,7 @@ import io.github.aigoodle.agent.api.AgentResponse;
 import io.github.aigoodle.agent.entity.AgentEntity;
 import io.github.aigoodle.agent.hitl.ApprovalGate;
 import io.github.aigoodle.agent.mapper.AgentMapper;
-import io.github.aigoodle.agent.memory.AgentMemory;
+import io.github.aigoodle.memory.MemoryManager;
 import io.github.aigoodle.agent.strategy.AgentStrategy;
 import io.github.aigoodle.agent.strategy.AgentStrategyRegistry;
 import io.github.aigoodle.model.service.ModelService;
@@ -92,7 +92,7 @@ class AgentServiceLifecycleTest {
         private final ModelService modelService = mock(ModelService.class);
         private final ToolRegistry toolRegistry = mock(ToolRegistry.class);
         private final AgentStrategyRegistry strategyRegistry = mock(AgentStrategyRegistry.class);
-        private final AgentMemory memory = mock(AgentMemory.class);
+        private final MemoryManager memory = mock(MemoryManager.class);
         private final ApprovalGate approvalGate = mock(ApprovalGate.class);
 
         AgentService createService() {

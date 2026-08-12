@@ -1,12 +1,13 @@
 package io.github.aigoodle.web.support;
 
-import io.github.aigoodle.agent.entity.AgentMessageEntity;
 import io.github.aigoodle.agent.entity.ConversationEntity;
 import io.github.aigoodle.agent.service.ConversationService;
+import io.github.aigoodle.memory.MemoryItem;
+import io.github.aigoodle.memory.MemoryRole;
 import io.github.aigoodle.web.dto.dify.DifyConversationVO;
 import io.github.aigoodle.web.dto.dify.DifyMessageVO;
-import org.springframework.stereotype.Component;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -14,11 +15,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/** Maps persistence rows to the public Dify conversation-history representation. */
 @Component
 @ConditionalOnClass(ConversationService.class)
 public final class DifyHistoryViewMapper {
-
     public DifyConversationVO toConversation(ConversationEntity conversation) {
         DifyConversationVO view = new DifyConversationVO();
         view.setId(conversation.getId());
@@ -27,56 +26,40 @@ public final class DifyHistoryViewMapper {
         view.setStatus(conversation.getStatus() == null ? "normal" : conversation.getStatus());
         view.setIntroduction(conversation.getIntroduction() == null ? "" : conversation.getIntroduction());
         view.setCreatedAt(epochSecond(conversation.getCreatedAt()));
-        LocalDateTime updatedAt = conversation.getUpdatedAt() == null
-                ? conversation.getCreatedAt()
-                : conversation.getUpdatedAt();
-        view.setUpdatedAt(epochSecond(updatedAt));
+        view.setUpdatedAt(epochSecond(conversation.getUpdatedAt() == null
+                ? conversation.getCreatedAt() : conversation.getUpdatedAt()));
         return view;
     }
 
-    /** Combines adjacent user/assistant persistence rows into Dify's one-question-one-answer model. */
-    public List<DifyMessageVO> toMessages(String conversationId, List<AgentMessageEntity> rows) {
+    public List<DifyMessageVO> toMessages(String conversationId, List<MemoryItem> rows) {
         List<DifyMessageVO> messages = new ArrayList<>();
-        AgentMessageEntity pendingQuestion = null;
-        for (AgentMessageEntity row : rows) {
-            if (hasRole(row, "USER")) {
-                if (pendingQuestion != null) {
-                    messages.add(toMessage(conversationId, pendingQuestion, null));
-                }
+        MemoryItem pendingQuestion = null;
+        for (MemoryItem row : rows) {
+            if (row.role() == MemoryRole.USER) {
+                if (pendingQuestion != null) messages.add(toMessage(conversationId, pendingQuestion, null));
                 pendingQuestion = row;
-            } else if (hasRole(row, "ASSISTANT")) {
+            } else if (row.role() == MemoryRole.ASSISTANT) {
                 messages.add(toMessage(conversationId, pendingQuestion, row));
                 pendingQuestion = null;
             }
         }
-        if (pendingQuestion != null) {
-            messages.add(toMessage(conversationId, pendingQuestion, null));
-        }
+        if (pendingQuestion != null) messages.add(toMessage(conversationId, pendingQuestion, null));
         return messages;
     }
 
-    private DifyMessageVO toMessage(String conversationId, AgentMessageEntity question,
-                                    AgentMessageEntity answer) {
-        AgentMessageEntity identityRow = answer != null ? answer : question;
+    private DifyMessageVO toMessage(String conversationId, MemoryItem question, MemoryItem answer) {
+        MemoryItem identity = answer != null ? answer : question;
         DifyMessageVO view = new DifyMessageVO();
-        view.setId(identityRow.getId());
+        view.setId(identity.id());
         view.setConversationId(conversationId);
         view.setInputs(Collections.emptyMap());
-        view.setQuery(question == null ? "" : emptyIfNull(question.getContent()));
-        view.setAnswer(answer == null ? "" : emptyIfNull(answer.getContent()));
+        view.setQuery(question == null ? "" : question.content());
+        view.setAnswer(answer == null ? "" : answer.content());
         view.setMessageFiles(Collections.emptyList());
         view.setFeedback(null);
         view.setRetrieverResources(Collections.emptyList());
-        view.setCreatedAt(epochSecond(identityRow.getCreatedAt()));
+        view.setCreatedAt(identity.createdAt() == null ? 0L : identity.createdAt().getEpochSecond());
         return view;
-    }
-
-    private static boolean hasRole(AgentMessageEntity message, String expectedRole) {
-        return expectedRole.equalsIgnoreCase(message.getRole());
-    }
-
-    private static String emptyIfNull(String value) {
-        return value == null ? "" : value;
     }
 
     private static long epochSecond(LocalDateTime time) {

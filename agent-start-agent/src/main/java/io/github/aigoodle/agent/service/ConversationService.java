@@ -1,9 +1,8 @@
 package io.github.aigoodle.agent.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import io.github.aigoodle.agent.entity.AgentMessageEntity;
 import io.github.aigoodle.agent.entity.ConversationEntity;
-import io.github.aigoodle.agent.mapper.AgentMessageMapper;
+import io.github.aigoodle.memory.MemoryManager;
 import io.github.aigoodle.agent.mapper.ConversationMapper;
 import io.github.aigoodle.common.exception.AgentException;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,11 +21,11 @@ public class ConversationService {
     private static final int GENERATED_NAME_MAX_LENGTH = 60;
 
     private final ConversationMapper conversationMapper;
-    private final AgentMessageMapper messageMapper;
+    private final MemoryManager memoryManager;
 
-    public ConversationService(ConversationMapper conversationMapper, AgentMessageMapper messageMapper) {
+    public ConversationService(ConversationMapper conversationMapper, MemoryManager memoryManager) {
         this.conversationMapper = conversationMapper;
-        this.messageMapper = messageMapper;
+        this.memoryManager = memoryManager;
     }
 
     public List<ConversationEntity> listByApp(String appId) {
@@ -91,9 +90,9 @@ public class ConversationService {
      */
     @Transactional
     public void delete(String conversationId) {
+        ConversationEntity conversation = require(conversationId);
         conversationMapper.deleteById(conversationId);
-        messageMapper.delete(new LambdaQueryWrapper<AgentMessageEntity>()
-                .eq(AgentMessageEntity::getConversationId, conversationId));
+        memoryManager.forgetConversation(conversation.getTenantId(), conversation.getAppId(), conversationId);
     }
 
     private static String resolveTenantId(String tenantId) {

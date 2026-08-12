@@ -1,6 +1,7 @@
 package io.github.aigoodle.memory.store;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import io.github.aigoodle.memory.*;
 import io.github.aigoodle.memory.entity.MemoryEntity;
 import io.github.aigoodle.memory.mapper.MemoryMapper;
@@ -11,6 +12,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.Collection;
 
 public class JdbcMemoryStore implements MemoryStore {
     private final MemoryMapper mapper;
@@ -39,9 +41,8 @@ public class JdbcMemoryStore implements MemoryStore {
         LambdaQueryWrapper<MemoryEntity> wrapper = new LambdaQueryWrapper<MemoryEntity>()
                 .eq(MemoryEntity::getTenantId, query.tenantId())
                 .in(MemoryEntity::getTier, query.tiers().stream().map(Enum::name).toList())
-                .and(query.ownerId() != null && !query.ownerId().isBlank(),
-                        part -> part.eq(MemoryEntity::getOwnerId, query.ownerId())
-                                .or().isNull(MemoryEntity::getOwnerId))
+                .eq(query.ownerId() != null && !query.ownerId().isBlank(),
+                        MemoryEntity::getOwnerId, query.ownerId())
                 .eq(query.conversationId() != null && !query.conversationId().isBlank(),
                         MemoryEntity::getConversationId, query.conversationId())
                 .and(part -> part.isNull(MemoryEntity::getExpiresAt)
@@ -55,6 +56,23 @@ public class JdbcMemoryStore implements MemoryStore {
     public void purgeExpired(Instant now) {
         mapper.delete(new LambdaQueryWrapper<MemoryEntity>()
                 .lt(MemoryEntity::getExpiresAt, toLocal(now)));
+    }
+
+    @Override
+    public void delete(String tenantId, String ownerId, String conversationId) {
+        mapper.delete(new LambdaQueryWrapper<MemoryEntity>()
+                .eq(MemoryEntity::getTenantId, tenantId)
+                .eq(ownerId != null && !ownerId.isBlank(), MemoryEntity::getOwnerId, ownerId)
+                .eq(MemoryEntity::getConversationId, conversationId));
+    }
+
+    @Override
+    public void recordAccess(Collection<String> memoryIds, Instant accessedAt) {
+        if (memoryIds == null || memoryIds.isEmpty()) return;
+        mapper.update(null, new LambdaUpdateWrapper<MemoryEntity>()
+                .in(MemoryEntity::getId, memoryIds)
+                .setSql("access_count = COALESCE(access_count, 0) + 1")
+                .set(MemoryEntity::getUpdatedAt, toLocal(accessedAt)));
     }
 
     private static MemoryItem toItem(MemoryEntity value) {

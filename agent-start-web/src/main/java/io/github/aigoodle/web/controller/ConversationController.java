@@ -22,7 +22,7 @@ import java.util.Map;
  */
 @RestController
 @ConditionalOnBean(ConversationService.class)
-@RequestMapping("${spring-agent.web.base-path:}/apps/{appId}/conversations")
+@RequestMapping("/apps/{appId}/conversations")
 public class ConversationController {
 
     private final ConversationService service;

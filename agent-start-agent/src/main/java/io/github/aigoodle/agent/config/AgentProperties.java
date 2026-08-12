@@ -7,37 +7,14 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  */
 @ConfigurationProperties(prefix = "spring-agent.agent")
 public class AgentProperties {
+    private int maxContextCharacters = 32_000;
+    private double longTermContextShare = 0.25;
+    private int contextSummaryCharacters = 1_000;
 
-    /** Memory backend: {@code jdbc} (recent, persisted) or {@code vector} (semantic recall). */
-    private String memory = "jdbc";
-
-    /** Embedding model id required when {@code memory=vector}. */
-    private String embeddingModelId;
-
-    /** Dataset name used by vector memory. */
-    private String memoryDatasetName = "agent-memory";
-
-    public String getMemory() {
-        return memory;
-    }
-
-    public void setMemory(String memory) {
-        this.memory = memory;
-    }
-
-    public String getEmbeddingModelId() {
-        return embeddingModelId;
-    }
-
-    public void setEmbeddingModelId(String embeddingModelId) {
-        this.embeddingModelId = embeddingModelId;
-    }
-
-    public String getMemoryDatasetName() {
-        return memoryDatasetName;
-    }
-
-    public void setMemoryDatasetName(String memoryDatasetName) {
-        this.memoryDatasetName = memoryDatasetName;
-    }
+    public int getMaxContextCharacters() { return maxContextCharacters; }
+    public void setMaxContextCharacters(int value) { maxContextCharacters = value; }
+    public double getLongTermContextShare() { return longTermContextShare; }
+    public void setLongTermContextShare(double value) { longTermContextShare = value; }
+    public int getContextSummaryCharacters() { return contextSummaryCharacters; }
+    public void setContextSummaryCharacters(int value) { contextSummaryCharacters = value; }
 }

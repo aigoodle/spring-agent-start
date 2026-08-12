@@ -1,6 +1,8 @@
 package io.github.aigoodle.workflow.node.builtin;
 
 import io.github.aigoodle.tool.ToolRegistry;
+import io.github.aigoodle.tool.execution.ToolExecutionContext;
+import io.github.aigoodle.tool.execution.ToolExecutionGateway;
 import io.github.aigoodle.workflow.graph.NodeDef;
 import io.github.aigoodle.workflow.graph.NodeType;
 import io.github.aigoodle.workflow.node.ExecutionContext;
@@ -20,9 +22,15 @@ import java.util.Map;
 public class ToolNodeExecutor implements NodeExecutor {
 
     private final ToolRegistry toolRegistry;
+    private final ToolExecutionGateway executionGateway;
 
     public ToolNodeExecutor(ToolRegistry toolRegistry) {
+        this(toolRegistry, ToolExecutionGateway.direct());
+    }
+
+    public ToolNodeExecutor(ToolRegistry toolRegistry, ToolExecutionGateway executionGateway) {
         this.toolRegistry = toolRegistry;
+        this.executionGateway = executionGateway;
     }
 
     @Override
@@ -47,7 +55,9 @@ public class ToolNodeExecutor implements NodeExecutor {
                 resolvedArguments.put(String.valueOf(argument.getKey()), resolvedValue);
             }
         }
-        Object toolResult = toolRegistry.execute(toolName, resolvedArguments);
+        Object toolResult = executionGateway.execute(toolRegistry.get(toolName), resolvedArguments,
+                new ToolExecutionContext(context.getRunId(), context.getTenantId(),
+                        node.getId(), context.getConversationId(), Map.of("nodeType", "TOOL")));
         return NodeResult.of(node.getString("outputKey", "result"), toolResult);
     }
 }

@@ -26,7 +26,7 @@ import java.util.List;
 /** Dataset metadata and retrieval endpoints. */
 @RestController
 @ConditionalOnBean(KnowledgeService.class)
-@RequestMapping("${spring-agent.web.base-path:}/datasets")
+@RequestMapping("/datasets")
 public class DatasetController {
 
     private final DatasetService datasetService;

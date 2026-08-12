@@ -55,7 +55,7 @@ mvn -pl agent-start-agent  -am -Dtest=AgentRuntimeTest#methodName test   # singl
 Build order is dependency-driven; respect it when adding cross-module references:
 
 ```
-common → model → { knowledge, tools } → agent → workflow → { trigger, observability, web } → completion → { web-spring-starter, completion-spring-starter, server, example }
+common → { model, memory } → { knowledge, tools } → agent → workflow → { trigger, observability, web } → completion → { web-spring-starter, completion-spring-starter, server, example }
 ```
 
 | Module | Role |
@@ -69,7 +69,8 @@ common → model → { knowledge, tools } → agent → workflow → { trigger, 
 | `agent-start-knowledge` | Datasets → documents → chunks, template chunking, hybrid (vector+keyword) retrieval, `DocumentReader`/`Chunker`/`Reranker` SPIs, optional RabbitMQ async ingestion |
 | `agent-start-store/` | Aggregator for optional `VectorStoreFactory` starters (`-pgvector`, `-elasticsearch`, `-milvus`). |
 | `agent-start-tools` | `Tool` SPI, `ToolRegistry`, `ToolProvider` plug-point, Spring AI `ToolCallback` adapter, **MCP client** (`McpToolProvider`) |
-| `agent-start-agent` | `AgentStrategy` runtime, JDBC + semantic vector memory, multi-agent delegation, human-in-the-loop approval |
+| `agent-start-memory` | Layered WORKING / SHORT_TERM / LONG_TERM memory, TTL, importance promotion, hybrid relevance-recency ranking, JDBC `MemoryStore` and replaceable persistence SPI |
+| `agent-start-agent` | Public `AgentRuntime`, `AgentStrategy` implementations, multi-agent delegation and human-in-the-loop approval; all state delegates to `agent-start-memory` |
 | `agent-start-workflow` | DAG `WorkflowEngine`, `NodeExecutor` nodes, workflow persistence |
 | `agent-start-trigger` | Webhook / cron / event triggers → async dispatch via `TriggerDispatcher` SPI (built-in: `WorkflowTriggerDispatcher`), invocation history + replay |
 | `agent-start-observability` | LLMOps: `MeteringChatModelDecorator` (a `ChatModelDecorator`) records per-call token/cost/latency into `LlmCallRecord`; `LlmMetricsService` aggregates per model |
@@ -107,6 +108,9 @@ The SPIs:
   the engine via `ObjectProvider<WorkflowEngine>` to break the DI cycle.
 - **`AgentStrategy`** (agent) — reasoning loop selected by `AgentStrategyType`. Built-ins:
   `ReActStrategy`, `FunctionCallingStrategy`, `PlanExecuteStrategy`.
+- **`AgentRuntime`** (agent) — persistence-independent execution facade used by workflow AGENT nodes
+  and other orchestrators. Callers submit an `AgentDefinition`; runtime strategy, tools, approval and
+  memory remain centralized in the agent module.
 - **`Tool` / `ToolProvider`** (tools) — individual tools and bulk providers. MCP servers configured
   under `spring-agent.tools.mcp.servers[*]` (stdio or HTTP) join the registry via `McpToolProvider`.
 - **`VectorStoreFactory` / `DocumentReader` / `Chunker` / `Reranker`** (knowledge) — swap the vector
@@ -126,9 +130,8 @@ are recorded for timing/observability.
 ## The web layer split (MVC vs WebFlux)
 
 - `web` controllers are all prefixed with **`/agent-start`** (`CONTROLLER_PATH_PREFIX` in
-  `SpringAgentWebAutoConfiguration`). `spring-agent.web.base-path` defaults to empty and should
-  **stay empty** — setting it to e.g. `/api/v1` produces `/agent-start/api/v1/…` and breaks the
-  frontend proxy.
+  `SpringAgentWebAutoConfiguration`). Application-wide deployment prefixes belong in Spring Boot
+  or gateway configuration, not individual controller mappings.
 - `completion` endpoints (`/chat-messages`, `/chat/completions/{appId}`, `/conversations`,
   `/messages`) are reactive and live outside the `/agent-start` prefix.
 - `web` uses springdoc **webmvc** flavor; reactive hosts (server) swap in **webflux** flavor — both
@@ -154,8 +157,9 @@ are recorded for timing/observability.
 - Knowledge ingestion can go async: `spring-agent.knowledge.async.enabled=true` with
   `starter-amqp` on the classpath uses RabbitMQ (`kb.document.ingest` queue + DLQ); without a broker
   it falls back to an in-process worker pool.
-- Agent memory: `spring-agent.agent.memory=jdbc` (default) or `vector` (semantic memory backed by
-  the knowledge module).
+- Agent memory is provided by `agent-start-memory`: bounded in-process working memory plus JDBC
+  short/long-term memory. Tune `spring-agent.memory.working-capacity`, `short-term-ttl`,
+  `long-term-threshold` and ranking weights, or replace the `MemoryStore` bean for vector/remote recall.
 - Approval gate defaults to `AutoApproveGate` (override the `ApprovalGate` bean for real HITL).
 
 ## Conventions

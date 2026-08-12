@@ -11,6 +11,11 @@ import io.github.aigoodle.tool.builtin.HttpGetTool;
 import io.github.aigoodle.tool.mcp.McpClientManager;
 import io.github.aigoodle.tool.mcp.McpProperties;
 import io.github.aigoodle.tool.mcp.McpToolProvider;
+import io.github.aigoodle.tool.execution.DefaultToolExecutionGateway;
+import io.github.aigoodle.tool.execution.ToolExecutionGateway;
+import io.github.aigoodle.tool.execution.ToolExecutionListener;
+import io.github.aigoodle.tool.execution.ToolExecutionPolicy;
+import io.github.aigoodle.tool.execution.ToolExecutionProperties;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
@@ -35,7 +40,18 @@ import org.springframework.context.annotation.Configuration;
  * turned off with {@code spring-agent.tools.builtin=false}.
  */
 @AutoConfiguration(after = SpringAgentModelAutoConfiguration.class)
+@EnableConfigurationProperties(ToolExecutionProperties.class)
 public class SpringAgentToolsAutoConfiguration {
+
+    @Bean(destroyMethod = "close")
+    @ConditionalOnMissingBean
+    public ToolExecutionGateway toolExecutionGateway(
+            ToolExecutionProperties properties,
+            ObjectProvider<ToolExecutionPolicy> policies,
+            ObjectProvider<ToolExecutionListener> listeners) {
+        return new DefaultToolExecutionGateway(properties,
+                policies.orderedStream().toList(), listeners.orderedStream().toList());
+    }
 
     @Bean
     @ConditionalOnProperty(prefix = "spring-agent.tools", name = "builtin", havingValue = "true", matchIfMissing = true)

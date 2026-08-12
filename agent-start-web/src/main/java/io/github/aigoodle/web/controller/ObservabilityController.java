@@ -20,7 +20,7 @@ import java.util.List;
  */
 @RestController
 @ConditionalOnBean(LlmMetricsService.class)
-@RequestMapping("${spring-agent.web.base-path:}/llmops")
+@RequestMapping("/llmops")
 public class ObservabilityController {
 
     private final LlmMetricsService metrics;

@@ -19,7 +19,7 @@ import java.util.List;
 /** Segment inspection and editing endpoints for knowledge documents. */
 @RestController
 @ConditionalOnBean(KnowledgeService.class)
-@RequestMapping("${spring-agent.web.base-path:}/datasets")
+@RequestMapping("/datasets")
 public class DatasetSegmentController {
 
     private final KnowledgeService knowledgeService;

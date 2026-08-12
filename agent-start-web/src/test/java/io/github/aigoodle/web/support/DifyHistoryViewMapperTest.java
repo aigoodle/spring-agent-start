@@ -1,14 +1,18 @@
 package io.github.aigoodle.web.support;
 
-import io.github.aigoodle.agent.entity.AgentMessageEntity;
 import io.github.aigoodle.agent.entity.ConversationEntity;
+import io.github.aigoodle.memory.MemoryItem;
+import io.github.aigoodle.memory.MemoryRole;
+import io.github.aigoodle.memory.MemoryTier;
 import io.github.aigoodle.common.exception.AgentException;
 import io.github.aigoodle.web.dto.dify.DifyConversationVO;
 import io.github.aigoodle.web.dto.dify.DifyMessageVO;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -19,8 +23,8 @@ class DifyHistoryViewMapperTest {
 
     @Test
     void combinesUserAndAssistantRowsIntoOneMessage() {
-        AgentMessageEntity question = message("question-1", "USER", "How are you?", 1);
-        AgentMessageEntity answer = message("answer-1", "ASSISTANT", "Great", 2);
+        MemoryItem question = message("question-1", MemoryRole.USER, "How are you?", 1);
+        MemoryItem answer = message("answer-1", MemoryRole.ASSISTANT, "Great", 2);
 
         List<DifyMessageVO> messages = mapper.toMessages("conversation-1", List.of(question, answer));
 
@@ -34,10 +38,10 @@ class DifyHistoryViewMapperTest {
 
     @Test
     void preservesUnpairedQuestionsAndAnswers() {
-        AgentMessageEntity firstQuestion = message("question-1", "USER", "First", 1);
-        AgentMessageEntity secondQuestion = message("question-2", "USER", "Second", 2);
-        AgentMessageEntity answer = message("answer-2", "ASSISTANT", "Reply", 3);
-        AgentMessageEntity orphanAnswer = message("answer-3", "ASSISTANT", "Opening", 4);
+        MemoryItem firstQuestion = message("question-1", MemoryRole.USER, "First", 1);
+        MemoryItem secondQuestion = message("question-2", MemoryRole.USER, "Second", 2);
+        MemoryItem answer = message("answer-2", MemoryRole.ASSISTANT, "Reply", 3);
+        MemoryItem orphanAnswer = message("answer-3", MemoryRole.ASSISTANT, "Opening", 4);
 
         List<DifyMessageVO> messages = mapper.toMessages(
                 "conversation-1", List.of(firstQuestion, secondQuestion, answer, orphanAnswer));
@@ -74,13 +78,10 @@ class DifyHistoryViewMapperTest {
                 .isInstanceOf(AgentException.class);
     }
 
-    private static AgentMessageEntity message(String id, String role, String content, long sequence) {
-        AgentMessageEntity message = new AgentMessageEntity();
-        message.setId(id);
-        message.setRole(role);
-        message.setContent(content);
-        message.setSeq(sequence);
-        message.setCreatedAt(LocalDateTime.of(2026, 1, 1, 0, Math.toIntExact(sequence)));
-        return message;
+    private static MemoryItem message(String id, MemoryRole role, String content, long sequence) {
+        return new MemoryItem(id, "default", "app-1", "conversation-1",
+                MemoryTier.SHORT_TERM, role, content, .5,
+                LocalDateTime.of(2026, 1, 1, 0, Math.toIntExact(sequence)).toInstant(ZoneOffset.UTC),
+                null, 0, Map.of());
     }
 }

@@ -78,6 +78,10 @@ public class AgentChatGenerator {
 
         emitter.event("message", OpenAIChatResponse.chunk(
                 chunkId, request.getModel(), null, null, AgentStreamEventPayloads.finishReason(response)));
+        if (response.getStatus() == AgentResponse.Status.AWAITING_APPROVAL) {
+            emitter.event("agent_approval_required",
+                    AgentStreamEventPayloads.approvalRequired(taskId, response));
+        }
         emitter.event("chat_finished",
                 AgentStreamEventPayloads.finished(taskId, application, response, startedAtMillis));
         emitter.event("message_end", Map.of(
@@ -95,6 +99,7 @@ public class AgentChatGenerator {
         return AgentRequest.builder()
                 .query(request.lastUserMessage())
                 .conversationId(request.getConversationId())
+                .timeoutMillis(request.getTimeoutMillis())
                 .variables(variables)
                 .build();
     }

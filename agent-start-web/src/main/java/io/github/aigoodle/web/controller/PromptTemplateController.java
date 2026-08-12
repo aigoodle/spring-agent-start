@@ -27,7 +27,7 @@ import java.util.Map;
  * from template" affordance on the agent / workflow-node forms.
  */
 @RestController
-@RequestMapping("${spring-agent.web.base-path:}/prompt-templates")
+@RequestMapping("/prompt-templates")
 public class PromptTemplateController {
 
     private final PromptTemplateService promptTemplateService;

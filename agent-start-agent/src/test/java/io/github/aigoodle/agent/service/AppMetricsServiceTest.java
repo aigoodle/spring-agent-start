@@ -1,11 +1,12 @@
 package io.github.aigoodle.agent.service;
 
-import io.github.aigoodle.agent.entity.AgentMessageEntity;
-import io.github.aigoodle.agent.mapper.AgentMessageMapper;
+import io.github.aigoodle.memory.*;
+import io.github.aigoodle.agent.mapper.AgentMapper;
 import org.junit.jupiter.api.Test;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -13,77 +14,33 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class AppMetricsServiceTest {
-
     @Test
-    void summarizesAnApplicationWithoutMessages() {
-        AgentMessageMapper messageMapper = mock(AgentMessageMapper.class);
-        when(messageMapper.selectList(any())).thenReturn(List.of());
-        AppMetricsService metricsService = new AppMetricsService(messageMapper);
+    void summarizesCanonicalMemoryItems() {
+        MemoryManager memory = mock(MemoryManager.class);
+        when(memory.recall(any())).thenReturn(List.of(
+                item("1", "c1", MemoryRole.USER, Instant.parse("2026-01-01T00:00:00Z")),
+                item("2", "c1", MemoryRole.ASSISTANT, Instant.parse("2026-01-01T00:01:00Z")),
+                item("3", "c2", MemoryRole.USER, Instant.parse("2026-01-02T00:00:00Z"))));
 
-        AppMetricsView metrics = metricsService.summarize("app-1");
+        AppMetricsView view = new AppMetricsService(memory, mock(AgentMapper.class)).summarize("app-1");
 
-        assertThat(metrics.getAppId()).isEqualTo("app-1");
-        assertThat(metrics.getTotalConversations()).isZero();
-        assertThat(metrics.getTotalMessages()).isZero();
-        assertThat(metrics.getAvgInteractionsPerConversation()).isZero();
-        assertThat(metrics.getLastActivityAt()).isNull();
+        assertThat(view.getTotalConversations()).isEqualTo(2);
+        assertThat(view.getTotalMessages()).isEqualTo(3);
+        assertThat(view.getUserMessages()).isEqualTo(2);
+        assertThat(view.getAssistantMessages()).isEqualTo(1);
+        assertThat(view.getAvgInteractionsPerConversation()).isEqualTo(1.0);
+        assertThat(view.getLastActivityAt()).isEqualTo("2026-01-02T00:00:00Z");
     }
 
     @Test
-    void countsRolesAndDistinctConversations() {
-        AgentMessageMapper messageMapper = mock(AgentMessageMapper.class);
-        when(messageMapper.selectList(any())).thenReturn(List.of(
-                message("conversation-1", "user"),
-                message("conversation-1", "ASSISTANT"),
-                message("conversation-2", "USER"),
-                message("conversation-2", "TOOL"),
-                message(null, null)));
-        AppMetricsService metricsService = new AppMetricsService(messageMapper);
-
-        AppMetricsView metrics = metricsService.summarize("app-1");
-
-        assertThat(metrics.getTotalConversations()).isEqualTo(2);
-        assertThat(metrics.getTotalMessages()).isEqualTo(5);
-        assertThat(metrics.getUserMessages()).isEqualTo(2);
-        assertThat(metrics.getAssistantMessages()).isOne();
-        assertThat(metrics.getAvgInteractionsPerConversation()).isEqualTo(1.0);
+    void emptyMemoryProducesZeroMetrics() {
+        MemoryManager memory = mock(MemoryManager.class);
+        when(memory.recall(any())).thenReturn(List.of());
+        assertThat(new AppMetricsService(memory, mock(AgentMapper.class)).summarize("app-1").getTotalMessages()).isZero();
     }
 
-    @Test
-    void roundsAverageUserTurnsToTwoDecimalPlaces() {
-        AgentMessageMapper messageMapper = mock(AgentMessageMapper.class);
-        when(messageMapper.selectList(any())).thenReturn(List.of(
-                message("conversation-1", "USER"),
-                message("conversation-2", "USER"),
-                message("conversation-3", "USER"),
-                message("conversation-3", "USER")));
-        AppMetricsService metricsService = new AppMetricsService(messageMapper);
-
-        AppMetricsView metrics = metricsService.summarize("app-1");
-
-        assertThat(metrics.getAvgInteractionsPerConversation()).isEqualTo(1.33);
-    }
-
-    @Test
-    void usesCreationTimeWhenUpdateTimeIsUnavailable() {
-        AgentMessageMapper messageMapper = mock(AgentMessageMapper.class);
-        AgentMessageEntity olderUpdatedMessage = message("conversation-1", "USER");
-        olderUpdatedMessage.setUpdatedAt(LocalDateTime.parse("2026-01-01T10:00:00"));
-        AgentMessageEntity newerCreatedMessage = message("conversation-1", "ASSISTANT");
-        newerCreatedMessage.setCreatedAt(LocalDateTime.parse("2026-01-02T11:30:00"));
-        when(messageMapper.selectList(any())).thenReturn(
-                List.of(olderUpdatedMessage, newerCreatedMessage));
-        AppMetricsService metricsService = new AppMetricsService(messageMapper);
-
-        AppMetricsView metrics = metricsService.summarize("app-1");
-
-        assertThat(metrics.getLastActivityAt()).isEqualTo("2026-01-02T11:30");
-    }
-
-    private static AgentMessageEntity message(String conversationId, String role) {
-        AgentMessageEntity message = new AgentMessageEntity();
-        message.setConversationId(conversationId);
-        message.setRole(role);
-        return message;
+    private static MemoryItem item(String id, String conversationId, MemoryRole role, Instant time) {
+        return new MemoryItem(id, "default", "app-1", conversationId, MemoryTier.SHORT_TERM,
+                role, id, .5, time, null, 0, Map.of());
     }
 }

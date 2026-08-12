@@ -28,7 +28,7 @@ import java.util.List;
  */
 @RestController
 @ConditionalOnBean(AppDatasetService.class)
-@RequestMapping("${spring-agent.web.base-path:}/apps/{appId}/datasets")
+@RequestMapping("/apps/{appId}/datasets")
 public class AppDatasetController {
 
     private final AppDatasetService appDatasetService;

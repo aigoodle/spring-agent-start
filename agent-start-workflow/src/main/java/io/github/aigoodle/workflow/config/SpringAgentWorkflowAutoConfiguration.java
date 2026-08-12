@@ -9,7 +9,7 @@ import io.github.aigoodle.workflow.engine.NodeExecutorRegistry;
 import io.github.aigoodle.workflow.engine.WorkflowEngine;
 import io.github.aigoodle.workflow.mapper.WorkflowMapper;
 import io.github.aigoodle.workflow.mapper.WorkflowRunMapper;
-import io.github.aigoodle.workflow.memory.WorkflowConversationMemory;
+import io.github.aigoodle.memory.MemoryManager;
 import io.github.aigoodle.workflow.node.NodeExecutor;
 import io.github.aigoodle.workflow.node.builtin.AgentNodeExecutor;
 import io.github.aigoodle.workflow.node.builtin.AnswerNodeExecutor;
@@ -117,27 +117,29 @@ public class SpringAgentWorkflowAutoConfiguration {
     @Bean
     public LlmNodeExecutor llmNodeExecutor(ModelService modelService,
                                            ObjectProvider<PromptTemplateService> promptTemplateService,
-                                           ObjectProvider<WorkflowConversationMemory> conversationMemory) {
+                                           MemoryManager conversationMemory) {
         return new LlmNodeExecutor(
                 modelService,
                 promptTemplateService.getIfAvailable(),
-                conversationMemory.getIfAvailable());
+                conversationMemory);
     }
 
     @Bean
     public QuestionClassifierNodeExecutor questionClassifierNodeExecutor(ModelService modelService,
-                                                                          ObjectProvider<PromptTemplateService> promptTemplateService) {
-        return new QuestionClassifierNodeExecutor(modelService, promptTemplateService.getIfAvailable());
+                                                                          ObjectProvider<PromptTemplateService> promptTemplateService,
+                                                                          MemoryManager memoryManager) {
+        return new QuestionClassifierNodeExecutor(modelService, promptTemplateService.getIfAvailable(), memoryManager);
     }
 
     @Bean
-    public ParameterExtractorNodeExecutor parameterExtractorNodeExecutor(ModelService modelService) {
-        return new ParameterExtractorNodeExecutor(modelService);
+    public ParameterExtractorNodeExecutor parameterExtractorNodeExecutor(ModelService modelService,
+                                                                          MemoryManager memoryManager) {
+        return new ParameterExtractorNodeExecutor(modelService, memoryManager);
     }
 
     @Bean
-    public AgentNodeExecutor agentNodeExecutor(io.github.aigoodle.agent.service.AgentService agentService) {
-        return new AgentNodeExecutor(agentService);
+    public AgentNodeExecutor agentNodeExecutor(io.github.aigoodle.agent.runtime.AgentRuntime agentRuntime) {
+        return new AgentNodeExecutor(agentRuntime);
     }
 
     // ---- optional: knowledge-based nodes ----
@@ -166,8 +168,10 @@ public class SpringAgentWorkflowAutoConfiguration {
         @Bean
         @ConditionalOnBean(io.github.aigoodle.tool.ToolRegistry.class)
         public io.github.aigoodle.workflow.node.builtin.ToolNodeExecutor toolNodeExecutor(
-                io.github.aigoodle.tool.ToolRegistry toolRegistry) {
-            return new io.github.aigoodle.workflow.node.builtin.ToolNodeExecutor(toolRegistry);
+                io.github.aigoodle.tool.ToolRegistry toolRegistry,
+                io.github.aigoodle.tool.execution.ToolExecutionGateway executionGateway) {
+            return new io.github.aigoodle.workflow.node.builtin.ToolNodeExecutor(
+                    toolRegistry, executionGateway);
         }
     }
 

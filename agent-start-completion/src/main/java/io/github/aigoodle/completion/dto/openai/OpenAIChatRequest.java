@@ -42,6 +42,11 @@ public class OpenAIChatRequest {
     @JsonProperty("max_tokens")
     private Integer maxTokens;
 
+    /** Agent execution deadline extension; ignored for workflow-only applications. */
+    @JsonProperty("timeout_ms")
+    @JsonAlias({"timeoutMillis"})
+    private Long timeoutMillis;
+
     @JsonProperty("top_p")
     private Double topP;
 

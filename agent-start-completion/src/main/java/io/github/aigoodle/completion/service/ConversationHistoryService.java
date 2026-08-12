@@ -1,8 +1,9 @@
 package io.github.aigoodle.completion.service;
 
-import io.github.aigoodle.agent.api.AgentMessage;
 import io.github.aigoodle.agent.entity.ConversationEntity;
-import io.github.aigoodle.agent.memory.AgentMemory;
+import io.github.aigoodle.memory.MemoryItem;
+import io.github.aigoodle.memory.MemoryManager;
+import io.github.aigoodle.memory.MemoryRole;
 import io.github.aigoodle.agent.service.ConversationService;
 import io.github.aigoodle.common.exception.AgentException;
 import io.github.aigoodle.completion.support.AppAccessResolver;
@@ -21,12 +22,12 @@ import java.util.Objects;
 public class ConversationHistoryService {
 
     private final ObjectProvider<ConversationService> conversationServices;
-    private final ObjectProvider<AgentMemory> agentMemories;
+    private final ObjectProvider<MemoryManager> memoryManagers;
 
     public ConversationHistoryService(ObjectProvider<ConversationService> conversationServices,
-                                      ObjectProvider<AgentMemory> agentMemories) {
+                                      ObjectProvider<MemoryManager> memoryManagers) {
         this.conversationServices = conversationServices;
-        this.agentMemories = agentMemories;
+        this.memoryManagers = memoryManagers;
     }
 
     public List<Map<String, Object>> conversations(String appId, int limit) {
@@ -34,7 +35,7 @@ public class ConversationHistoryService {
         if (conversationService == null) {
             return List.of();
         }
-        AgentMemory memory = agentMemories.getIfAvailable();
+        MemoryManager memory = memoryManagers.getIfAvailable();
         return conversationService.listByApp(appId).stream()
                 .limit(limit)
                 .map(conversation -> toConversationView(conversation, memory))
@@ -45,17 +46,20 @@ public class ConversationHistoryService {
                                               String conversationId,
                                               int limit) {
         verifyOwnership(appId, conversationId);
-        AgentMemory memory = agentMemories.getIfAvailable();
+        MemoryManager memory = memoryManagers.getIfAvailable();
         if (memory == null) {
             return List.of();
         }
-        return memory.load(conversationId, limit).stream()
+        ConversationService conversationService = conversationServices.getIfAvailable();
+        if (conversationService == null) return List.of();
+        ConversationEntity conversation = conversationService.require(conversationId);
+        return memory.history(conversation.getTenantId(), appId, conversationId, limit).stream()
                 .map(ConversationHistoryService::toMessageView)
                 .toList();
     }
 
     private Map<String, Object> toConversationView(
-            ConversationEntity conversation, AgentMemory memory) {
+            ConversationEntity conversation, MemoryManager memory) {
         Map<String, Object> view = new LinkedHashMap<>();
         view.put("conversationId", conversation.getId());
         view.put("name", conversation.getName());
@@ -67,14 +71,14 @@ public class ConversationHistoryService {
         return view;
     }
 
-    private static Map<String, Object> toMessageView(AgentMessage message) {
+    private static Map<String, Object> toMessageView(MemoryItem message) {
         Map<String, Object> view = new LinkedHashMap<>();
         view.put("role", message.role() == null ? null : message.role().name());
         view.put("content", message.content());
         return view;
     }
 
-    private String firstMessageOf(ConversationEntity conversation, AgentMemory memory) {
+    private String firstMessageOf(ConversationEntity conversation, MemoryManager memory) {
         if (conversation.getSummary() != null && !conversation.getSummary().isBlank()) {
             return conversation.getSummary();
         }
@@ -82,9 +86,10 @@ public class ConversationHistoryService {
             return conversation.getName();
         }
         try {
-            return memory.load(conversation.getId(), 20).stream()
-                    .filter(message -> message.role() == AgentMessage.Role.USER)
-                    .map(AgentMessage::content)
+            return memory.history(conversation.getTenantId(), conversation.getAppId(),
+                            conversation.getId(), 20).stream()
+                    .filter(message -> message.role() == MemoryRole.USER)
+                    .map(MemoryItem::content)
                     .findFirst()
                     .orElse(conversation.getName());
         } catch (RuntimeException memoryFailure) {
