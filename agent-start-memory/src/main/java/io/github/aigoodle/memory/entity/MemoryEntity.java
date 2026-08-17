@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("agent_memories")
+@TableName("goodle_memories")
 public class MemoryEntity extends BaseEntity {
     private String ownerId;
     private String conversationId;

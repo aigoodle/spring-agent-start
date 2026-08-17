@@ -58,6 +58,7 @@ spring-agent:
   web:
     # CORS wide open by default so the local vite dev server can hit it.
     allowed-origins: ["*"]
+    base-path: "/agent-start"
   model:
     encryption-secret: ${AGENT_SECRET:demo-secret-change-me}
   knowledge:

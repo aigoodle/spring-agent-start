@@ -1,5 +1,5 @@
 -- ============================================================================
--- Migration V1.5 · document_ingest_queue table
+-- Migration V1.5 · goodle_document_ingest_queue table
 -- ----------------------------------------------------------------------------
 -- Adds the sidecar table backing the async knowledge-ingest pipeline
 -- (opt-in via spring-agent.knowledge.async.enabled=true). Presence of a row
@@ -7,7 +7,7 @@
 -- INDEXING) is still being processed by the worker; the row is deleted once
 -- ingestion completes.
 --
--- Kept separate from `documents` so multi-MB raw_text blobs don't come back
+-- Kept separate from `goodle_documents` so multi-MB raw_text blobs don't come back
 -- on the card-grid list query.
 --
 -- Idempotent — safe to run twice.
@@ -15,7 +15,7 @@
 
 BEGIN;
 
-CREATE TABLE IF NOT EXISTS document_ingest_queue (
+CREATE TABLE IF NOT EXISTS goodle_document_ingest_queue (
     document_id VARCHAR(64) NOT NULL,
     dataset_id  VARCHAR(64) NOT NULL,
     tenant_id   VARCHAR(64) NOT NULL DEFAULT 'default',
@@ -27,6 +27,6 @@ CREATE TABLE IF NOT EXISTS document_ingest_queue (
     updated_at  TIMESTAMP,
     PRIMARY KEY (document_id)
 );
-CREATE INDEX IF NOT EXISTS idx_ingest_queue_dataset ON document_ingest_queue (dataset_id);
+CREATE INDEX IF NOT EXISTS idx_ingest_queue_dataset ON goodle_document_ingest_queue (dataset_id);
 
 COMMIT;

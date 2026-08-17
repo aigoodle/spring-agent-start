@@ -1,18 +1,18 @@
 -- agent-start-model schema (portable across H2 and MySQL).
 -- Dify-parity 6-table model layer:
---   agent_model_provider          -- provider definitions (DB-driven, seeded from Java built-ins)
---   agent_predefined_model        -- provider catalog (DB-driven, seeded)
---   agent_provider_credential     -- tenant's saved credentials
---   agent_model                   -- tenant's CUSTOM-registered models (with overrides)
---   agent_provider_model_setting  -- per-model enable/disable per tenant (missing row = enabled, Dify semantics)
---   agent_tenant_default_model    -- tenant default per model_type
+--   goodle_model_provider          -- provider definitions (DB-driven, seeded from Java built-ins)
+--   goodle_predefined_model        -- provider catalog (DB-driven, seeded)
+--   goodle_provider_credential     -- tenant's saved credentials
+--   goodle_model                   -- tenant's CUSTOM-registered models (with overrides)
+--   goodle_provider_model_setting  -- per-model enable/disable per tenant (missing row = enabled, Dify semantics)
+--   goodle_tenant_default_model    -- tenant default per model_type
 
 -- Provider definitions. Rows with source='builtin' are seeded from Java ModelProvider
 -- beans at startup — providing the Maven-loaded default catalog. Rows with
 -- source='external'|'custom' can be added by other modules (via seeder callbacks
 -- or admin UI) without touching Java code — supporting the "extend without redeploy"
 -- flow. tenant_id='system' = global; tenant_id=<xxx> = tenant-private definition.
-CREATE TABLE IF NOT EXISTS agent_model_provider (
+CREATE TABLE IF NOT EXISTS goodle_model_provider (
     id                             VARCHAR(64)  NOT NULL,
     tenant_id                      VARCHAR(64)  NOT NULL DEFAULT 'system',
     name                           VARCHAR(255) NOT NULL,   -- e.g. 'openai', 'langgenius/tongyi/tongyi'
@@ -33,14 +33,14 @@ CREATE TABLE IF NOT EXISTS agent_model_provider (
     updated_at                     TIMESTAMP,
     PRIMARY KEY (id)
 );
-CREATE INDEX IF NOT EXISTS idx_model_provider_tenant_name ON agent_model_provider (tenant_id, name);
+CREATE INDEX IF NOT EXISTS idx_model_provider_tenant_name ON goodle_model_provider (tenant_id, name);
 
 -- Predefined model catalog — shipped by the provider (via manifest / Java seed /
 -- external module). Read-only "what's available"; tenant selections are elsewhere.
-CREATE TABLE IF NOT EXISTS agent_predefined_model (
+CREATE TABLE IF NOT EXISTS goodle_predefined_model (
     id                VARCHAR(64)  NOT NULL,
     tenant_id         VARCHAR(64)  NOT NULL DEFAULT 'system',  -- 'system' = global; a tenant may add its own predefined entries
-    provider_name     VARCHAR(255) NOT NULL,   -- FK to agent_model_provider.name
+    provider_name     VARCHAR(255) NOT NULL,   -- FK to goodle_model_provider.name
     model             VARCHAR(255) NOT NULL,   -- e.g. 'gpt-4o'
     label             VARCHAR(255) NOT NULL,
     model_type        VARCHAR(32)  NOT NULL,
@@ -53,10 +53,10 @@ CREATE TABLE IF NOT EXISTS agent_predefined_model (
     updated_at        TIMESTAMP,
     PRIMARY KEY (id)
 );
-CREATE INDEX IF NOT EXISTS idx_predef_provider_type ON agent_predefined_model (provider_name, model_type);
-CREATE INDEX IF NOT EXISTS idx_predef_tenant_provider ON agent_predefined_model (tenant_id, provider_name);
+CREATE INDEX IF NOT EXISTS idx_predef_provider_type ON goodle_predefined_model (provider_name, model_type);
+CREATE INDEX IF NOT EXISTS idx_predef_tenant_provider ON goodle_predefined_model (tenant_id, provider_name);
 
-CREATE TABLE IF NOT EXISTS agent_provider_credential (
+CREATE TABLE IF NOT EXISTS goodle_provider_credential (
     id               VARCHAR(64)  NOT NULL,
     tenant_id        VARCHAR(64)  NOT NULL DEFAULT 'default',
     provider_name    VARCHAR(128) NOT NULL,
@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS agent_provider_credential (
 -- overrides (dedicated apiKey, self-hosted baseUrl, Volcengine endpointId,
 -- non-standard dimensions). Predefined models discovered from vendor listing
 -- are NOT saved here (Dify-parity: refresh is display-only).
-CREATE TABLE IF NOT EXISTS agent_model (
+CREATE TABLE IF NOT EXISTS goodle_model (
     id               VARCHAR(64)  NOT NULL,
     tenant_id        VARCHAR(64)  NOT NULL DEFAULT 'default',
     provider_name    VARCHAR(128) NOT NULL,
@@ -80,8 +80,8 @@ CREATE TABLE IF NOT EXISTS agent_model (
     model_type       VARCHAR(32)  NOT NULL,
     credential_id    VARCHAR(64),
     encrypted_config TEXT,
-    enabled          BOOLEAN      NOT NULL DEFAULT TRUE,  -- DEPRECATED: enable/disable moved to agent_provider_model_setting
-    is_default       BOOLEAN      NOT NULL DEFAULT FALSE, -- DEPRECATED: defaults moved to agent_tenant_default_model
+    enabled          BOOLEAN      NOT NULL DEFAULT TRUE,  -- DEPRECATED: enable/disable moved to goodle_provider_model_setting
+    is_default       BOOLEAN      NOT NULL DEFAULT FALSE, -- DEPRECATED: defaults moved to goodle_tenant_default_model
     created_at       TIMESTAMP,
     updated_at       TIMESTAMP,
     PRIMARY KEY (id)
@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS agent_model (
 -- Enable/disable per (tenant, provider, model, model_type). Missing row means
 -- ENABLED (Dify convention) — so a freshly-configured provider gets every
 -- predefined model enabled without needing to insert 100 rows.
-CREATE TABLE IF NOT EXISTS agent_provider_model_setting (
+CREATE TABLE IF NOT EXISTS goodle_provider_model_setting (
     id                     VARCHAR(64)  NOT NULL,
     tenant_id              VARCHAR(64)  NOT NULL DEFAULT 'default',
     provider_name          VARCHAR(128) NOT NULL,
@@ -103,10 +103,10 @@ CREATE TABLE IF NOT EXISTS agent_provider_model_setting (
     PRIMARY KEY (id)
 );
 CREATE INDEX IF NOT EXISTS idx_setting_lookup
-    ON agent_provider_model_setting (tenant_id, provider_name, model_name, model_type);
+    ON goodle_provider_model_setting (tenant_id, provider_name, model_name, model_type);
 
 -- Tenant default per model_type (Dify-parity tenant_default_models).
-CREATE TABLE IF NOT EXISTS agent_tenant_default_model (
+CREATE TABLE IF NOT EXISTS goodle_tenant_default_model (
     id             VARCHAR(64)  NOT NULL,
     tenant_id      VARCHAR(64)  NOT NULL DEFAULT 'default',
     provider_name  VARCHAR(128) NOT NULL,
@@ -116,14 +116,14 @@ CREATE TABLE IF NOT EXISTS agent_tenant_default_model (
     updated_at     TIMESTAMP,
     PRIMARY KEY (id)
 );
-CREATE INDEX IF NOT EXISTS idx_default_tenant_type ON agent_tenant_default_model (tenant_id, model_type);
+CREATE INDEX IF NOT EXISTS idx_default_tenant_type ON goodle_tenant_default_model (tenant_id, model_type);
 
-CREATE INDEX IF NOT EXISTS idx_agent_model_tenant_type ON agent_model (tenant_id, model_type);
-CREATE INDEX IF NOT EXISTS idx_agent_cred_tenant_provider ON agent_provider_credential (tenant_id, provider_name);
+CREATE INDEX IF NOT EXISTS idx_agent_model_tenant_type ON goodle_model (tenant_id, model_type);
+CREATE INDEX IF NOT EXISTS idx_agent_cred_tenant_provider ON goodle_provider_credential (tenant_id, provider_name);
 
 -- Reusable prompt templates: text with {{#var#}} placeholders that any agent or
 -- workflow LLM node can reference. Dify's "prompt template" concept.
-CREATE TABLE IF NOT EXISTS agent_prompt_template (
+CREATE TABLE IF NOT EXISTS goodle_prompt_template (
     id           VARCHAR(64)  NOT NULL,
     tenant_id    VARCHAR(64)  NOT NULL DEFAULT 'default',
     name         VARCHAR(255) NOT NULL,
@@ -136,4 +136,4 @@ CREATE TABLE IF NOT EXISTS agent_prompt_template (
     PRIMARY KEY (id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_prompt_tenant_category ON agent_prompt_template (tenant_id, category);
+CREATE INDEX IF NOT EXISTS idx_prompt_tenant_category ON goodle_prompt_template (tenant_id, category);

@@ -12,7 +12,7 @@ import lombok.EqualsAndHashCode;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("tags")
+@TableName("goodle_tags")
 public class TagEntity extends BaseEntity {
 
     /** {@code app} / {@code knowledge}. */

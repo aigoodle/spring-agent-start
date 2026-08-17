@@ -9,13 +9,21 @@ import io.github.aigoodle.model.provider.ModelParameterRule;
 import io.github.aigoodle.model.provider.ModelProvider;
 import io.github.aigoodle.model.provider.PredefinedModel;
 import io.github.aigoodle.model.provider.RemoteModel;
+import io.github.aigoodle.web.dto.model.CatalogModelView;
+import io.github.aigoodle.web.dto.model.CredentialFieldView;
+import io.github.aigoodle.web.dto.model.GroupedModelView;
+import io.github.aigoodle.web.dto.model.GroupedProviderView;
+import io.github.aigoodle.web.dto.model.ParameterRuleView;
+import io.github.aigoodle.web.dto.model.ProviderCredentialView;
+import io.github.aigoodle.web.dto.model.ProviderDeclarationView;
+import io.github.aigoodle.web.dto.model.RemoteModelView;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Converts model-domain objects into the stable map shapes exposed by the web API.
+ * Converts model-domain objects into strongly typed views exposed by the web API.
  *
  * <p>The mapper is deliberately stateless: tenant-aware enrichment and persistence
  * lookups belong to the controller-facing assembler, while this class only translates
@@ -59,98 +67,98 @@ public final class ModelViewMapper {
         return definition;
     }
 
-    public static Map<String, Object> toGroupedProviderView(
-            ProviderDefinitionEntity definition, List<Map<String, Object>> models) {
-        Map<String, Object> view = new LinkedHashMap<>();
-        view.put("id", definition.getName());
-        view.put("provider", definition.getName());
-        view.put("label", definition.getLabel());
-        view.put("description", definition.getDescription());
-
-        Map<String, Object> declaration = new LinkedHashMap<>();
-        declaration.put("icon", definition.getIcon());
-        declaration.put("svg_icon", definition.getSvgIcon());
-        view.put("declaration", declaration);
-        view.put("modelList", models);
+    public static GroupedProviderView toGroupedProviderView(
+            ProviderDefinitionEntity definition, List<GroupedModelView> models) {
+        GroupedProviderView view = new GroupedProviderView();
+        view.setId(definition.getName());
+        view.setProvider(definition.getName());
+        view.setLabel(definition.getLabel());
+        view.setDescription(definition.getDescription());
+        ProviderDeclarationView declaration = new ProviderDeclarationView();
+        declaration.setIcon(definition.getIcon());
+        declaration.setSvgIcon(definition.getSvgIcon());
+        view.setDeclaration(declaration);
+        view.setModelList(models);
         return view;
     }
 
-    public static Map<String, Object> toGroupedModelView(
+    public static GroupedModelView toGroupedModelView(
             String providerName, String modelName, ModelType modelType) {
-        Map<String, Object> view = new LinkedHashMap<>();
-        view.put("id", providerName + "::" + modelName + "::" + modelType.name());
-        view.put("providerName", providerName);
-        view.put("modelName", modelName);
-        view.put("modelType", modelType.name());
+        GroupedModelView view = new GroupedModelView();
+        view.setId(providerName + "::" + modelName + "::" + modelType.name());
+        view.setProviderName(providerName);
+        view.setModelName(modelName);
+        view.setModelType(modelType.name());
         return view;
     }
 
-    public static Map<String, Object> toCredentialView(
+    public static ProviderCredentialView toCredentialView(
             ModelProvider provider, ProviderCredentialEntity credential) {
-        Map<String, Object> view = new LinkedHashMap<>();
-        view.put("providerName", provider.getName());
-        view.put("configured", credential != null);
+        ProviderCredentialView view = new ProviderCredentialView();
+        view.setProviderName(provider.getName());
+        view.setConfigured(credential != null);
         if (credential != null) {
-            view.put("credentialId", credential.getId());
-            view.put("credentialName", credential.getCredentialName());
+            view.setCredentialId(credential.getId());
+            view.setCredentialName(credential.getCredentialName());
         }
         return view;
     }
 
-    public static Map<String, Object> toCredentialFieldView(CredentialField field) {
-        Map<String, Object> view = new LinkedHashMap<>();
-        view.put("name", field.getName());
-        view.put("label", field.getLabel());
-        view.put("type", field.getType());
-        view.put("required", field.isRequired());
-        view.put("secret", field.isSecret());
-        view.put("defaultValue", field.getDefaultValue());
-        view.put("placeholder", field.getPlaceholder());
+    public static CredentialFieldView toCredentialFieldView(CredentialField field) {
+        CredentialFieldView view = new CredentialFieldView();
+        view.setName(field.getName());
+        view.setLabel(field.getLabel());
+        view.setType(field.getType());
+        view.setRequired(field.isRequired());
+        view.setSecret(field.isSecret());
+        view.setDefaultValue(field.getDefaultValue());
+        view.setPlaceholder(field.getPlaceholder());
         return view;
     }
 
-    public static Map<String, Object> toPredefinedModelView(PredefinedModel model) {
-        Map<String, Object> view = new LinkedHashMap<>();
-        view.put("model", model.getModel());
-        view.put("label", model.getLabel());
-        view.put("modelType", model.getModelType());
-        view.put("features", model.getFeatures());
-        view.put("contextLength", model.getContextLength());
-        view.put("dimensions", model.getDimensions());
+    public static CatalogModelView toPredefinedModelView(PredefinedModel model) {
+        CatalogModelView view = new CatalogModelView();
+        view.setModel(model.getModel());
+        view.setLabel(model.getLabel());
+        view.setModelType(model.getModelType());
+        view.setFeatures(model.getFeatures());
+        view.setContextLength(model.getContextLength());
+        view.setDimensions(model.getDimensions());
         if (model.getParameterRules() != null && !model.getParameterRules().isEmpty()) {
-            view.put("parameterRules", model.getParameterRules().stream()
+            view.setParameterRules(model.getParameterRules().stream()
                     .map(ModelViewMapper::toParameterRuleView)
                     .toList());
         }
         return view;
     }
 
-    public static Map<String, Object> toParameterRuleView(ModelParameterRule rule) {
-        Map<String, Object> view = new LinkedHashMap<>();
-        view.put("name", rule.getName());
-        view.put("label", rule.getLabel());
-        view.put("type", rule.getType());
-        view.put("min", rule.getMin());
-        view.put("max", rule.getMax());
-        view.put("step", rule.getStep());
-        view.put("precision", rule.getPrecision());
-        view.put("defaultValue", rule.getDefaultValue());
-        view.put("placeholder", rule.getPlaceholder());
-        view.put("help", rule.getHelp());
-        view.put("required", rule.isRequired());
+    public static ParameterRuleView toParameterRuleView(ModelParameterRule rule) {
+        ParameterRuleView view = new ParameterRuleView();
+        view.setName(rule.getName());
+        view.setLabel(rule.getLabel());
+        view.setType(rule.getType());
+        view.setMin(rule.getMin());
+        view.setMax(rule.getMax());
+        view.setStep(rule.getStep());
+        view.setPrecision(rule.getPrecision());
+        view.setDefaultValue(rule.getDefaultValue());
+        view.setPlaceholder(rule.getPlaceholder());
+        view.setHelp(rule.getHelp());
+        view.setRequired(rule.isRequired());
         return view;
     }
 
-    public static Map<String, Object> toRemoteModelView(RemoteModel model) {
-        Map<String, Object> view = new LinkedHashMap<>();
-        view.put("modelId", model.getModelId());
-        view.put("label", model.getLabel());
-        view.put("modelType", model.getModelType());
-        view.put("contextLength", model.getContextLength());
-        view.put("dimensions", model.getDimensions());
-        view.put("features", model.getFeatures());
-        view.put("ownedBy", model.getOwnedBy());
-        view.put("typeInferred", model.isTypeInferred());
+    public static RemoteModelView toRemoteModelView(RemoteModel model) {
+        RemoteModelView view = new RemoteModelView();
+        view.setModelId(model.getModelId());
+        view.setLabel(model.getLabel());
+        view.setModelType(model.getModelType());
+        view.setContextLength(model.getContextLength());
+        view.setDimensions(model.getDimensions());
+        view.setFeatures(model.getFeatures());
+        view.setOwnedBy(model.getOwnedBy());
+        view.setTypeInferred(model.isTypeInferred());
         return view;
     }
 }
+

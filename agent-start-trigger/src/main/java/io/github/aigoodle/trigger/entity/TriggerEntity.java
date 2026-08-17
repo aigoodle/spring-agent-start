@@ -12,7 +12,7 @@ import lombok.EqualsAndHashCode;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("app_triggers")
+@TableName("goodle_app_triggers")
 public class TriggerEntity extends BaseEntity {
 
     private String name;

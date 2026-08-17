@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.Map;
 
+import static io.github.aigoodle.common.context.UserContextHolder.currentTenantId;
+
 /**
  * Manage the per-app API tokens shown on the "API 访问" tab. Values are minted
  * server-side and returned once — subsequent list/get calls show the full
@@ -39,11 +41,10 @@ public class ApiTokenController {
 
     @PostMapping
     public ApiResponse<ApiTokenEntity> create(@PathVariable String appId,
-                                              @RequestParam(required = false) String tenantId,
                                               @RequestBody(required = false) Map<String, String> body) {
         String name = body == null ? null : body.get("name");
         String type = body == null ? null : body.get("type");
-        return ApiResponse.ok(service.create(appId, tenantId, name, type));
+        return ApiResponse.ok(service.create(appId, currentTenantId(), name, type));
     }
 
     @PostMapping("/{id}/rename")

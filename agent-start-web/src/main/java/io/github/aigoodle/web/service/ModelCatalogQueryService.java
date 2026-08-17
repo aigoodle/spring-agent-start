@@ -13,6 +13,11 @@ import io.github.aigoodle.model.service.ModelService;
 import io.github.aigoodle.model.service.ProviderCredentialService;
 import io.github.aigoodle.model.service.ProviderDefinitionService;
 import io.github.aigoodle.model.service.ProviderModelSettingsService;
+import io.github.aigoodle.web.dto.ProviderView;
+import io.github.aigoodle.web.dto.model.CatalogModelView;
+import io.github.aigoodle.web.dto.model.GroupedModelView;
+import io.github.aigoodle.web.dto.model.GroupedProviderView;
+import io.github.aigoodle.web.dto.model.ModelParametersView;
 import io.github.aigoodle.web.support.ModelProviderViewAssembler;
 import io.github.aigoodle.web.support.ModelViewMapper;
 import org.springframework.stereotype.Service;
@@ -49,7 +54,7 @@ public class ModelCatalogQueryService {
                 modelService, credentialService, definitionService, settingsService);
     }
 
-    public List<Map<String, Object>> providers(String tenantId) {
+    public List<ProviderView> providers(String tenantId) {
         List<ProviderDefinitionEntity> definitions = definitionService.list(tenantId);
         if (!definitions.isEmpty()) {
             return definitions.stream()
@@ -61,7 +66,7 @@ public class ModelCatalogQueryService {
                 .toList();
     }
 
-    public Map<String, Object> provider(String providerName, String tenantId) {
+    public ProviderView provider(String providerName, String tenantId) {
         ProviderDefinitionEntity definition = definitionService.findByName(tenantId, providerName);
         if (definition != null) {
             return viewAssembler.toProviderView(definition, tenantId);
@@ -70,8 +75,8 @@ public class ModelCatalogQueryService {
         return viewAssembler.toProviderView(provider, tenantId);
     }
 
-    public List<Map<String, Object>> catalog(String providerName, String tenantId) {
-        List<Map<String, Object>> catalog = new ArrayList<>();
+    public List<CatalogModelView> catalog(String providerName, String tenantId) {
+        List<CatalogModelView> catalog = new ArrayList<>();
         Map<String, ProviderModelSettingEntity> settings =
                 settingsService.settingIndex(tenantId, providerName);
         Map<ModelType, TenantDefaultModelEntity> defaults = settingsService.listDefaults(tenantId);
@@ -116,8 +121,8 @@ public class ModelCatalogQueryService {
      * (1) list the same model twice and (2) resurrect models the user explicitly
      * switched off (materialized rows carry {@code enabled=true}).
      */
-    public Map<String, List<Map<String, Object>>> groupedModelsByType(String tenantId) {
-        Map<String, List<Map<String, Object>>> providersByModelType = new LinkedHashMap<>();
+    public Map<String, List<GroupedProviderView>> groupedModelsByType(String tenantId) {
+        Map<String, List<GroupedProviderView>> providersByModelType = new LinkedHashMap<>();
         // Seed empty buckets so the UI can render every supported type even when
         // there are no candidates yet (keeps the response shape stable).
         for (ModelType modelType : ModelType.values()) {
@@ -136,7 +141,7 @@ public class ModelCatalogQueryService {
 
             // Per-type buckets keyed by model name so each (provider, model, type)
             // triple produces at most one option.
-            Map<ModelType, Map<String, Map<String, Object>>> modelsByType = new LinkedHashMap<>();
+            Map<ModelType, Map<String, GroupedModelView>> modelsByType = new LinkedHashMap<>();
             Set<String> predefinedTriples = new HashSet<>();
 
             for (PredefinedModelEntity predefinedModel
@@ -172,7 +177,7 @@ public class ModelCatalogQueryService {
             }
 
             // Publish one provider entry per model type with a non-empty bucket.
-            for (Map.Entry<ModelType, Map<String, Map<String, Object>>> entry
+            for (Map.Entry<ModelType, Map<String, GroupedModelView>> entry
                     : modelsByType.entrySet()) {
                 if (entry.getValue().isEmpty()) {
                     continue;
@@ -189,7 +194,7 @@ public class ModelCatalogQueryService {
         return modelName + "::" + (modelType == null ? "" : modelType.name());
     }
 
-    public Map<String, Object> parameters(String modelId) {
+    public ModelParametersView parameters(String modelId) {
         List<ModelParameterRule> rules = modelService.parameterRulesFor(modelId);
         Map<String, Object> storedValues = modelService.getModelProperties(modelId);
         Map<String, Object> configuredValues = new LinkedHashMap<>();
@@ -199,10 +204,11 @@ public class ModelCatalogQueryService {
                 configuredValues.put(rule.getName(), configuredValue);
             }
         }
-        Map<String, Object> view = new LinkedHashMap<>();
-        view.put("rules", rules.stream().map(ModelViewMapper::toParameterRuleView).toList());
-        view.put("parameters", configuredValues);
+        ModelParametersView view = new ModelParametersView();
+        view.setRules(rules.stream().map(ModelViewMapper::toParameterRuleView).toList());
+        view.setParameters(configuredValues);
         return view;
     }
 
 }
+

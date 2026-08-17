@@ -17,6 +17,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.Map;
 
+import static io.github.aigoodle.common.context.UserContextHolder.currentTenantId;
+
 /**
  * Tenant-scoped organisational tags for apps + datasets (Dify parity — the
  * sidebar filter chips). One tag row + many bindings.
@@ -33,13 +35,13 @@ public class TagController {
     }
 
     @GetMapping
-    public ApiResponse<List<TagEntity>> list(@RequestParam(required = false) String tenantId,
-                                             @RequestParam(required = false) String type) {
-        return ApiResponse.ok(service.list(tenantId, type));
+    public ApiResponse<List<TagEntity>> list(@RequestParam(required = false) String type) {
+        return ApiResponse.ok(service.list(currentTenantId(), type));
     }
 
     @PostMapping
     public ApiResponse<TagEntity> create(@RequestBody TagEntity body) {
+        body.setTenantId(currentTenantId());
         return ApiResponse.ok(service.create(body));
     }
 

@@ -1,13 +1,13 @@
 -- ============================================================================
--- Migration V1.8 . split apps behaviour into app_model_configs
+-- Migration V1.8 . split goodle_apps behaviour into goodle_app_model_configs
 -- ----------------------------------------------------------------------------
--- Dify-parity restructure. The apps table becomes a lean catalog row (name /
+-- Dify-parity restructure. The goodle_apps table becomes a lean catalog row (name /
 -- icon / mode / publish state / denormalised model reference); everything
 -- about how the app *behaves* moves into a 1:1 sidecar keyed by app id.
 --
 -- Rationale
---   * Workflow / chatflow apps already carry prompt / model / retrieval
---     inside the workflows.graph blob. Duplicating those on apps forces
+--   * Workflow / chatflow goodle_apps already carry prompt / model / retrieval
+--     inside the goodle_workflows.graph blob. Duplicating those on goodle_apps forces
 --     every save path to keep two copies in sync.
 --   * The agent-list card only needs name / icon / mode / published — so
 --     the drawer payload (prompt / model overrides / tools / retrieval)
@@ -16,17 +16,17 @@
 --     sidecar, without touching the catalog row.
 --
 -- Migration steps
---   1. CREATE TABLE app_model_configs.
+--   1. CREATE TABLE goodle_app_model_configs.
 --   2. Backfill one sidecar row per existing app by copying the columns we
 --      are about to drop.
---   3. Drop the migrated columns from apps (plus the transient
---      apps.model_settings_json from V1.7 which is now app_model_configs.configs).
+--   3. Drop the migrated columns from goodle_apps (plus the transient
+--      goodle_apps.model_settings_json from V1.7 which is now goodle_app_model_configs.configs).
 --
 -- Idempotent: the CREATE TABLE / ADD COLUMN / DROP COLUMN clauses use IF (NOT)
 -- EXISTS so a partial replay is safe.
 -- ============================================================================
 
-CREATE TABLE IF NOT EXISTS app_model_configs (
+CREATE TABLE IF NOT EXISTS goodle_app_model_configs (
     id                                VARCHAR(64) NOT NULL,
     tenant_id                         VARCHAR(64) NOT NULL DEFAULT 'default',
     app_id                            VARCHAR(64) NOT NULL,
@@ -65,11 +65,11 @@ CREATE TABLE IF NOT EXISTS app_model_configs (
     PRIMARY KEY (id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_app_model_config_app ON app_model_configs (app_id);
+CREATE INDEX IF NOT EXISTS idx_app_model_config_app ON goodle_app_model_configs (app_id);
 
 -- Backfill: one sidecar row per app. Uses COALESCE(instructions, pre_prompt)
 -- because early rows filled instructions, later rows filled pre_prompt.
-INSERT INTO app_model_configs (
+INSERT INTO goodle_app_model_configs (
     id, tenant_id, app_id,
     model_provider, model_name,
     configs,
@@ -92,27 +92,27 @@ SELECT
     a.max_iterations, a.memory_enabled, a.memory_window,
     a.dataset_ids_json, a.retrieval_config_json, a.file_upload_json,
     a.created_at, a.updated_at
-FROM apps a
-WHERE NOT EXISTS (SELECT 1 FROM app_model_configs c WHERE c.id = a.id);
+FROM goodle_apps a
+WHERE NOT EXISTS (SELECT 1 FROM goodle_app_model_configs c WHERE c.id = a.id);
 
--- Drop the migrated columns from apps. Kept: id, tenant_id, name, description,
+-- Drop the migrated columns from goodle_apps. Kept: id, tenant_id, name, description,
 -- icon(_background|_type), use_icon_as_answer_icon, mode, status, is_public,
 -- enable_(site|api), api_(rpm|rph), published, workflow_id, model_(name|provider),
 -- created_at, updated_at.
-ALTER TABLE apps DROP COLUMN IF EXISTS instructions;
-ALTER TABLE apps DROP COLUMN IF EXISTS pre_prompt;
-ALTER TABLE apps DROP COLUMN IF EXISTS prompt_type;
-ALTER TABLE apps DROP COLUMN IF EXISTS opening_statement;
-ALTER TABLE apps DROP COLUMN IF EXISTS suggested_questions_json;
-ALTER TABLE apps DROP COLUMN IF EXISTS user_input_form_json;
-ALTER TABLE apps DROP COLUMN IF EXISTS file_upload_json;
-ALTER TABLE apps DROP COLUMN IF EXISTS dataset_ids_json;
-ALTER TABLE apps DROP COLUMN IF EXISTS retrieval_config_json;
-ALTER TABLE apps DROP COLUMN IF EXISTS strategy;
-ALTER TABLE apps DROP COLUMN IF EXISTS tool_names_json;
-ALTER TABLE apps DROP COLUMN IF EXISTS approval_tools_json;
-ALTER TABLE apps DROP COLUMN IF EXISTS delegate_agent_ids_json;
-ALTER TABLE apps DROP COLUMN IF EXISTS max_iterations;
-ALTER TABLE apps DROP COLUMN IF EXISTS memory_enabled;
-ALTER TABLE apps DROP COLUMN IF EXISTS memory_window;
-ALTER TABLE apps DROP COLUMN IF EXISTS model_settings_json;
+ALTER TABLE goodle_apps DROP COLUMN IF EXISTS instructions;
+ALTER TABLE goodle_apps DROP COLUMN IF EXISTS pre_prompt;
+ALTER TABLE goodle_apps DROP COLUMN IF EXISTS prompt_type;
+ALTER TABLE goodle_apps DROP COLUMN IF EXISTS opening_statement;
+ALTER TABLE goodle_apps DROP COLUMN IF EXISTS suggested_questions_json;
+ALTER TABLE goodle_apps DROP COLUMN IF EXISTS user_input_form_json;
+ALTER TABLE goodle_apps DROP COLUMN IF EXISTS file_upload_json;
+ALTER TABLE goodle_apps DROP COLUMN IF EXISTS dataset_ids_json;
+ALTER TABLE goodle_apps DROP COLUMN IF EXISTS retrieval_config_json;
+ALTER TABLE goodle_apps DROP COLUMN IF EXISTS strategy;
+ALTER TABLE goodle_apps DROP COLUMN IF EXISTS tool_names_json;
+ALTER TABLE goodle_apps DROP COLUMN IF EXISTS approval_tools_json;
+ALTER TABLE goodle_apps DROP COLUMN IF EXISTS delegate_agent_ids_json;
+ALTER TABLE goodle_apps DROP COLUMN IF EXISTS max_iterations;
+ALTER TABLE goodle_apps DROP COLUMN IF EXISTS memory_enabled;
+ALTER TABLE goodle_apps DROP COLUMN IF EXISTS memory_window;
+ALTER TABLE goodle_apps DROP COLUMN IF EXISTS model_settings_json;

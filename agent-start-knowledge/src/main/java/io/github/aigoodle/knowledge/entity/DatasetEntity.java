@@ -12,7 +12,7 @@ import lombok.EqualsAndHashCode;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("dataset")
+@TableName("goodle_dataset")
 public class DatasetEntity extends BaseEntity {
 
     private String name;

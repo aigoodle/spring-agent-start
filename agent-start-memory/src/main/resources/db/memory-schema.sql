@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS agent_memories (
+CREATE TABLE IF NOT EXISTS goodle_memories (
     id VARCHAR(64) PRIMARY KEY,
     tenant_id VARCHAR(64) NOT NULL DEFAULT 'default',
     owner_id VARCHAR(64),
@@ -13,5 +13,5 @@ CREATE TABLE IF NOT EXISTS agent_memories (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_agent_memories_scope
-    ON agent_memories (tenant_id, owner_id, conversation_id, tier, created_at);
-CREATE INDEX IF NOT EXISTS idx_agent_memories_expiry ON agent_memories (expires_at);
+    ON goodle_memories (tenant_id, owner_id, conversation_id, tier, created_at);
+CREATE INDEX IF NOT EXISTS idx_agent_memories_expiry ON goodle_memories (expires_at);

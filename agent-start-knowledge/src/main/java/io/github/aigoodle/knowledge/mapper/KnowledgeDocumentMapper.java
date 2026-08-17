@@ -7,9 +7,9 @@ import org.apache.ibatis.annotations.Select;
 
 @Mapper
 public interface KnowledgeDocumentMapper extends BaseMapper<KnowledgeDocumentEntity> {
-    @Select("SELECT parsed_document_json FROM documents WHERE id = #{documentId}")
+    @Select("SELECT parsed_document_json FROM goodle_documents WHERE id = #{documentId}")
     String selectParsedDocumentJson(String documentId);
 
-    @Select("SELECT source_data_base64 FROM documents WHERE id = #{documentId}")
+    @Select("SELECT source_data_base64 FROM goodle_documents WHERE id = #{documentId}")
     String selectSourceDataBase64(String documentId);
 }

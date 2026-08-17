@@ -58,9 +58,9 @@ class JdbcVectorStoreTest {
 
         // vectors landed in the relational table
         Integer rows = jdbc.queryForObject(
-                "SELECT count(*) FROM embeddings WHERE dataset_id = ?", Integer.class, ds.getId());
+                "SELECT count(*) FROM goodle_embeddings WHERE dataset_id = ?", Integer.class, ds.getId());
         assertNotNull(rows);
-        assertTrue(rows > 0, "embeddings should be persisted in embeddings table");
+        assertTrue(rows > 0, "embeddings should be persisted in goodle_embeddings table");
 
         // retrieval works through the persisted store
         List<RetrievedSegment> hits = knowledgeService.retrieve(ds.getId(), "dogs playing fetch");

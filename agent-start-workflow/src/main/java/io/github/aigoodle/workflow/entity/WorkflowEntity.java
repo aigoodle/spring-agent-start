@@ -25,7 +25,7 @@ import lombok.EqualsAndHashCode;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName(value = "workflows", autoResultMap = true)
+@TableName(value = "goodle_workflows", autoResultMap = true)
 public class WorkflowEntity extends BaseEntity {
 
     /**

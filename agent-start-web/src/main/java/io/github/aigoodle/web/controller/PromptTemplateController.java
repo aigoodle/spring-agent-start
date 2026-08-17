@@ -21,6 +21,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.Map;
 
+import static io.github.aigoodle.common.context.UserContextHolder.currentTenantId;
+
 /**
  * REST facade over {@link PromptTemplateService}. Templates can be created, listed by
  * category and rendered inline — powers the frontend prompt library plus the "load
@@ -41,9 +43,8 @@ public class PromptTemplateController {
 
     @GetMapping
     public ApiResponse<List<PromptTemplateEntity>> list(
-            @RequestParam(required = false) String tenantId,
             @RequestParam(required = false) String category) {
-        return ApiResponse.ok(promptTemplateService.list(tenantId, category));
+        return ApiResponse.ok(promptTemplateService.list(currentTenantId(), category));
     }
 
     @GetMapping("/{id}")
@@ -54,7 +55,7 @@ public class PromptTemplateController {
     @PostMapping
     public ApiResponse<PromptTemplateEntity> create(@RequestBody PromptTemplateRequest request) {
         return ApiResponse.ok(promptTemplateService.create(new PromptTemplateDraft(
-                request.getTenantId(), request.getName(), request.getCategory(),
+                currentTenantId(), request.getName(), request.getCategory(),
                 request.getDescription(), request.getContent(), request.getTags())));
     }
 

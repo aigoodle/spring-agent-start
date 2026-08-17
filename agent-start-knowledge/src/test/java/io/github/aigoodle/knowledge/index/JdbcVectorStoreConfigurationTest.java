@@ -9,8 +9,8 @@ class JdbcVectorStoreConfigurationTest {
 
     @Test
     void acceptsSimpleAndSchemaQualifiedTableNames() {
-        assertThat(new JdbcVectorStoreConfiguration("dataset-1", "embeddings").tableName())
-                .isEqualTo("embeddings");
+        assertThat(new JdbcVectorStoreConfiguration("dataset-1", "goodle_embeddings").tableName())
+                .isEqualTo("goodle_embeddings");
         assertThat(new JdbcVectorStoreConfiguration("dataset-1", "agent.embeddings").tableName())
                 .isEqualTo("agent.embeddings");
     }
@@ -26,7 +26,7 @@ class JdbcVectorStoreConfigurationTest {
     @Test
     void requiresADatasetScope() {
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> new JdbcVectorStoreConfiguration(" ", "embeddings"))
+                .isThrownBy(() -> new JdbcVectorStoreConfiguration(" ", "goodle_embeddings"))
                 .withMessage("datasetId must not be blank");
     }
 }

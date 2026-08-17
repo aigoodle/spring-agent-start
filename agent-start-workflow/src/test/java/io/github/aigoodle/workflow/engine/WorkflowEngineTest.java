@@ -2,11 +2,14 @@ package io.github.aigoodle.workflow.engine;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import io.github.aigoodle.common.context.CurrentUser;
+import io.github.aigoodle.common.context.UserContextHolder;
 import io.github.aigoodle.workflow.graph.EdgeDef;
 import io.github.aigoodle.workflow.graph.NodeDef;
 import io.github.aigoodle.workflow.graph.NodeType;
 import io.github.aigoodle.workflow.graph.WorkflowGraph;
 import io.github.aigoodle.workflow.node.NodeExecutor;
+import io.github.aigoodle.workflow.node.NodeResult;
 import io.github.aigoodle.workflow.node.builtin.EndNodeExecutor;
 import io.github.aigoodle.workflow.node.builtin.HttpRequestNodeExecutor;
 import io.github.aigoodle.workflow.node.builtin.IfElseNodeExecutor;
@@ -79,6 +82,38 @@ class WorkflowEngineTest {
         // start, greet, check, endYes
         assertEquals(4, r.getSteps().size());
         assertNotNull(r.getRunId());
+    }
+
+    @Test
+    void capturesCurrentTenantBeforeDispatchingNodesToVirtualThreads() {
+        AtomicReference<String> executedTenant = new AtomicReference<>();
+        NodeExecutor capturingStart = new NodeExecutor() {
+            @Override
+            public NodeType type() {
+                return NodeType.START;
+            }
+
+            @Override
+            public NodeResult execute(NodeDef node,
+                                      io.github.aigoodle.workflow.node.ExecutionContext context) {
+                executedTenant.set(context.getTenantId());
+                return NodeResult.empty();
+            }
+        };
+        WorkflowEngine tenantAwareEngine = new WorkflowEngine(
+                new NodeExecutorRegistry(List.of(capturingStart)));
+        WorkflowGraph graph = new WorkflowGraph();
+        graph.addNode(NodeDef.of("start", NodeType.START));
+
+        CurrentUser user = CurrentUser.builder()
+                .userId("user-1")
+                .tenantId("tenant-a")
+                .build();
+        WorkflowRunResult result = UserContextHolder.callAs(
+                user, () -> tenantAwareEngine.run(graph, Map.of(), null));
+
+        assertTrue(result.isSuccess(), result.getError());
+        assertEquals("tenant-a", executedTenant.get());
     }
 
     @Test

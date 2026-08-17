@@ -17,12 +17,12 @@ class JdbcVectorStoreDeleteTest {
         JdbcVectorStore vectorStore = new JdbcVectorStore(
                 jdbcTemplate,
                 mock(EmbeddingModel.class),
-                new JdbcVectorStoreConfiguration("dataset-1", "embeddings"));
+                new JdbcVectorStoreConfiguration("dataset-1", "goodle_embeddings"));
 
         vectorStore.delete(List.of("document-1", "document-2"));
 
         verify(jdbcTemplate).update(
-                "DELETE FROM embeddings WHERE dataset_id = ? AND id IN (?,?)",
+                "DELETE FROM goodle_embeddings WHERE dataset_id = ? AND id IN (?,?)",
                 "dataset-1", "document-1", "document-2");
     }
 }

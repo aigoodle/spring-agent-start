@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("agent_runs")
+@TableName("goodle_runs")
 public class AgentRunEntity extends BaseEntity {
     private String agentId;
     private String conversationId;

@@ -1,5 +1,5 @@
 -- ============================================================================
--- Migration V1.4 · Add svg_icon column to agent_model_provider
+-- Migration V1.4 · Add svg_icon column to goodle_model_provider
 -- ----------------------------------------------------------------------------
 -- Motivation: the existing `icon` column is a VARCHAR(255) meant for a short
 -- key or an asset URL. User-defined providers registered from the UI want to
@@ -17,5 +17,5 @@
 -- execute XSS even without server-side sanitisation.
 -- ============================================================================
 
-ALTER TABLE agent_model_provider
+ALTER TABLE goodle_model_provider
     ADD COLUMN IF NOT EXISTS svg_icon TEXT;

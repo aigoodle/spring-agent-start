@@ -17,12 +17,10 @@ public final class AppAccessResolver {
 
     public String enforcePathApp(String pathAppId, String authorizationHeader,
                                  boolean debugRun) {
-        if (debugRun) {
-            return pathAppId;
-        }
         ApiTokenEntity token = findToken(authorizationHeader);
         if (token == null) {
-            return pathAppId;
+            throw new AgentException("invalid_api_key",
+                    "缺少或无效的 API Key；控制台调试请使用独立 debug 接口", null);
         }
         if (pathAppId != null && !pathAppId.isBlank()
                 && !pathAppId.equals(token.getAppId())) {

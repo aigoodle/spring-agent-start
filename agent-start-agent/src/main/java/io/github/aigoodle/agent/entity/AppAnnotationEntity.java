@@ -12,7 +12,7 @@ import lombok.EqualsAndHashCode;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("app_annotations")
+@TableName("goodle_app_annotations")
 public class AppAnnotationEntity extends BaseEntity {
 
     /** Identifier of the application that owns this annotation. */

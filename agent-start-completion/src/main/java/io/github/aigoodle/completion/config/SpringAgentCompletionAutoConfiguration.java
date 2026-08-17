@@ -2,6 +2,8 @@ package io.github.aigoodle.completion.config;
 
 import io.github.aigoodle.agent.service.ApiTokenService;
 import io.github.aigoodle.completion.support.AppAccessResolver;
+import io.github.aigoodle.completion.support.ChatAccessPolicy;
+import io.github.aigoodle.completion.support.DenyChatAccessPolicy;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -40,5 +42,11 @@ public class SpringAgentCompletionAutoConfiguration {
     public AppAccessResolver appAccessResolver(
             ObjectProvider<ApiTokenService> apiTokenServices) {
         return new AppAccessResolver(apiTokenServices);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(ChatAccessPolicy.class)
+    public ChatAccessPolicy chatAccessPolicy() {
+        return new DenyChatAccessPolicy();
     }
 }

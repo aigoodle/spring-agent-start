@@ -20,7 +20,7 @@ import lombok.EqualsAndHashCode;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("apps")
+@TableName("goodle_apps")
 public class AgentEntity extends BaseEntity {
 
     private String name;

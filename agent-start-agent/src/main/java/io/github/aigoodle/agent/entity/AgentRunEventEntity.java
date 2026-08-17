@@ -7,7 +7,7 @@ import lombok.EqualsAndHashCode;
 
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("agent_run_events")
+@TableName("goodle_run_events")
 public class AgentRunEventEntity extends BaseEntity {
     private String runId;
     private Long sequenceNo;

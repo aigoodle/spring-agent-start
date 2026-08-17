@@ -63,8 +63,6 @@ public class SpringAgentWebAutoConfiguration {
      * paths from colliding with the host's own routes. Hard-coded — the value
      * only exists to be unique, not to be tuned.
      */
-    public static final String CONTROLLER_PATH_PREFIX = "/agent-start";
-
     @Bean
     @ConditionalOnMissingBean
     public GlobalExceptionHandler springAgentGlobalExceptionHandler() {
@@ -92,12 +90,15 @@ public class SpringAgentWebAutoConfiguration {
 
         @Bean
         @ConditionalOnMissingBean(name = "springAgentPathPrefixConfigurer")
-        public WebMvcConfigurer springAgentPathPrefixConfigurer() {
+        public WebMvcConfigurer springAgentPathPrefixConfigurer(SpringAgentWebProperties properties) {
             return new WebMvcConfigurer() {
                 @Override
                 public void configurePathMatch(PathMatchConfigurer configurer) {
-                    configurer.addPathPrefix(CONTROLLER_PATH_PREFIX,
-                            c -> c.getPackageName().startsWith("io.github.aigoodle.web.controller"));
+                    String basePath = normalizedBasePath(properties.getBasePath());
+                    if (!basePath.isEmpty()) {
+                        configurer.addPathPrefix(basePath,
+                                c -> c.getPackageName().startsWith("io.github.aigoodle.web.controller"));
+                    }
                 }
             };
         }
@@ -139,13 +140,16 @@ public class SpringAgentWebAutoConfiguration {
 
         @Bean
         @ConditionalOnMissingBean(name = "springAgentReactivePathPrefixConfigurer")
-        public WebFluxConfigurer springAgentReactivePathPrefixConfigurer() {
+        public WebFluxConfigurer springAgentReactivePathPrefixConfigurer(SpringAgentWebProperties properties) {
             return new WebFluxConfigurer() {
                 @Override
                 public void configurePathMatching(
                         org.springframework.web.reactive.config.PathMatchConfigurer configurer) {
-                    configurer.addPathPrefix(CONTROLLER_PATH_PREFIX,
-                            c -> c.getPackageName().startsWith("io.github.aigoodle.web.controller"));
+                    String basePath = normalizedBasePath(properties.getBasePath());
+                    if (!basePath.isEmpty()) {
+                        configurer.addPathPrefix(basePath,
+                                c -> c.getPackageName().startsWith("io.github.aigoodle.web.controller"));
+                    }
                 }
             };
         }
@@ -171,5 +175,19 @@ public class SpringAgentWebAutoConfiguration {
                 }
             };
         }
+    }
+
+    static String normalizedBasePath(String basePath) {
+        if (basePath == null || basePath.isBlank() || "/".equals(basePath.trim())) {
+            return "";
+        }
+        String normalized = basePath.trim();
+        if (!normalized.startsWith("/")) {
+            normalized = "/" + normalized;
+        }
+        while (normalized.endsWith("/") && normalized.length() > 1) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized;
     }
 }

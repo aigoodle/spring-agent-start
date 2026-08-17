@@ -21,7 +21,7 @@ import lombok.EqualsAndHashCode;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("agent_provider_credential")
+@TableName("goodle_provider_credential")
 public class ProviderCredentialEntity extends BaseEntity {
 
     private String providerName;

@@ -53,6 +53,12 @@ public class CurrentUser implements Serializable {
     /** 可选：来源应用 id（api-key 兑换出的上下文场景才有值）。 */
     private String appId;
 
+    /** Authentication mechanism used to establish this trusted context. */
+    private PrincipalType principalType;
+
+    /** Fine-grained permissions already granted by the host authentication layer. */
+    private Set<String> scopes;
+
     /** 可选：角色列表 —— 使用方鉴权后的原始角色标记，spring-agent-start 内部不解释含义。 */
     private Set<String> roles;
 

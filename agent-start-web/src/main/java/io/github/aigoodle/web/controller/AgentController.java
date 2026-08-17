@@ -24,6 +24,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.Map;
 
+import static io.github.aigoodle.common.context.UserContextHolder.currentTenantId;
+
 /** Agent application metadata, configuration and tool-discovery endpoints. */
 @RestController
 @ConditionalOnBean(AgentService.class)
@@ -44,8 +46,8 @@ public class AgentController {
     }
 
     @GetMapping
-    public ApiResponse<List<AgentEntity>> list(@RequestParam(required = false) String tenantId) {
-        return ApiResponse.ok(applicationCoordinator.list(tenantId));
+    public ApiResponse<List<AgentEntity>> list() {
+        return ApiResponse.ok(applicationCoordinator.list(currentTenantId()));
     }
 
     @GetMapping("/{id}")
@@ -61,12 +63,14 @@ public class AgentController {
 
     @PostMapping
     public ApiResponse<AgentEntity> create(@RequestBody CreateAgentRequest request) {
+        request.setTenantId(currentTenantId());
         return ApiResponse.ok(applicationCoordinator.create(request));
     }
 
     @PutMapping("/{id}")
     public ApiResponse<AgentEntity> update(@PathVariable String id,
                                            @RequestBody CreateAgentRequest request) {
+        request.setTenantId(currentTenantId());
         return ApiResponse.ok(applicationCoordinator.update(id, request));
     }
 

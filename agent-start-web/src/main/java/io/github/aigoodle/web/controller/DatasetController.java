@@ -23,6 +23,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+import static io.github.aigoodle.common.context.UserContextHolder.currentTenantId;
+
 /** Dataset metadata and retrieval endpoints. */
 @RestController
 @ConditionalOnBean(KnowledgeService.class)
@@ -38,8 +40,8 @@ public class DatasetController {
     }
 
     @GetMapping
-    public ApiResponse<List<DatasetEntity>> list(@RequestParam(required = false) String tenantId) {
-        return ApiResponse.ok(datasetService.list(tenantId));
+    public ApiResponse<List<DatasetEntity>> list() {
+        return ApiResponse.ok(datasetService.list(currentTenantId()));
     }
 
     @GetMapping("/{id}")
@@ -49,6 +51,7 @@ public class DatasetController {
 
     @PostMapping
     public ApiResponse<DatasetEntity> create(@RequestBody CreateDatasetRequest request) {
+        request.setTenantId(currentTenantId());
         return ApiResponse.ok(datasetService.create(request));
     }
 

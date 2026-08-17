@@ -13,7 +13,7 @@ import lombok.EqualsAndHashCode;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("dataset_query")
+@TableName("goodle_dataset_query")
 public class HitTestingLogEntity extends BaseEntity {
 
     private String datasetId;

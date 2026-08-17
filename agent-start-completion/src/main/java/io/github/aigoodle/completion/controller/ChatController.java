@@ -5,6 +5,8 @@ import io.github.aigoodle.completion.dto.openai.OpenAIChatRequest;
 import io.github.aigoodle.completion.dto.openai.OpenAIChatResponse;
 import io.github.aigoodle.completion.service.AppGenerateService;
 import io.github.aigoodle.completion.service.ConversationHistoryService;
+import io.github.aigoodle.completion.support.ChatAccessContext;
+import io.github.aigoodle.completion.support.ChatAccessPolicy;
 import io.github.aigoodle.completion.support.AppAccessResolver;
 import io.github.aigoodle.completion.support.DifyChatAdapter;
 import io.github.aigoodle.web.common.ApiResponse;
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
@@ -31,6 +34,7 @@ import java.util.concurrent.Executors;
 
 /** Reactive OpenAI/Dify chat facade plus console conversation-history endpoints. */
 @RestController
+@RequestMapping("${spring-agent.web.base-path:/agent-start}")
 @ConditionalOnBean(AppGenerateService.class)
 public class ChatController {
 
@@ -40,13 +44,49 @@ public class ChatController {
     private final AppGenerateService appGenerateService;
     private final ConversationHistoryService conversationHistoryService;
     private final AppAccessResolver appAccessResolver;
+    private final ChatAccessPolicy chatAccessPolicy;
 
     public ChatController(AppGenerateService appGenerateService,
                           AppAccessResolver appAccessResolver,
+                          ChatAccessPolicy chatAccessPolicy,
                           ConversationHistoryService conversationHistoryService) {
         this.appGenerateService = appGenerateService;
         this.conversationHistoryService = conversationHistoryService;
         this.appAccessResolver = appAccessResolver;
+        this.chatAccessPolicy = chatAccessPolicy;
+    }
+
+    @PostMapping(
+            value = "/internal/apps/{appId}/chat/completions",
+            consumes = {MediaType.APPLICATION_JSON_VALUE,
+                    MediaType.APPLICATION_JSON_VALUE + ";charset=UTF-8"},
+            produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.TEXT_EVENT_STREAM_VALUE})
+    public ResponseEntity<?> internalCompletions(
+            @PathVariable String appId,
+            @RequestBody OpenAIChatRequest request) {
+        ChatAccessContext access = chatAccessPolicy.authorizeInternal(appId);
+        request.setDebug(null);
+        request.setWorkflowId(null);
+        request.setAppId(null);
+        return generateOpenAI(access.appId(), request);
+    }
+
+    @PostMapping(
+            value = "/console/apps/{appId}/debug/chat/completions",
+            consumes = {MediaType.APPLICATION_JSON_VALUE,
+                    MediaType.APPLICATION_JSON_VALUE + ";charset=UTF-8"},
+            produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.TEXT_EVENT_STREAM_VALUE})
+    public ResponseEntity<?> debugCompletions(
+            @PathVariable String appId,
+            @RequestHeader(value = "X-Workflow-Id", required = false) String workflowIdHeader,
+            @RequestBody OpenAIChatRequest request) {
+        String workflowId = AppAccessResolver.firstNonBlank(
+                workflowIdHeader, request.getWorkflowId());
+        ChatAccessContext access = chatAccessPolicy.authorizeDebug(appId, workflowId);
+        request.setDebug(workflowId == null);
+        request.setWorkflowId(workflowId);
+        request.setAppId(null);
+        return generateOpenAI(access.appId(), request);
     }
 
     /**
@@ -62,18 +102,13 @@ public class ChatController {
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false)
             String authorizationHeader,
             @RequestBody OpenAIChatRequest request) {
-        String appId = appAccessResolver.requireTokenApp(authorizationHeader);
+        ChatAccessContext access = chatAccessPolicy.authorizeExternal(
+                appAccessResolver.requireTokenApp(authorizationHeader));
         // Public OpenAI-compatible calls may only execute the app's published binding.
         request.setDebug(null);
         request.setWorkflowId(null);
         request.setAppId(null);
-        if (request.streaming()) {
-            return eventStream(appGenerateService.generateStream(appId, request));
-        }
-        Mono<OpenAIChatResponse> response = Mono.fromCallable(
-                        () -> appGenerateService.generateBlocking(appId, request))
-                .subscribeOn(BLOCKING_SCHEDULER);
-        return json(response);
+        return generateOpenAI(access.appId(), request);
     }
 
     @PostMapping(
@@ -171,6 +206,16 @@ public class ChatController {
 
     private static ResponseEntity<?> eventStream(Flux<ServerSentEvent<Object>> stream) {
         return ResponseEntity.ok().contentType(MediaType.TEXT_EVENT_STREAM).body(stream);
+    }
+
+    private ResponseEntity<?> generateOpenAI(String appId, OpenAIChatRequest request) {
+        if (request.streaming()) {
+            return eventStream(appGenerateService.generateStream(appId, request));
+        }
+        Mono<OpenAIChatResponse> response = Mono.fromCallable(
+                        () -> appGenerateService.generateBlocking(appId, request))
+                .subscribeOn(BLOCKING_SCHEDULER);
+        return json(response);
     }
 
     private static ResponseEntity<?> json(Object body) {

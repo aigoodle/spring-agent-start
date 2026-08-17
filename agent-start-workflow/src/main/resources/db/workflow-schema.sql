@@ -1,19 +1,19 @@
 -- agent-start-workflow schema (portable across H2 and MySQL).
 -- Table names aligned with spring-agent-start:
---   workflows       ← was agent_workflow
---   workflow_runs   ← was agent_workflow_run
+--   goodle_workflows       ← was agent_workflow
+--   goodle_workflow_runs   ← was agent_workflow_run
 
--- workflows carries app-scoped drafts + published snapshots (Dify parity).
+-- goodle_workflows carries app-scoped drafts + published snapshots (Dify parity).
 --
 -- Invariant: for a workflow-mode app, exactly one row has {id = app.id,
 -- version = 'draft'} — the mutable working copy. Publishing copies its
 -- graph_json into a *new* row with a fresh id + timestamp-shaped version and
--- points apps.workflow_id at that snapshot; the draft row keeps its id so
+-- points goodle_apps.workflow_id at that snapshot; the draft row keeps its id so
 -- subsequent edits always know where to write.
 --
--- Standalone (app_id = null) workflows still work for the /workflows debug
+-- Standalone (app_id = null) goodle_workflows still work for the /goodle_workflows debug
 -- endpoints so the JSON playground doesn't need an app.
-CREATE TABLE IF NOT EXISTS workflows (
+CREATE TABLE IF NOT EXISTS goodle_workflows (
     id                      VARCHAR(64)  NOT NULL,
     tenant_id               VARCHAR(64)  NOT NULL DEFAULT 'default',
     app_id                  VARCHAR(64),
@@ -35,10 +35,10 @@ CREATE TABLE IF NOT EXISTS workflows (
     PRIMARY KEY (id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_workflow_app ON workflows (app_id, version);
-CREATE INDEX IF NOT EXISTS idx_workflow_tenant ON workflows (tenant_id);
+CREATE INDEX IF NOT EXISTS idx_workflow_app ON goodle_workflows (app_id, version);
+CREATE INDEX IF NOT EXISTS idx_workflow_tenant ON goodle_workflows (tenant_id);
 
-CREATE TABLE IF NOT EXISTS workflow_runs (
+CREATE TABLE IF NOT EXISTS goodle_workflow_runs (
     id              VARCHAR(64) NOT NULL,
     tenant_id       VARCHAR(64) NOT NULL DEFAULT 'default',
     workflow_id     VARCHAR(64),
@@ -54,4 +54,4 @@ CREATE TABLE IF NOT EXISTS workflow_runs (
     PRIMARY KEY (id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_run_workflow ON workflow_runs (workflow_id);
+CREATE INDEX IF NOT EXISTS idx_run_workflow ON goodle_workflow_runs (workflow_id);

@@ -1,7 +1,7 @@
 -- Durable Agent Run state/checkpoints and the standalone layered-memory module.
 -- Idempotent so it can upgrade installations created before these modules existed.
 
-CREATE TABLE IF NOT EXISTS agent_runs (
+CREATE TABLE IF NOT EXISTS goodle_runs (
     id VARCHAR(64) PRIMARY KEY,
     tenant_id VARCHAR(64) NOT NULL DEFAULT 'default',
     agent_id VARCHAR(64) NOT NULL,
@@ -19,13 +19,13 @@ CREATE TABLE IF NOT EXISTS agent_runs (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS event_sequence BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE goodle_runs ADD COLUMN IF NOT EXISTS event_sequence BIGINT NOT NULL DEFAULT 0;
 
-CREATE INDEX IF NOT EXISTS idx_agent_run_agent_created ON agent_runs (agent_id, created_at);
-CREATE INDEX IF NOT EXISTS idx_agent_run_conversation ON agent_runs (conversation_id);
-CREATE INDEX IF NOT EXISTS idx_agent_run_status ON agent_runs (status);
+CREATE INDEX IF NOT EXISTS idx_agent_run_agent_created ON goodle_runs (agent_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_agent_run_conversation ON goodle_runs (conversation_id);
+CREATE INDEX IF NOT EXISTS idx_agent_run_status ON goodle_runs (status);
 
-CREATE TABLE IF NOT EXISTS agent_run_events (
+CREATE TABLE IF NOT EXISTS goodle_run_events (
     id VARCHAR(64) PRIMARY KEY,
     tenant_id VARCHAR(64) NOT NULL DEFAULT 'default',
     run_id VARCHAR(64) NOT NULL,
@@ -38,17 +38,17 @@ CREATE TABLE IF NOT EXISTS agent_run_events (
 );
 
 CREATE INDEX IF NOT EXISTS idx_agent_run_event_stream
-    ON agent_run_events (run_id, sequence_no);
+    ON goodle_run_events (run_id, sequence_no);
 
 -- Existing lifecycle events may predate event_sequence. Continue after the largest
 -- persisted sequence so the CAS allocator never reuses an event number.
-UPDATE agent_runs r
+UPDATE goodle_runs r
 SET event_sequence = greatest(
         r.event_sequence,
-        COALESCE((SELECT max(e.sequence_no) FROM agent_run_events e WHERE e.run_id = r.id), 0)
+        COALESCE((SELECT max(e.sequence_no) FROM goodle_run_events e WHERE e.run_id = r.id), 0)
     );
 
-CREATE TABLE IF NOT EXISTS agent_memories (
+CREATE TABLE IF NOT EXISTS goodle_memories (
     id VARCHAR(64) PRIMARY KEY,
     tenant_id VARCHAR(64) NOT NULL DEFAULT 'default',
     owner_id VARCHAR(64),
@@ -64,5 +64,5 @@ CREATE TABLE IF NOT EXISTS agent_memories (
 );
 
 CREATE INDEX IF NOT EXISTS idx_agent_memories_scope
-    ON agent_memories (tenant_id, owner_id, conversation_id, tier, created_at);
-CREATE INDEX IF NOT EXISTS idx_agent_memories_expiry ON agent_memories (expires_at);
+    ON goodle_memories (tenant_id, owner_id, conversation_id, tier, created_at);
+CREATE INDEX IF NOT EXISTS idx_agent_memories_expiry ON goodle_memories (expires_at);

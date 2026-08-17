@@ -11,7 +11,7 @@ import lombok.EqualsAndHashCode;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("llm_calls")
+@TableName("goodle_llm_calls")
 public class LlmCallRecord extends BaseEntity {
 
     private String provider;

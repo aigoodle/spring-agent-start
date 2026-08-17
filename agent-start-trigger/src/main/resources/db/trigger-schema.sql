@@ -1,9 +1,9 @@
 -- agent-start-trigger schema (portable across H2 and MySQL/Postgres).
 -- Table names aligned with spring-agent-start:
---   app_triggers          ← was agent_trigger
---   trigger_invocations   ← was agent_trigger_invocation
+--   goodle_app_triggers          ← was agent_trigger
+--   goodle_trigger_invocations   ← was agent_trigger_invocation
 
-CREATE TABLE IF NOT EXISTS app_triggers (
+CREATE TABLE IF NOT EXISTS goodle_app_triggers (
     id          VARCHAR(64)  NOT NULL,
     tenant_id   VARCHAR(64)  NOT NULL DEFAULT 'default',
     name        VARCHAR(255),
@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS app_triggers (
     PRIMARY KEY (id)
 );
 
-CREATE TABLE IF NOT EXISTS trigger_invocations (
+CREATE TABLE IF NOT EXISTS goodle_trigger_invocations (
     id           VARCHAR(64) NOT NULL,
     tenant_id    VARCHAR(64) NOT NULL DEFAULT 'default',
     trigger_id   VARCHAR(64) NOT NULL,
@@ -33,5 +33,5 @@ CREATE TABLE IF NOT EXISTS trigger_invocations (
     PRIMARY KEY (id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_trigger_type ON app_triggers (type, enabled);
-CREATE INDEX IF NOT EXISTS idx_invocation_trigger ON trigger_invocations (trigger_id);
+CREATE INDEX IF NOT EXISTS idx_trigger_type ON goodle_app_triggers (type, enabled);
+CREATE INDEX IF NOT EXISTS idx_invocation_trigger ON goodle_trigger_invocations (trigger_id);

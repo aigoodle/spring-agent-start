@@ -26,8 +26,11 @@ import java.util.List;
 public class SpringAgentOpenApiConfig {
 
     @Bean
-    public OpenAPI springAgentOpenApi() {
-        String serverUrl = SpringAgentWebAutoConfiguration.CONTROLLER_PATH_PREFIX;
+    public OpenAPI springAgentOpenApi(SpringAgentWebProperties properties) {
+        String serverUrl = SpringAgentWebAutoConfiguration.normalizedBasePath(properties.getBasePath());
+        if (serverUrl.isEmpty()) {
+            serverUrl = "/";
+        }
         return new OpenAPI()
                 .info(new Info()
                         .title("spring-agent-start REST API")

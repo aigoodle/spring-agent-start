@@ -162,9 +162,46 @@ public final class UserContextHolder {
         return currentUser == null ? null : currentUser.getUsername();
     }
 
+    /** Application resolved by the trusted authentication layer, or {@code null}. */
+    public static String currentAppId() {
+        CurrentUser currentUser = HOLDER.get();
+        if (currentUser == null) {
+            return null;
+        }
+        return trimToNull(currentUser.getAppId());
+    }
+
+    /** Require an application-bound context. */
+    public static String requireAppId() {
+        String appId = currentAppId();
+        if (appId == null) {
+            throw new IllegalStateException("No appId in current user context");
+        }
+        return appId;
+    }
+
+    public static PrincipalType currentPrincipalType() {
+        CurrentUser currentUser = HOLDER.get();
+        return currentUser == null ? null : currentUser.getPrincipalType();
+    }
+
+    public static boolean hasScope(String scope) {
+        CurrentUser currentUser = HOLDER.get();
+        return currentUser != null && currentUser.getScopes() != null
+                && scope != null && currentUser.getScopes().contains(scope);
+    }
+
     /** 是否已登录（== ThreadLocal 里有值）。 */
     public static boolean isAuthenticated() {
         return HOLDER.get() != null;
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     // ============================================================ 反应式桥接

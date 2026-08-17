@@ -12,7 +12,7 @@ import lombok.EqualsAndHashCode;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("documents")
+@TableName("goodle_documents")
 public class KnowledgeDocumentEntity extends BaseEntity {
 
     private String datasetId;

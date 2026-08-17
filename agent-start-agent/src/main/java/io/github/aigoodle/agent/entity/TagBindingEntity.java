@@ -8,7 +8,7 @@ import lombok.EqualsAndHashCode;
 /** Many-to-many join between {@link TagEntity} and an app or dataset id. */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("tag_bindings")
+@TableName("goodle_tag_bindings")
 public class TagBindingEntity extends BaseEntity {
 
     /** FK to {@code tags.id}. */

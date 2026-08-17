@@ -10,7 +10,7 @@ import lombok.EqualsAndHashCode;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("workflow_runs")
+@TableName("goodle_workflow_runs")
 public class WorkflowRunEntity extends BaseEntity {
 
     private String workflowId;

@@ -1,12 +1,12 @@
 -- ============================================================================
--- Migration V1.4 · workflows.graph_json → workflows.graph
+-- Migration V1.4 · goodle_workflows.graph_json → goodle_workflows.graph
 -- ----------------------------------------------------------------------------
 -- Historical context: three schema variants exist in the wild for the graph
--- column on the workflows table —
+-- column on the goodle_workflows table —
 --
 --   * spring-agent-start (legacy):   column named `graph`   of type `json`
 --   * spring-agent-start early builds: column named `graph_json` of type `TEXT`
---   * databases that jumped straight to spring-agent-start: no `workflows`
+--   * databases that jumped straight to spring-agent-start: no `goodle_workflows`
 --     table at all before init.sql created it (also `graph_json TEXT`).
 --
 -- The Java entity now standardises on {@code graph} (JsonNode field, TEXT
@@ -24,12 +24,12 @@ BEGIN
     -- Case 1: only graph_json exists → rename it. Preserves data.
     IF EXISTS (
         SELECT 1 FROM information_schema.columns
-         WHERE table_name = 'workflows' AND column_name = 'graph_json'
+         WHERE table_name = 'goodle_workflows' AND column_name = 'graph_json'
     ) AND NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-         WHERE table_name = 'workflows' AND column_name = 'graph'
+         WHERE table_name = 'goodle_workflows' AND column_name = 'graph'
     ) THEN
-        ALTER TABLE workflows RENAME COLUMN graph_json TO graph;
+        ALTER TABLE goodle_workflows RENAME COLUMN graph_json TO graph;
     END IF;
 
     -- Case 2: both columns exist (bizarre but happens if someone ran the
@@ -37,24 +37,24 @@ BEGIN
     -- non-null graph_json rows into graph, then drop graph_json.
     IF EXISTS (
         SELECT 1 FROM information_schema.columns
-         WHERE table_name = 'workflows' AND column_name = 'graph_json'
+         WHERE table_name = 'goodle_workflows' AND column_name = 'graph_json'
     ) AND EXISTS (
         SELECT 1 FROM information_schema.columns
-         WHERE table_name = 'workflows' AND column_name = 'graph'
+         WHERE table_name = 'goodle_workflows' AND column_name = 'graph'
     ) THEN
-        UPDATE workflows
+        UPDATE goodle_workflows
            SET graph = graph_json::text::json  -- cast if graph is json type
          WHERE graph IS NULL AND graph_json IS NOT NULL;
-        ALTER TABLE workflows DROP COLUMN graph_json;
+        ALTER TABLE goodle_workflows DROP COLUMN graph_json;
     END IF;
 
     -- Case 3: neither exists → add graph (TEXT). Only reachable if some other
     -- migration/tool created the table without a graph column at all.
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-         WHERE table_name = 'workflows' AND column_name = 'graph'
+         WHERE table_name = 'goodle_workflows' AND column_name = 'graph'
     ) THEN
-        ALTER TABLE workflows ADD COLUMN graph TEXT;
+        ALTER TABLE goodle_workflows ADD COLUMN graph TEXT;
     END IF;
 END $$;
 
@@ -66,10 +66,10 @@ DO $$
 BEGIN
     IF EXISTS (
         SELECT 1 FROM information_schema.columns
-         WHERE table_name = 'workflows' AND column_name = 'graph'
+         WHERE table_name = 'goodle_workflows' AND column_name = 'graph'
            AND is_nullable = 'NO'
     ) THEN
-        ALTER TABLE workflows ALTER COLUMN graph DROP NOT NULL;
+        ALTER TABLE goodle_workflows ALTER COLUMN graph DROP NOT NULL;
     END IF;
 END $$;
 

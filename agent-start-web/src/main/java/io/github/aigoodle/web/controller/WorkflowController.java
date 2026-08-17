@@ -28,6 +28,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static io.github.aigoodle.common.context.UserContextHolder.currentTenantId;
+
 /**
  * HTTP facade for workflow definitions, drafts, execution and palette metadata.
  * The SSE streaming run endpoints live in {@link WorkflowStreamController} —
@@ -50,8 +52,8 @@ public class WorkflowController {
     }
 
     @GetMapping("/workflows")
-    public ApiResponse<List<WorkflowEntity>> list(@RequestParam(required = false) String tenantId) {
-        return ApiResponse.ok(workflowService.list(tenantId));
+    public ApiResponse<List<WorkflowEntity>> list() {
+        return ApiResponse.ok(workflowService.list(currentTenantId()));
     }
 
     @PostMapping("/workflows")
@@ -63,7 +65,7 @@ public class WorkflowController {
         }
         return ApiResponse.ok(workflowService.save(new WorkflowDraftDefinition(
                 request.getAppId(),
-                request.getTenantId(),
+                currentTenantId(),
                 request.getName(),
                 request.getMode(),
                 request.getGraph())));

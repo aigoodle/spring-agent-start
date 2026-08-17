@@ -8,13 +8,13 @@ import lombok.EqualsAndHashCode;
 /**
  * A chat session whose message content is owned by {@code agent-start-memory}.
  * Ported from the legacy {@code conversations} table (Dify parity). The
- * {@code messages} table already carries {@code conversation_id} — this row
+ * {@code goodle_messages} table already carries {@code conversation_id} — this row
  * gives the frontend a place to attach names, pin flags, summaries and audit
  * timestamps without walking the whole message history.
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("conversations")
+@TableName("goodle_conversations")
 public class ConversationEntity extends BaseEntity {
 
     /** FK to {@code apps.id} — the conversation belongs to a single app. */

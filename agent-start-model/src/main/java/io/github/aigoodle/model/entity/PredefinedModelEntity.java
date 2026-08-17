@@ -19,7 +19,7 @@ import lombok.EqualsAndHashCode;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("agent_predefined_model")
+@TableName("goodle_predefined_model")
 public class PredefinedModelEntity extends BaseEntity {
 
     /** FK to {@link ProviderDefinitionEntity#getName()}. */

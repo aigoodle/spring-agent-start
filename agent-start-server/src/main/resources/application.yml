@@ -21,7 +21,7 @@ spring:
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:spring-agent}?currentSchema=public&reWriteBatchedInserts=true&stringtype=unspecified&ApplicationName=agent-start-server
     username: ${DB_USER:postgres}
-    password: ${DB_PASSWORD:difyai123456}
+    password: ${DB_PASSWORD:ai123456}
     driver-class-name: org.postgresql.Driver
 
   sql:
@@ -47,7 +47,14 @@ spring:
     max-in-memory-size: 100MB
 
 spring-agent:
+  demo:
+    # Standalone server is a sandbox, so no full login system is required.
+    # Set AGENT_DEMO_ENABLED=false in production hosts and provide ChatAccessPolicy.
+    enabled: ${AGENT_DEMO_ENABLED:true}
+    tenant-id: ${AGENT_DEMO_TENANT:default}
+    allow-debug: ${AGENT_DEMO_ALLOW_DEBUG:true}
   web:
+    base-path: "/agent-start"
     # CORS wide open by default so a Vite dev server (or any origin) can hit it.
     allowed-origins: ["*"]
   model:

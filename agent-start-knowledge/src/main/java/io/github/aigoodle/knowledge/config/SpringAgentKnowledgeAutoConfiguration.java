@@ -180,7 +180,7 @@ public class SpringAgentKnowledgeAutoConfiguration {
     @ConditionalOnProperty(prefix = "spring-agent.knowledge", name = "vector-store", havingValue = "jdbc")
     @ConditionalOnMissingBean(VectorStoreFactory.class)
     public VectorStoreFactory jdbcVectorStoreFactory(JdbcTemplate jdbcTemplate,
-            @Value("${spring-agent.knowledge.vector-table:embeddings}") String table) {
+            @Value("${spring-agent.knowledge.vector-table:goodle_embeddings}") String table) {
         return new JdbcVectorStoreFactory(jdbcTemplate, table);
     }
 

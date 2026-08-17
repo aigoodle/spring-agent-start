@@ -12,7 +12,7 @@ import lombok.EqualsAndHashCode;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("api_tokens")
+@TableName("goodle_api_tokens")
 public class ApiTokenEntity extends BaseEntity {
 
     /** FK to {@code apps.id}. */

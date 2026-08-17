@@ -1,12 +1,12 @@
 -- agent-start-knowledge schema (portable across H2 and MySQL).
 -- Table names aligned with the reference spring-agent-start project (Dify-parity):
---   dataset               ← was agent_dataset
---   documents             ← was agent_knowledge_document
---   document_segments     ← was agent_segment
---   embeddings            ← was agent_vector (JDBC vector-store fallback)
---   dataset_query         ← was agent_dataset_hit_test_log
+--   goodle_dataset               ← was agent_dataset
+--   goodle_documents             ← was agent_knowledge_document
+--   goodle_document_segments     ← was agent_segment
+--   goodle_embeddings            ← was agent_vector (JDBC vector-store fallback)
+--   goodle_dataset_query         ← was agent_dataset_hit_test_log
 
-CREATE TABLE IF NOT EXISTS dataset (
+CREATE TABLE IF NOT EXISTS goodle_dataset (
     id                    VARCHAR(64)  NOT NULL,
     tenant_id             VARCHAR(64)  NOT NULL DEFAULT 'default',
     name                  VARCHAR(255) NOT NULL,
@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS dataset (
     PRIMARY KEY (id)
 );
 
-CREATE TABLE IF NOT EXISTS documents (
+CREATE TABLE IF NOT EXISTS goodle_documents (
     id            VARCHAR(64)  NOT NULL,
     tenant_id     VARCHAR(64)  NOT NULL DEFAULT 'default',
     dataset_id    VARCHAR(64)  NOT NULL,
@@ -47,22 +47,22 @@ CREATE TABLE IF NOT EXISTS documents (
     updated_at    TIMESTAMP,
     PRIMARY KEY (id)
 );
-ALTER TABLE documents ADD COLUMN IF NOT EXISTS parser_name VARCHAR(64);
-ALTER TABLE documents ADD COLUMN IF NOT EXISTS media_type VARCHAR(255);
-ALTER TABLE documents ADD COLUMN IF NOT EXISTS page_count INT;
-ALTER TABLE documents ADD COLUMN IF NOT EXISTS block_count INT;
-ALTER TABLE documents ADD COLUMN IF NOT EXISTS parse_warnings_json TEXT;
-ALTER TABLE documents ADD COLUMN IF NOT EXISTS parsed_document_json TEXT;
-ALTER TABLE documents ADD COLUMN IF NOT EXISTS source_data_base64 TEXT;
-ALTER TABLE documents ADD COLUMN IF NOT EXISTS file_size BIGINT;
-ALTER TABLE documents ADD COLUMN IF NOT EXISTS source_checksum VARCHAR(64);
+ALTER TABLE goodle_documents ADD COLUMN IF NOT EXISTS parser_name VARCHAR(64);
+ALTER TABLE goodle_documents ADD COLUMN IF NOT EXISTS media_type VARCHAR(255);
+ALTER TABLE goodle_documents ADD COLUMN IF NOT EXISTS page_count INT;
+ALTER TABLE goodle_documents ADD COLUMN IF NOT EXISTS block_count INT;
+ALTER TABLE goodle_documents ADD COLUMN IF NOT EXISTS parse_warnings_json TEXT;
+ALTER TABLE goodle_documents ADD COLUMN IF NOT EXISTS parsed_document_json TEXT;
+ALTER TABLE goodle_documents ADD COLUMN IF NOT EXISTS source_data_base64 TEXT;
+ALTER TABLE goodle_documents ADD COLUMN IF NOT EXISTS file_size BIGINT;
+ALTER TABLE goodle_documents ADD COLUMN IF NOT EXISTS source_checksum VARCHAR(64);
 
 -- Sidecar table for the async ingestion queue. Presence of a row means the
 -- corresponding document is still "in flight" (PARSING / PENDING / CHUNKING /
 -- INDEXING); the async runner deletes the row on COMPLETED. Keeping raw_text
--- here instead of on `documents` keeps list queries lightweight — no
--- multi-MB text blobs coming back on a `SELECT * FROM documents`.
-CREATE TABLE IF NOT EXISTS document_ingest_queue (
+-- here instead of on `goodle_documents` keeps list queries lightweight — no
+-- multi-MB text blobs coming back on a `SELECT * FROM goodle_documents`.
+CREATE TABLE IF NOT EXISTS goodle_document_ingest_queue (
     document_id VARCHAR(64) NOT NULL,
     dataset_id  VARCHAR(64) NOT NULL,
     tenant_id   VARCHAR(64) NOT NULL DEFAULT 'default',
@@ -75,10 +75,10 @@ CREATE TABLE IF NOT EXISTS document_ingest_queue (
     updated_at  TIMESTAMP,
     PRIMARY KEY (document_id)
 );
-CREATE INDEX IF NOT EXISTS idx_ingest_queue_dataset ON document_ingest_queue (dataset_id);
-ALTER TABLE document_ingest_queue ADD COLUMN IF NOT EXISTS parsed_document_json TEXT;
+CREATE INDEX IF NOT EXISTS idx_ingest_queue_dataset ON goodle_document_ingest_queue (dataset_id);
+ALTER TABLE goodle_document_ingest_queue ADD COLUMN IF NOT EXISTS parsed_document_json TEXT;
 
-CREATE TABLE IF NOT EXISTS document_segments (
+CREATE TABLE IF NOT EXISTS goodle_document_segments (
     id            VARCHAR(64)  NOT NULL,
     tenant_id     VARCHAR(64)  NOT NULL DEFAULT 'default',
     dataset_id    VARCHAR(64)  NOT NULL,
@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS document_segments (
 );
 
 -- Optional table for the built-in JDBC vector store (spring-agent.knowledge.vector-store=jdbc).
-CREATE TABLE IF NOT EXISTS embeddings (
+CREATE TABLE IF NOT EXISTS goodle_embeddings (
     id            VARCHAR(64) NOT NULL,
     dataset_id    VARCHAR(64) NOT NULL,
     content       TEXT,
@@ -106,16 +106,16 @@ CREATE TABLE IF NOT EXISTS embeddings (
     embedding     TEXT,
     PRIMARY KEY (id)
 );
-CREATE INDEX IF NOT EXISTS idx_embeddings_dataset ON embeddings (dataset_id);
+CREATE INDEX IF NOT EXISTS idx_embeddings_dataset ON goodle_embeddings (dataset_id);
 
-CREATE INDEX IF NOT EXISTS idx_doc_dataset ON documents (dataset_id);
-CREATE INDEX IF NOT EXISTS idx_segment_dataset ON document_segments (dataset_id);
-CREATE INDEX IF NOT EXISTS idx_segment_document ON document_segments (document_id);
+CREATE INDEX IF NOT EXISTS idx_doc_dataset ON goodle_documents (dataset_id);
+CREATE INDEX IF NOT EXISTS idx_segment_dataset ON goodle_document_segments (dataset_id);
+CREATE INDEX IF NOT EXISTS idx_segment_document ON goodle_document_segments (document_id);
 
 -- Retrieval query log: every dry-run + production retrieval recorded for later
--- comparison / debugging. Powers the "recent queries" panel of the dataset
+-- comparison / debugging. Powers the "recent queries" panel of the goodle_dataset
 -- detail page so users can eyeball retrieval quality drift.
-CREATE TABLE IF NOT EXISTS dataset_query (
+CREATE TABLE IF NOT EXISTS goodle_dataset_query (
     id           VARCHAR(64) NOT NULL,
     tenant_id    VARCHAR(64) NOT NULL DEFAULT 'default',
     dataset_id   VARCHAR(64) NOT NULL,
@@ -129,4 +129,4 @@ CREATE TABLE IF NOT EXISTS dataset_query (
     updated_at   TIMESTAMP,
     PRIMARY KEY (id)
 );
-CREATE INDEX IF NOT EXISTS idx_dataset_query_dataset ON dataset_query (dataset_id);
+CREATE INDEX IF NOT EXISTS idx_dataset_query_dataset ON goodle_dataset_query (dataset_id);

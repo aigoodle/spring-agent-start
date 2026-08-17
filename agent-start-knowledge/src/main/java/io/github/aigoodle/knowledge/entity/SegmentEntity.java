@@ -12,7 +12,7 @@ import lombok.EqualsAndHashCode;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("document_segments")
+@TableName("goodle_document_segments")
 public class SegmentEntity extends BaseEntity {
 
     private String datasetId;

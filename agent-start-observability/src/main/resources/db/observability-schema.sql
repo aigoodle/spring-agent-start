@@ -1,7 +1,7 @@
 -- agent-start-observability schema (portable across H2 and MySQL/Postgres).
--- llm_calls was agent_llm_call; renamed for cross-project consistency.
+-- goodle_llm_calls was agent_llm_call; renamed for cross-project consistency.
 
-CREATE TABLE IF NOT EXISTS llm_calls (
+CREATE TABLE IF NOT EXISTS goodle_llm_calls (
     id                VARCHAR(64) NOT NULL,
     tenant_id         VARCHAR(64) NOT NULL DEFAULT 'default',
     provider          VARCHAR(128),
@@ -18,5 +18,5 @@ CREATE TABLE IF NOT EXISTS llm_calls (
     PRIMARY KEY (id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_llm_call_model ON llm_calls (model);
-CREATE INDEX IF NOT EXISTS idx_llm_call_created ON llm_calls (created_at);
+CREATE INDEX IF NOT EXISTS idx_llm_call_model ON goodle_llm_calls (model);
+CREATE INDEX IF NOT EXISTS idx_llm_call_created ON goodle_llm_calls (created_at);

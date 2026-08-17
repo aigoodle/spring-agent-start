@@ -11,7 +11,7 @@ import lombok.EqualsAndHashCode;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("trigger_invocations")
+@TableName("goodle_trigger_invocations")
 public class TriggerInvocationEntity extends BaseEntity {
 
     private String triggerId;

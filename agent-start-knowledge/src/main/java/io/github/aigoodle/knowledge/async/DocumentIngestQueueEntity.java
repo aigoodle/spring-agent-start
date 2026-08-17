@@ -13,13 +13,13 @@ import java.time.LocalDateTime;
  * pipeline (chunk → index).
  *
  * <p>Kept separate from {@code documents} so the main list query stays
- * lightweight — you don't want {@code SELECT * FROM documents} pulling
+ * lightweight — you don't want {@code SELECT * FROM goodle_documents} pulling
  * multi-MB {@code raw_text} blobs for a card grid. The row is
  * <b>deleted</b> once the worker successfully processes the task, so this
  * table only ever holds "in-flight" work.</p>
  */
 @Data
-@TableName("document_ingest_queue")
+@TableName("goodle_document_ingest_queue")
 public class DocumentIngestQueueEntity {
 
     /**

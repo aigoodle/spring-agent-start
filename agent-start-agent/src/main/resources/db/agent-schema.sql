@@ -1,22 +1,22 @@
 -- agent-start-agent schema (portable across H2 and MySQL/Postgres).
 -- Table names aligned with spring-agent-start (Dify parity):
---   apps                    ← was agent_definition (智能体应用) — lean metadata
---   app_model_configs       ← 1:1 sidecar carrying prompt / model params /
+--   goodle_apps                    ← was agent_definition (智能体应用) — lean metadata
+--   goodle_app_model_configs       ← 1:1 sidecar carrying prompt / model params /
 --                              retrieval / agent behaviour (Dify parity)
---   app_annotations         ← per-app QA overrides
---   app_annotation_settings ← retrieval config for annotations
---   conversations           ← chat session metadata under an app
---   api_tokens              ← per-app API access tokens
---   app_sites               ← published widget / hosted site config
---   tags / tag_bindings     ← tenant-scoped organisational tags
+--   goodle_app_annotations         ← per-app QA overrides
+--   goodle_app_annotation_settings ← retrieval config for annotations
+--   goodle_conversations           ← chat session metadata under an app
+--   goodle_api_tokens              ← per-app API access tokens
+--   goodle_app_sites               ← published widget / hosted site config
+--   goodle_tags / goodle_tag_bindings     ← tenant-scoped organisational goodle_tags
 --
--- Design note: the split between `apps` and `app_model_configs` follows Dify —
--- `apps` is the at-a-glance catalog row (name / icon / mode / publish state),
+-- Design note: the split between `goodle_apps` and `goodle_app_model_configs` follows Dify —
+-- `goodle_apps` is the at-a-glance catalog row (name / icon / mode / publish state),
 -- everything about *how the app behaves* (prompt, model overrides, tools,
--- retrieval) lives in the sidecar keyed by app id. Workflow / chatflow apps
+-- retrieval) lives in the sidecar keyed by app id. Workflow / chatflow goodle_apps
 -- carry an empty sidecar because their behaviour lives in the workflow graph.
 
-CREATE TABLE IF NOT EXISTS apps (
+CREATE TABLE IF NOT EXISTS goodle_apps (
     id                        VARCHAR(64)  NOT NULL,
     tenant_id                 VARCHAR(64)  NOT NULL DEFAULT 'default',
     name                      VARCHAR(255) NOT NULL,
@@ -33,13 +33,13 @@ CREATE TABLE IF NOT EXISTS apps (
     api_rpm                   INT DEFAULT 0,
     api_rph                   INT DEFAULT 0,
     published                 BOOLEAN DEFAULT TRUE,
-    -- FK to workflows.id — the persistent DRAFT workflow this app edits (Dify
+    -- FK to goodle_workflows.id — the persistent DRAFT workflow this app edits (Dify
     -- parity). Populated on create for workflow/chatflow modes; null for
     -- chat/agent/completion.
     workflow_id               VARCHAR(64),
     -- Denormalised model reference kept on the catalog row so the agent-list
     -- card can render "provider · model" without a JOIN. The source of truth
-    -- for runtime resolution is app_model_configs.
+    -- for runtime resolution is goodle_app_model_configs.
     model_name                VARCHAR(128),
     model_provider            VARCHAR(64),
     created_at                TIMESTAMP,
@@ -47,18 +47,18 @@ CREATE TABLE IF NOT EXISTS apps (
     PRIMARY KEY (id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_apps_tenant_mode ON apps (tenant_id, mode);
-CREATE INDEX IF NOT EXISTS idx_apps_published ON apps (published);
+CREATE INDEX IF NOT EXISTS idx_apps_tenant_mode ON goodle_apps (tenant_id, mode);
+CREATE INDEX IF NOT EXISTS idx_apps_published ON goodle_apps (published);
 
 -- ============================================================================
--- app_model_configs — 1:1 sidecar with apps.id (id == app_id). Carries the
+-- goodle_app_model_configs — 1:1 sidecar with goodle_apps.id (id == app_id). Carries the
 -- entire "编排" drawer payload: system prompt, model overrides, agent
--- strategy / tools / delegation / memory, dataset / retrieval config, user
+-- strategy / tools / delegation / memory, goodle_dataset / retrieval config, user
 -- input form and speech / moderation blobs. Vendor-neutral: thinking mode is
 -- a normalized 'auto'|'enabled'|'disabled' flag inside `configs`, translated
 -- per-vendor by AgentChatOptionsFactory.
 -- ============================================================================
-CREATE TABLE IF NOT EXISTS app_model_configs (
+CREATE TABLE IF NOT EXISTS goodle_app_model_configs (
     id                                VARCHAR(64) NOT NULL,
     tenant_id                         VARCHAR(64) NOT NULL DEFAULT 'default',
     app_id                            VARCHAR(64) NOT NULL,
@@ -103,12 +103,12 @@ CREATE TABLE IF NOT EXISTS app_model_configs (
     PRIMARY KEY (id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_app_model_config_app ON app_model_configs (app_id);
+CREATE INDEX IF NOT EXISTS idx_app_model_config_app ON goodle_app_model_configs (app_id);
 
 -- User-authored QA overrides surfaced in the "日志与标注" drawer tab. When a
 -- chat query hits `question`, `content` is returned verbatim (bypassing the
 -- LLM). Ranking + hit-count bump is wired in a follow-up pass.
-CREATE TABLE IF NOT EXISTS app_annotations (
+CREATE TABLE IF NOT EXISTS goodle_app_annotations (
     id         VARCHAR(64) NOT NULL,
     tenant_id  VARCHAR(64) NOT NULL DEFAULT 'default',
     app_id     VARCHAR(64) NOT NULL,
@@ -121,11 +121,11 @@ CREATE TABLE IF NOT EXISTS app_annotations (
     PRIMARY KEY (id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_annotation_app ON app_annotations (app_id);
+CREATE INDEX IF NOT EXISTS idx_annotation_app ON goodle_app_annotations (app_id);
 
 -- Per-app annotation retrieval configuration (score threshold + embedding
 -- model). Effectively singleton per app; upsert by app_id.
-CREATE TABLE IF NOT EXISTS app_annotation_settings (
+CREATE TABLE IF NOT EXISTS goodle_app_annotation_settings (
     id                 VARCHAR(64) NOT NULL,
     tenant_id          VARCHAR(64) NOT NULL DEFAULT 'default',
     app_id             VARCHAR(64) NOT NULL,
@@ -136,11 +136,11 @@ CREATE TABLE IF NOT EXISTS app_annotation_settings (
     updated_at         TIMESTAMP,
     PRIMARY KEY (id)
 );
-CREATE INDEX IF NOT EXISTS idx_annotation_setting_app ON app_annotation_settings (app_id);
+CREATE INDEX IF NOT EXISTS idx_annotation_setting_app ON goodle_app_annotation_settings (app_id);
 
 -- Chat-session metadata; message content lives in agent-start-memory.
 -- holds conversation_id — this row carries user-visible metadata.
-CREATE TABLE IF NOT EXISTS conversations (
+CREATE TABLE IF NOT EXISTS goodle_conversations (
     id                VARCHAR(64) NOT NULL,
     tenant_id         VARCHAR(64) NOT NULL DEFAULT 'default',
     app_id            VARCHAR(64) NOT NULL,
@@ -156,11 +156,11 @@ CREATE TABLE IF NOT EXISTS conversations (
     updated_at        TIMESTAMP,
     PRIMARY KEY (id)
 );
-CREATE INDEX IF NOT EXISTS idx_conversation_app ON conversations (app_id);
+CREATE INDEX IF NOT EXISTS idx_conversation_app ON goodle_conversations (app_id);
 
 -- Durable agent execution state. A run remains queryable after the request or
 -- JVM that started it has gone away; version is used for optimistic transitions.
-CREATE TABLE IF NOT EXISTS agent_runs (
+CREATE TABLE IF NOT EXISTS goodle_runs (
     id                VARCHAR(64) NOT NULL,
     tenant_id         VARCHAR(64) NOT NULL DEFAULT 'default',
     agent_id          VARCHAR(64) NOT NULL,
@@ -178,13 +178,13 @@ CREATE TABLE IF NOT EXISTS agent_runs (
     updated_at        TIMESTAMP,
     PRIMARY KEY (id)
 );
-CREATE INDEX IF NOT EXISTS idx_agent_run_agent_created ON agent_runs (agent_id, created_at);
-CREATE INDEX IF NOT EXISTS idx_agent_run_conversation ON agent_runs (conversation_id);
-CREATE INDEX IF NOT EXISTS idx_agent_run_status ON agent_runs (status);
+CREATE INDEX IF NOT EXISTS idx_agent_run_agent_created ON goodle_runs (agent_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_agent_run_conversation ON goodle_runs (conversation_id);
+CREATE INDEX IF NOT EXISTS idx_agent_run_status ON goodle_runs (status);
 
 -- Append-only projection source consumed by SSE clients, observability adapters
 -- and future checkpoint/replay support. sequence_no is monotonic within a run.
-CREATE TABLE IF NOT EXISTS agent_run_events (
+CREATE TABLE IF NOT EXISTS goodle_run_events (
     id            VARCHAR(64) NOT NULL,
     tenant_id     VARCHAR(64) NOT NULL DEFAULT 'default',
     run_id        VARCHAR(64) NOT NULL,
@@ -196,10 +196,10 @@ CREATE TABLE IF NOT EXISTS agent_run_events (
     PRIMARY KEY (id),
     UNIQUE (run_id, sequence_no)
 );
-CREATE INDEX IF NOT EXISTS idx_agent_run_event_stream ON agent_run_events (run_id, sequence_no);
+CREATE INDEX IF NOT EXISTS idx_agent_run_event_stream ON goodle_run_events (run_id, sequence_no);
 
 -- Per-app API access tokens. Value is generated server-side on create.
-CREATE TABLE IF NOT EXISTS api_tokens (
+CREATE TABLE IF NOT EXISTS goodle_api_tokens (
     id            VARCHAR(64) NOT NULL,
     tenant_id     VARCHAR(64) NOT NULL DEFAULT 'default',
     app_id        VARCHAR(64) NOT NULL,
@@ -211,11 +211,11 @@ CREATE TABLE IF NOT EXISTS api_tokens (
     updated_at    TIMESTAMP,
     PRIMARY KEY (id)
 );
-CREATE INDEX IF NOT EXISTS idx_api_token_app ON api_tokens (app_id);
-CREATE INDEX IF NOT EXISTS idx_api_token_value ON api_tokens (token);
+CREATE INDEX IF NOT EXISTS idx_api_token_app ON goodle_api_tokens (app_id);
+CREATE INDEX IF NOT EXISTS idx_api_token_value ON goodle_api_tokens (token);
 
 -- Published widget / hosted-site config for an app. Singleton per app.
-CREATE TABLE IF NOT EXISTS app_sites (
+CREATE TABLE IF NOT EXISTS goodle_app_sites (
     id                        VARCHAR(64) NOT NULL,
     tenant_id                 VARCHAR(64) NOT NULL DEFAULT 'default',
     app_id                    VARCHAR(64) NOT NULL,
@@ -238,11 +238,11 @@ CREATE TABLE IF NOT EXISTS app_sites (
     updated_at                TIMESTAMP,
     PRIMARY KEY (id)
 );
-CREATE INDEX IF NOT EXISTS idx_app_site_app ON app_sites (app_id);
-CREATE INDEX IF NOT EXISTS idx_app_site_code ON app_sites (code);
+CREATE INDEX IF NOT EXISTS idx_app_site_app ON goodle_app_sites (app_id);
+CREATE INDEX IF NOT EXISTS idx_app_site_code ON goodle_app_sites (code);
 
--- Tenant-scoped organisational tags applied to apps or datasets.
-CREATE TABLE IF NOT EXISTS tags (
+-- Tenant-scoped organisational goodle_tags applied to goodle_apps or datasets.
+CREATE TABLE IF NOT EXISTS goodle_tags (
     id         VARCHAR(64) NOT NULL,
     tenant_id  VARCHAR(64) NOT NULL DEFAULT 'default',
     type       VARCHAR(32) DEFAULT 'app',
@@ -251,9 +251,9 @@ CREATE TABLE IF NOT EXISTS tags (
     updated_at TIMESTAMP,
     PRIMARY KEY (id)
 );
-CREATE INDEX IF NOT EXISTS idx_tag_tenant_type ON tags (tenant_id, type);
+CREATE INDEX IF NOT EXISTS idx_tag_tenant_type ON goodle_tags (tenant_id, type);
 
-CREATE TABLE IF NOT EXISTS tag_bindings (
+CREATE TABLE IF NOT EXISTS goodle_tag_bindings (
     id           VARCHAR(64) NOT NULL,
     tenant_id    VARCHAR(64) NOT NULL DEFAULT 'default',
     tag_id       VARCHAR(64) NOT NULL,
@@ -263,5 +263,5 @@ CREATE TABLE IF NOT EXISTS tag_bindings (
     updated_at   TIMESTAMP,
     PRIMARY KEY (id)
 );
-CREATE INDEX IF NOT EXISTS idx_tag_binding_target ON tag_bindings (target_id, target_type);
-CREATE INDEX IF NOT EXISTS idx_tag_binding_tag ON tag_bindings (tag_id);
+CREATE INDEX IF NOT EXISTS idx_tag_binding_target ON goodle_tag_bindings (target_id, target_type);
+CREATE INDEX IF NOT EXISTS idx_tag_binding_tag ON goodle_tag_bindings (tag_id);

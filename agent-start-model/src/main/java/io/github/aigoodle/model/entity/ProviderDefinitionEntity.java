@@ -28,7 +28,7 @@ import lombok.EqualsAndHashCode;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("agent_model_provider")
+@TableName("goodle_model_provider")
 public class ProviderDefinitionEntity extends BaseEntity {
 
     /** Unique provider key (e.g. {@code "openai"}, {@code "langgenius/tongyi/tongyi"}). */

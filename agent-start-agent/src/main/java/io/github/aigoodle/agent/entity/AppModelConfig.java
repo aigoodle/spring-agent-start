@@ -35,7 +35,7 @@ import lombok.EqualsAndHashCode;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("app_model_configs")
+@TableName("goodle_app_model_configs")
 public class AppModelConfig extends BaseEntity {
 
     /** FK to {@code apps.id}. Value is identical to {@link #getId()}. */

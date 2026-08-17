@@ -16,6 +16,9 @@ import java.util.List;
 @ConfigurationProperties(prefix = "spring-agent.web")
 public class SpringAgentWebProperties {
 
+    /** Common prefix for web and completion endpoints; blank mounts them at the root. */
+    private String basePath = "/agent-start";
+
     /** Allowed origins for CORS; {@code *} = any (default, since no login is expected). */
     private List<String> allowedOrigins = List.of("*");
 

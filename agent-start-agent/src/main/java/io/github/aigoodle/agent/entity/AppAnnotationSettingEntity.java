@@ -8,7 +8,7 @@ import lombok.EqualsAndHashCode;
 /** Retrieval settings shared by all annotations owned by one application. */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("app_annotation_settings")
+@TableName("goodle_app_annotation_settings")
 public class AppAnnotationSettingEntity extends BaseEntity {
 
     /** Identifier of the application that owns these settings. */

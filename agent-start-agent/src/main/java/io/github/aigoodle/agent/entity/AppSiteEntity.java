@@ -12,7 +12,7 @@ import lombok.EqualsAndHashCode;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("app_sites")
+@TableName("goodle_app_sites")
 public class AppSiteEntity extends BaseEntity {
 
     /** FK to {@code apps.id}. */

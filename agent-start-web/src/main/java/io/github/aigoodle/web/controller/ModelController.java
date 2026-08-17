@@ -15,6 +15,12 @@ import io.github.aigoodle.model.service.ProviderDefinitionService;
 import io.github.aigoodle.model.service.ProviderModelSettingsService;
 import io.github.aigoodle.web.common.ApiResponse;
 import io.github.aigoodle.web.dto.ProviderCredentialRequest;
+import io.github.aigoodle.web.dto.ProviderView;
+import io.github.aigoodle.web.dto.model.CatalogModelView;
+import io.github.aigoodle.web.dto.model.GroupedProviderView;
+import io.github.aigoodle.web.dto.model.ModelParametersView;
+import io.github.aigoodle.web.dto.model.ProviderCredentialView;
+import io.github.aigoodle.web.dto.model.RemoteModelView;
 import io.github.aigoodle.web.service.ModelCatalogQueryService;
 import io.github.aigoodle.web.support.ModelViewMapper;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -30,6 +36,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import static io.github.aigoodle.common.context.UserContextHolder.currentTenantId;
 
 /**
  * REST facade over {@link ModelService} + {@link ModelProviderRegistry}. Powers the
@@ -76,16 +84,14 @@ public class ModelController {
      * so first-run UX still works.
      */
     @GetMapping("/model-providers")
-    public ApiResponse<List<Map<String, Object>>> listProviders(
-            @RequestParam(required = false) String tenantId) {
-        return ApiResponse.ok(catalogQueries.providers(tenantId));
+    public ApiResponse<List<ProviderView>> listProviders() {
+        return ApiResponse.ok(catalogQueries.providers(currentTenantId()));
             // Cold start fallback — first boot before seeder ran, still show Java built-ins.
     }
 
     @GetMapping("/model-providers/{name}")
-    public ApiResponse<Map<String, Object>> getProvider(@PathVariable String name,
-                                                        @RequestParam(required = false) String tenantId) {
-        return ApiResponse.ok(catalogQueries.provider(name, tenantId));
+    public ApiResponse<ProviderView> getProvider(@PathVariable String name) {
+        return ApiResponse.ok(catalogQueries.provider(name, currentTenantId()));
     }
 
     // ------------------------------------------------ provider definition CRUD
@@ -101,6 +107,7 @@ public class ModelController {
     public ApiResponse<ProviderDefinitionEntity> createDefinition(
             @RequestBody Map<String, Object> body) {
         ProviderDefinitionEntity definition = ModelViewMapper.toProviderDefinition(body);
+        definition.setTenantId(currentTenantId());
         if (definition.getSource() == null) {
             definition.setSource("custom");
         }
@@ -138,9 +145,8 @@ public class ModelController {
      * pulled from {@code agent_provider_model_setting} + {@code agent_tenant_default_model}.
      */
     @GetMapping("/model-providers/{name}/catalog")
-    public ApiResponse<List<Map<String, Object>>> providerCatalog(
-            @PathVariable String name, @RequestParam(required = false) String tenantId) {
-        return ApiResponse.ok(catalogQueries.catalog(name, tenantId));
+    public ApiResponse<List<CatalogModelView>> providerCatalog(@PathVariable String name) {
+        return ApiResponse.ok(catalogQueries.catalog(name, currentTenantId()));
         // Predefined DB rows first (source=predefined), then custom rows.
     }
 
@@ -149,6 +155,7 @@ public class ModelController {
     public ApiResponse<PredefinedModelEntity> addPredefinedModel(
             @PathVariable String name, @RequestBody Map<String, Object> body) {
         PredefinedModelEntity row = new PredefinedModelEntity();
+        row.setTenantId(currentTenantId());
         row.setProviderName(name);
         row.setModel((String) body.get("model"));
         row.setLabel(body.get("label") == null ? (String) body.get("model") : (String) body.get("label"));
@@ -186,8 +193,8 @@ public class ModelController {
     public ApiResponse<Boolean> setModelEnabled(@PathVariable String name,
                                                 @PathVariable String modelName,
                                                 @RequestParam ModelType modelType,
-                                                @RequestParam(required = false) String tenantId,
                                                 @RequestBody Map<String, Object> body) {
+        String tenantId = currentTenantId();
         boolean enabled = body.get("enabled") instanceof Boolean b ? b
                 : Boolean.parseBoolean(String.valueOf(body.get("enabled")));
         settingsService.setEnabled(tenantId, name, modelName, modelType, enabled);
@@ -196,7 +203,7 @@ public class ModelController {
             // appears in the catalog on subsequent loads without needing a refresh.
             if (definitionService.findPredefined(name, modelName, modelType) == null) {
                 PredefinedModelEntity row = new PredefinedModelEntity();
-                row.setTenantId(tenantId == null || tenantId.isBlank() ? "default" : tenantId);
+                row.setTenantId(tenantId);
                 row.setProviderName(name);
                 row.setModel(modelName);
                 row.setLabel(modelName);
@@ -215,8 +222,8 @@ public class ModelController {
     @PutMapping("/model-providers/{name}/models/{modelName}/default")
     public ApiResponse<Void> setModelDefault(@PathVariable String name,
                                              @PathVariable String modelName,
-                                             @RequestParam ModelType modelType,
-                                             @RequestParam(required = false) String tenantId) {
+                                             @RequestParam ModelType modelType) {
+        String tenantId = currentTenantId();
         settingsService.setDefault(tenantId, name, modelName, modelType);
         // A tenant default must be invocable — make sure its enable switch is ON.
         // The dropdown only offers switched-on models, so for UI-driven calls this
@@ -229,10 +236,9 @@ public class ModelController {
     // ------------------------------------------------- provider-level credential
 
     @GetMapping("/model-providers/{name}/credential")
-    public ApiResponse<Map<String, Object>> getProviderCredential(@PathVariable String name,
-                                                                  @RequestParam(required = false) String tenantId) {
+    public ApiResponse<ProviderCredentialView> getProviderCredential(@PathVariable String name) {
         ModelProvider provider = providerRegistry.get(name);
-        ProviderCredentialEntity credential = credentialService.findPrimary(tenantId, provider.getName());
+        ProviderCredentialEntity credential = credentialService.findPrimary(currentTenantId(), provider.getName());
         return ApiResponse.ok(ModelViewMapper.toCredentialView(provider, credential));
     }
 
@@ -245,11 +251,11 @@ public class ModelController {
      * is also the gate for the default-model dropdown.
      */
     @PutMapping("/model-providers/{name}/credential")
-    public ApiResponse<Map<String, Object>> upsertProviderCredential(
+    public ApiResponse<ProviderCredentialView> upsertProviderCredential(
             @PathVariable String name, @RequestBody ProviderCredentialRequest request) {
         ModelProvider provider = providerRegistry.get(name);
         ProviderCredentialEntity credential = modelService.saveProviderCredentialWithValidation(
-                request.getTenantId(), provider.getName(), request.getCredentials());
+                currentTenantId(), provider.getName(), request.getCredentials());
         return ApiResponse.ok(ModelViewMapper.toCredentialView(provider, credential));
     }
 
@@ -262,10 +268,9 @@ public class ModelController {
      * this fix addresses.
      */
     @DeleteMapping("/model-providers/{name}/credential")
-    public ApiResponse<Void> deleteProviderCredential(@PathVariable String name,
-                                                      @RequestParam(required = false) String tenantId) {
+    public ApiResponse<Void> deleteProviderCredential(@PathVariable String name) {
         modelService.deleteProviderCredentialCascade(
-                tenantId, providerRegistry.get(name).getName());
+                currentTenantId(), providerRegistry.get(name).getName());
         return ApiResponse.ok();
     }
 
@@ -274,9 +279,8 @@ public class ModelController {
      * credential. Non-destructive — does not touch the catalog rows.
      */
     @GetMapping("/model-providers/{name}/remote-models")
-    public ApiResponse<List<Map<String, Object>>> listRemoteModels(@PathVariable String name,
-                                                                    @RequestParam(required = false) String tenantId) {
-        List<RemoteModel> models = modelService.listRemoteModels(tenantId, name);
+    public ApiResponse<List<RemoteModelView>> listRemoteModels(@PathVariable String name) {
+        List<RemoteModel> models = modelService.listRemoteModels(currentTenantId(), name);
         return ApiResponse.ok(models.stream().map(ModelViewMapper::toRemoteModelView).toList());
     }
 
@@ -286,17 +290,16 @@ public class ModelController {
      * models the user explicitly enables end up in {@code agent_provider_model_setting}.
      */
     @PostMapping("/model-providers/{name}/refresh-catalog")
-    public ApiResponse<List<Map<String, Object>>> refreshCatalog(
-            @PathVariable String name, @RequestParam(required = false) String tenantId) {
-        List<RemoteModel> remote = modelService.refreshCatalog(tenantId, name);
+    public ApiResponse<List<RemoteModelView>> refreshCatalog(@PathVariable String name) {
+        List<RemoteModel> remote = modelService.refreshCatalog(currentTenantId(), name);
         return ApiResponse.ok(remote.stream().map(ModelViewMapper::toRemoteModelView).toList());
     }
 
     // ------------------------------------------------------------------ models
 
     @GetMapping("/models")
-    public ApiResponse<List<ModelEntity>> listModels(@RequestParam(required = false) String tenantId,
-                                                     @RequestParam(required = false) ModelType type) {
+    public ApiResponse<List<ModelEntity>> listModels(@RequestParam(required = false) ModelType type) {
+        String tenantId = currentTenantId();
         return ApiResponse.ok(type == null ? modelService.list(tenantId) : modelService.listByType(tenantId, type));
     }
 
@@ -307,6 +310,7 @@ public class ModelController {
 
     @PostMapping("/models")
     public ApiResponse<ModelEntity> registerModel(@RequestBody ModelRegistration registration) {
+        registration.setTenantId(currentTenantId());
         return ApiResponse.ok(modelService.register(registration));
     }
 
@@ -344,6 +348,7 @@ public class ModelController {
     /** Dry-run the credentials without persisting: builds the provider once. */
     @PostMapping("/models/validate")
     public ApiResponse<Void> validate(@RequestBody ModelRegistration registration) {
+        registration.setTenantId(currentTenantId());
         modelService.validate(registration);
         return ApiResponse.ok();
     }
@@ -367,7 +372,7 @@ public class ModelController {
      * overrides ({@code apiKey}/{@code baseUrl}) don't leak into the view.
      */
     @GetMapping("/models/{id}/parameters")
-    public ApiResponse<Map<String, Object>> getModelParameters(@PathVariable String id) {
+    public ApiResponse<ModelParametersView> getModelParameters(@PathVariable String id) {
         return ApiResponse.ok(catalogQueries.parameters(id));
     }
 
@@ -377,8 +382,8 @@ public class ModelController {
      * the provider falls back to its own default.
      */
     @PutMapping("/models/{id}/parameters")
-    public ApiResponse<Map<String, Object>> updateModelParameters(@PathVariable String id,
-                                                                  @RequestBody Map<String, Object> parameters) {
+    public ApiResponse<ModelParametersView> updateModelParameters(@PathVariable String id,
+                                                                   @RequestBody Map<String, Object> parameters) {
         modelService.updateParameters(id, parameters);
         return getModelParameters(id);
     }
@@ -389,10 +394,9 @@ public class ModelController {
      * single glance instead of scattered across every model row.
      */
     @GetMapping("/models/defaults")
-    public ApiResponse<Map<String, ModelEntity>> listDefaults(
-            @RequestParam(required = false) String tenantId) {
+    public ApiResponse<Map<String, ModelEntity>> listDefaults() {
         Map<String, ModelEntity> out = new LinkedHashMap<>();
-        modelService.listDefaults(tenantId).forEach((type, entity) -> out.put(type.name(), entity));
+        modelService.listDefaults(currentTenantId()).forEach((type, entity) -> out.put(type.name(), entity));
         return ApiResponse.ok(out);
     }
 
@@ -429,8 +433,7 @@ public class ModelController {
      * {@code PUT /model-providers/{name}/models/{modelName}/default}.
      */
     @GetMapping("/models/grouped-by-type")
-    public ApiResponse<Map<String, List<Map<String, Object>>>> listModelsGroupedByType(
-            @RequestParam(required = false) String tenantId) {
-        return ApiResponse.ok(catalogQueries.groupedModelsByType(tenantId));
+    public ApiResponse<Map<String, List<GroupedProviderView>>> listModelsGroupedByType() {
+        return ApiResponse.ok(catalogQueries.groupedModelsByType(currentTenantId()));
     }
 }

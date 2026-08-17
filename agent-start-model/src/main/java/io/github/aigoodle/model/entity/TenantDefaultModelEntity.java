@@ -13,7 +13,7 @@ import lombok.EqualsAndHashCode;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("agent_tenant_default_model")
+@TableName("goodle_tenant_default_model")
 public class TenantDefaultModelEntity extends BaseEntity {
 
     private String providerName;

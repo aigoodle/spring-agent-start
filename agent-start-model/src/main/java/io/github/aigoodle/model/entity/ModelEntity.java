@@ -41,7 +41,7 @@ import lombok.EqualsAndHashCode;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("agent_model")
+@TableName("goodle_model")
 public class ModelEntity extends BaseEntity {
 
     private String providerName;

@@ -15,6 +15,9 @@ import io.github.aigoodle.model.service.ModelService;
 import io.github.aigoodle.model.service.ProviderCredentialService;
 import io.github.aigoodle.model.service.ProviderDefinitionService;
 import io.github.aigoodle.model.service.ProviderModelSettingsService;
+import io.github.aigoodle.web.dto.ProviderView;
+import io.github.aigoodle.web.dto.model.CatalogModelView;
+import io.github.aigoodle.web.dto.model.ParameterRuleView;
 
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -46,36 +49,36 @@ public final class ModelProviderViewAssembler {
         this.settingsService = settingsService;
     }
 
-    public Map<String, Object> toProviderView(
+    public ProviderView toProviderView(
             ProviderDefinitionEntity definition, String tenantId) {
-        Map<String, Object> view = new LinkedHashMap<>();
-        view.put("id", definition.getId());
-        view.put("name", definition.getName());
-        view.put("label", definition.getLabel());
-        view.put("description", definition.getDescription());
-        view.put("icon", definition.getIcon());
-        view.put("svgIcon", definition.getSvgIcon());
-        view.put("implementationKey", definition.getImplementationKey());
-        view.put("defaultBaseUrl", definition.getDefaultBaseUrl());
-        view.put("source", definition.getSource());
-        view.put("sortOrder", definition.getSortOrder());
-        view.put("enabled", definition.getEnabled());
-        view.put("supportsRemoteModelListing",
+        ProviderView view = new ProviderView();
+        view.setId(definition.getId());
+        view.setName(definition.getName());
+        view.setLabel(definition.getLabel());
+        view.setDescription(definition.getDescription());
+        view.setIcon(definition.getIcon());
+        view.setSvgIcon(definition.getSvgIcon());
+        view.setImplementationKey(definition.getImplementationKey());
+        view.setDefaultBaseUrl(definition.getDefaultBaseUrl());
+        view.setSource(definition.getSource());
+        view.setSortOrder(definition.getSortOrder());
+        view.setEnabled(definition.getEnabled());
+        view.setSupportsRemoteModelListing(
                 Boolean.TRUE.equals(definition.getSupportsRemoteModelListing()));
 
         Set<ModelType> supportedTypes =
                 definitionService.deserializeModelTypes(definition.getSupportedModelTypes());
-        view.put("supportedModelTypes", supportedTypes);
+        view.setSupportedModelTypes(supportedTypes);
         List<CredentialField> credentialFields =
                 definitionService.deserializeCredentialSchema(definition.getCredentialSchema());
-        view.put("credentialSchema", credentialFields.stream()
+        view.setCredentialSchema(credentialFields.stream()
                 .map(ModelViewMapper::toCredentialFieldView)
                 .toList());
-        view.put("defaultParameterRules",
+        view.setDefaultParameterRules(
                 defaultRulesByModelType(definition, supportedTypes));
         List<PredefinedModelEntity> predefinedModels =
                 definitionService.listPredefined(definition.getName());
-        view.put("predefinedModels", predefinedModels.stream()
+        view.setPredefinedModels(predefinedModels.stream()
                 .map(this::toPredefinedModelRow)
                 .toList());
 
@@ -86,25 +89,25 @@ public final class ModelProviderViewAssembler {
         return view;
     }
 
-    public Map<String, Object> toProviderView(ModelProvider provider, String tenantId) {
-        Map<String, Object> view = new LinkedHashMap<>();
-        view.put("name", provider.getName());
-        view.put("label", provider.getLabel());
-        view.put("implementationKey", provider.implementationKey());
-        view.put("source", "builtin");
-        view.put("supportedModelTypes", provider.supportedModelTypes());
-        view.put("credentialSchema", provider.credentialSchema().fields().stream()
+    public ProviderView toProviderView(ModelProvider provider, String tenantId) {
+        ProviderView view = new ProviderView();
+        view.setName(provider.getName());
+        view.setLabel(provider.getLabel());
+        view.setImplementationKey(provider.implementationKey());
+        view.setSource("builtin");
+        view.setSupportedModelTypes(provider.supportedModelTypes());
+        view.setCredentialSchema(provider.credentialSchema().fields().stream()
                 .map(ModelViewMapper::toCredentialFieldView).toList());
-        view.put("predefinedModels", provider.predefinedModels().stream()
+        view.setPredefinedModels(provider.predefinedModels().stream()
                 .map(ModelViewMapper::toPredefinedModelView).toList());
 
-        Map<String, Object> defaultRules = new LinkedHashMap<>();
+        Map<String, List<ParameterRuleView>> defaultRules = new LinkedHashMap<>();
         for (ModelType modelType : provider.supportedModelTypes()) {
             defaultRules.put(modelType.name(), provider.defaultParameterRules(modelType).stream()
                     .map(ModelViewMapper::toParameterRuleView).toList());
         }
-        view.put("defaultParameterRules", defaultRules);
-        view.put("supportsRemoteModelListing", provider.supportsRemoteModelListing());
+        view.setDefaultParameterRules(defaultRules);
+        view.setSupportsRemoteModelListing(provider.supportsRemoteModelListing());
         Set<String> triples = new HashSet<>();
         for (PredefinedModel predefinedModel : provider.predefinedModels()) {
             triples.add(predefinedModel.getModel() + "::" + predefinedModel.getModelType().name());
@@ -114,41 +117,41 @@ public final class ModelProviderViewAssembler {
         return view;
     }
 
-    public Map<String, Object> toCatalogRow(
+    public CatalogModelView toCatalogRow(
             PredefinedModelEntity predefinedModel,
             Map<String, ProviderModelSettingEntity> settings,
             Map<ModelType, TenantDefaultModelEntity> defaults) {
-        Map<String, Object> row = toPredefinedModelRow(predefinedModel);
+        CatalogModelView row = toPredefinedModelRow(predefinedModel);
         ProviderModelSettingEntity setting = settings.get(
                 predefinedModel.getModel() + "::" + predefinedModel.getModelType().name());
-        row.put("enabled", setting != null && Boolean.TRUE.equals(setting.getEnabled()));
-        row.put("loadBalancingEnabled",
+        row.setEnabled(setting != null && Boolean.TRUE.equals(setting.getEnabled()));
+        row.setLoadBalancingEnabled(
                 setting != null && Boolean.TRUE.equals(setting.getLoadBalancingEnabled()));
-        row.put("isDefault", isDefault(predefinedModel.getProviderName(),
+        row.setIsDefault(isDefault(predefinedModel.getProviderName(),
                 predefinedModel.getModel(), defaults.get(predefinedModel.getModelType())));
         return row;
     }
 
-    public Map<String, Object> toCatalogRow(
+    public CatalogModelView toCatalogRow(
             ModelEntity model, Map<ModelType, TenantDefaultModelEntity> defaults) {
-        Map<String, Object> row = new LinkedHashMap<>();
-        row.put("id", model.getId());
-        row.put("model", model.getModelName());
-        row.put("label", model.getModelName());
-        row.put("modelType", model.getModelType());
-        row.put("credentialId", model.getCredentialId());
-        row.put("enabled", model.getEnabled());
-        row.put("source", "custom");
-        row.put("isDefault", isDefault(model.getProviderName(), model.getModelName(),
+        CatalogModelView row = new CatalogModelView();
+        row.setId(model.getId());
+        row.setModel(model.getModelName());
+        row.setLabel(model.getModelName());
+        row.setModelType(model.getModelType());
+        row.setCredentialId(model.getCredentialId());
+        row.setEnabled(model.getEnabled());
+        row.setSource("custom");
+        row.setIsDefault(isDefault(model.getProviderName(), model.getModelName(),
                 defaults.get(model.getModelType())));
         return row;
     }
 
-    private Map<String, Object> defaultRulesByModelType(
+    private Map<String, List<ParameterRuleView>> defaultRulesByModelType(
             ProviderDefinitionEntity definition, Set<ModelType> supportedTypes) {
         Map<ModelType, List<ModelParameterRule>> rulesByType =
                 definitionService.deserializeParameterRules(definition.getDefaultParameterRules());
-        Map<String, Object> viewsByType = new LinkedHashMap<>();
+        Map<String, List<ParameterRuleView>> viewsByType = new LinkedHashMap<>();
         for (ModelType modelType : supportedTypes) {
             viewsByType.put(modelType.name(), rulesByType.getOrDefault(modelType, List.of()).stream()
                     .map(ModelViewMapper::toParameterRuleView).toList());
@@ -156,32 +159,32 @@ public final class ModelProviderViewAssembler {
         return viewsByType;
     }
 
-    private Map<String, Object> toPredefinedModelRow(PredefinedModelEntity model) {
-        Map<String, Object> view = new LinkedHashMap<>();
-        view.put("id", model.getId());
-        view.put("model", model.getModel());
-        view.put("label", model.getLabel());
-        view.put("modelType", model.getModelType());
-        view.put("contextLength", model.getContextLength());
-        view.put("dimensions", model.getDimensions());
-        view.put("features", definitionService.deserializeFeatures(model.getFeatures()));
-        view.put("source", "predefined");
+    private CatalogModelView toPredefinedModelRow(PredefinedModelEntity model) {
+        CatalogModelView view = new CatalogModelView();
+        view.setId(model.getId());
+        view.setModel(model.getModel());
+        view.setLabel(model.getLabel());
+        view.setModelType(model.getModelType());
+        view.setContextLength(model.getContextLength());
+        view.setDimensions(model.getDimensions());
+        view.setFeatures(definitionService.deserializeFeatures(model.getFeatures()));
+        view.setSource("predefined");
         if (model.getParameterRules() != null) {
-            view.put("parameterRules",
+            view.setParameterRules(
                     definitionService.deserializeRuleList(model.getParameterRules()).stream()
                             .map(ModelViewMapper::toParameterRuleView).toList());
         }
         return view;
     }
 
-    private void addTenantState(Map<String, Object> view, String tenantId,
+    private void addTenantState(ProviderView view, String tenantId,
                                 String providerName, List<String> secretFieldNames,
                                 Set<String> predefinedTriples) {
         ProviderCredentialEntity credential = credentialService.findPrimary(tenantId, providerName);
-        view.put("credentialConfigured", credential != null);
+        view.setCredentialConfigured(credential != null);
         if (credential != null) {
-            view.put("credentialId", credential.getId());
-            view.put("credentialMasked",
+            view.setCredentialId(credential.getId());
+            view.setCredentialMasked(
                     credentialService.maskedView(credential, secretFieldNames));
         }
         // Count only genuinely custom models. A materialized copy of a predefined
@@ -193,7 +196,7 @@ public final class ModelProviderViewAssembler {
                 .filter(model -> !predefinedTriples.contains(
                         model.getModelName() + "::" + model.getModelType().name()))
                 .toList();
-        view.put("installedModelCount", customModels.size());
+        view.setInstalledModelCount(customModels.size());
 
         // How many models currently have their switch ON — the same gate the
         // default-model dropdown applies. Predefined rows count when the settings
@@ -211,7 +214,7 @@ public final class ModelProviderViewAssembler {
                 enabledCount++;
             }
         }
-        view.put("enabledModelCount", Math.toIntExact(enabledCount));
+        view.setEnabledModelCount(Math.toIntExact(enabledCount));
     }
 
     private static Set<String> predefinedTriples(List<PredefinedModelEntity> predefinedModels) {
@@ -229,3 +232,4 @@ public final class ModelProviderViewAssembler {
                 && providerName.equalsIgnoreCase(defaultModel.getProviderName());
     }
 }
+

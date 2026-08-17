@@ -7,6 +7,7 @@ import io.github.aigoodle.agent.service.ConversationService;
 import io.github.aigoodle.common.exception.AgentException;
 import io.github.aigoodle.completion.service.AppGenerateService;
 import io.github.aigoodle.completion.service.ConversationHistoryService;
+import io.github.aigoodle.completion.support.ChatAccessPolicy;
 import io.github.aigoodle.completion.support.AppAccessResolver;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
@@ -22,6 +23,7 @@ class ChatControllerTest {
         ChatController controller = new ChatController(
                 mock(AppGenerateService.class),
                 new AppAccessResolver(emptyProvider()),
+                mock(ChatAccessPolicy.class),
                 mock(ConversationHistoryService.class));
 
         assertThatThrownBy(() -> controller.openAICompletions(null,
@@ -56,6 +58,7 @@ class ChatControllerTest {
         ChatController controller = new ChatController(
                 mock(AppGenerateService.class),
                 new AppAccessResolver(emptyProvider()),
+                mock(ChatAccessPolicy.class),
                 new ConversationHistoryService(providerOf(conversationService), emptyProvider()));
 
         assertThatThrownBy(() -> controller.conversationMessages(

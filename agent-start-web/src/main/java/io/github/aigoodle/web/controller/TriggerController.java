@@ -20,6 +20,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.Map;
 
+import static io.github.aigoodle.common.context.UserContextHolder.currentTenantId;
+
 /**
  * REST facade over {@link TriggerService}. Manage webhook / cron / event triggers,
  * fire them manually, list past invocations and replay one. Wired only when the
@@ -38,8 +40,8 @@ public class TriggerController {
     // ------------------------------------------------------------------ CRUD
 
     @GetMapping("/triggers")
-    public ApiResponse<List<TriggerEntity>> list(@RequestParam(required = false) String tenantId) {
-        return ApiResponse.ok(triggerService.list(tenantId));
+    public ApiResponse<List<TriggerEntity>> list() {
+        return ApiResponse.ok(triggerService.list(currentTenantId()));
     }
 
     @GetMapping("/triggers/{id}")
@@ -49,6 +51,7 @@ public class TriggerController {
 
     @PostMapping("/triggers")
     public ApiResponse<TriggerEntity> create(@RequestBody CreateTriggerRequest request) {
+        request.setTenantId(currentTenantId());
         return ApiResponse.ok(triggerService.create(request));
     }
 

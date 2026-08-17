@@ -21,20 +21,20 @@
 
 -- ============================================================================
 --  MODEL MODULE (Dify-parity 6-table split)
---    · agent_model_provider         — provider definitions (DB-driven, seeded from Java built-ins)
---    · agent_predefined_model       — provider catalog (DB-driven, replaces Java predefinedModels())
---    · agent_provider_credential    — encrypted per-tenant credentials
---    · agent_model                  — per-tenant CUSTOM model registrations (with overrides)
---    · agent_provider_model_setting — per-tenant model enable/disable (missing row = enabled)
---    · agent_tenant_default_model   — per-tenant default per model type
---    · agent_prompt_template        — reusable prompt templates
+--    · goodle_model_provider         — provider definitions (DB-driven, seeded from Java built-ins)
+--    · goodle_predefined_model       — provider catalog (DB-driven, replaces Java predefinedModels())
+--    · goodle_provider_credential    — encrypted per-tenant credentials
+--    · goodle_model                  — per-tenant CUSTOM model registrations (with overrides)
+--    · goodle_provider_model_setting — per-tenant model enable/disable (missing row = enabled)
+--    · goodle_tenant_default_model   — per-tenant default per model type
+--    · goodle_prompt_template        — reusable prompt templates
 -- ============================================================================
 
 -- Provider definitions. `source='builtin'` rows are seeded from Java at first boot.
 -- `source='external'|'custom'` can be added via /api/v1/model-provider-definitions
 -- without touching Java code — supporting the "extend supported providers via DB
 -- rather than code" flow.
-CREATE TABLE IF NOT EXISTS agent_model_provider (
+CREATE TABLE IF NOT EXISTS goodle_model_provider (
     id                             VARCHAR(64)  NOT NULL,
     tenant_id                      VARCHAR(64)  NOT NULL DEFAULT 'system',
     name                           VARCHAR(255) NOT NULL,
@@ -55,12 +55,12 @@ CREATE TABLE IF NOT EXISTS agent_model_provider (
     updated_at                     TIMESTAMP,
     PRIMARY KEY (id)
 );
-CREATE INDEX IF NOT EXISTS idx_model_provider_tenant_name ON agent_model_provider (tenant_id, name);
+CREATE INDEX IF NOT EXISTS idx_model_provider_tenant_name ON goodle_model_provider (tenant_id, name);
 
 -- Predefined model catalog per provider. `tenant_id='system'` is the shared
 -- global catalog; a tenant may add its own entries visible only to itself.
 -- Selection state (enabled / default) lives in the setting/default tables.
-CREATE TABLE IF NOT EXISTS agent_predefined_model (
+CREATE TABLE IF NOT EXISTS goodle_predefined_model (
     id                VARCHAR(64)  NOT NULL,
     tenant_id         VARCHAR(64)  NOT NULL DEFAULT 'system',
     provider_name     VARCHAR(255) NOT NULL,
@@ -76,10 +76,10 @@ CREATE TABLE IF NOT EXISTS agent_predefined_model (
     updated_at        TIMESTAMP,
     PRIMARY KEY (id)
 );
-CREATE INDEX IF NOT EXISTS idx_predef_provider_type ON agent_predefined_model (provider_name, model_type);
-CREATE INDEX IF NOT EXISTS idx_predef_tenant_provider ON agent_predefined_model (tenant_id, provider_name);
+CREATE INDEX IF NOT EXISTS idx_predef_provider_type ON goodle_predefined_model (provider_name, model_type);
+CREATE INDEX IF NOT EXISTS idx_predef_tenant_provider ON goodle_predefined_model (tenant_id, provider_name);
 
-CREATE TABLE IF NOT EXISTS agent_provider_credential (
+CREATE TABLE IF NOT EXISTS goodle_provider_credential (
     id               VARCHAR(64)  NOT NULL,
     tenant_id        VARCHAR(64)  NOT NULL DEFAULT 'default',
     provider_name    VARCHAR(128) NOT NULL,
@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS agent_provider_credential (
 
 -- Tenant-registered custom models — only for user-added rows with model-level
 -- overrides. Predefined catalog is NOT persisted here (Dify-parity).
-CREATE TABLE IF NOT EXISTS agent_model (
+CREATE TABLE IF NOT EXISTS goodle_model (
     id               VARCHAR(64)  NOT NULL,
     tenant_id        VARCHAR(64)  NOT NULL DEFAULT 'default',
     provider_name    VARCHAR(128) NOT NULL,
@@ -101,15 +101,15 @@ CREATE TABLE IF NOT EXISTS agent_model (
     model_type       VARCHAR(32)  NOT NULL,
     credential_id    VARCHAR(64),
     encrypted_config TEXT,
-    enabled          BOOLEAN      NOT NULL DEFAULT TRUE,  -- DEPRECATED: moved to agent_provider_model_setting
-    is_default       BOOLEAN      NOT NULL DEFAULT FALSE, -- DEPRECATED: moved to agent_tenant_default_model
+    enabled          BOOLEAN      NOT NULL DEFAULT TRUE,  -- DEPRECATED: moved to goodle_provider_model_setting
+    is_default       BOOLEAN      NOT NULL DEFAULT FALSE, -- DEPRECATED: moved to goodle_tenant_default_model
     created_at       TIMESTAMP,
     updated_at       TIMESTAMP,
     PRIMARY KEY (id)
 );
 
 -- Enable/disable per model per tenant. Missing row = enabled (Dify convention).
-CREATE TABLE IF NOT EXISTS agent_provider_model_setting (
+CREATE TABLE IF NOT EXISTS goodle_provider_model_setting (
     id                     VARCHAR(64)  NOT NULL,
     tenant_id              VARCHAR(64)  NOT NULL DEFAULT 'default',
     provider_name          VARCHAR(128) NOT NULL,
@@ -122,10 +122,10 @@ CREATE TABLE IF NOT EXISTS agent_provider_model_setting (
     PRIMARY KEY (id)
 );
 CREATE INDEX IF NOT EXISTS idx_setting_lookup
-    ON agent_provider_model_setting (tenant_id, provider_name, model_name, model_type);
+    ON goodle_provider_model_setting (tenant_id, provider_name, model_name, model_type);
 
 -- Tenant default per model type (Dify parity for tenant_default_models).
-CREATE TABLE IF NOT EXISTS agent_tenant_default_model (
+CREATE TABLE IF NOT EXISTS goodle_tenant_default_model (
     id             VARCHAR(64)  NOT NULL,
     tenant_id      VARCHAR(64)  NOT NULL DEFAULT 'default',
     provider_name  VARCHAR(128) NOT NULL,
@@ -135,12 +135,12 @@ CREATE TABLE IF NOT EXISTS agent_tenant_default_model (
     updated_at     TIMESTAMP,
     PRIMARY KEY (id)
 );
-CREATE INDEX IF NOT EXISTS idx_default_tenant_type ON agent_tenant_default_model (tenant_id, model_type);
+CREATE INDEX IF NOT EXISTS idx_default_tenant_type ON goodle_tenant_default_model (tenant_id, model_type);
 
-CREATE INDEX IF NOT EXISTS idx_agent_model_tenant_type ON agent_model (tenant_id, model_type);
-CREATE INDEX IF NOT EXISTS idx_agent_cred_tenant_provider ON agent_provider_credential (tenant_id, provider_name);
+CREATE INDEX IF NOT EXISTS idx_agent_model_tenant_type ON goodle_model (tenant_id, model_type);
+CREATE INDEX IF NOT EXISTS idx_agent_cred_tenant_provider ON goodle_provider_credential (tenant_id, provider_name);
 
-CREATE TABLE IF NOT EXISTS agent_prompt_template (
+CREATE TABLE IF NOT EXISTS goodle_prompt_template (
     id           VARCHAR(64)  NOT NULL,
     tenant_id    VARCHAR(64)  NOT NULL DEFAULT 'default',
     name         VARCHAR(255) NOT NULL,
@@ -153,19 +153,19 @@ CREATE TABLE IF NOT EXISTS agent_prompt_template (
     PRIMARY KEY (id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_prompt_tenant_category ON agent_prompt_template (tenant_id, category);
+CREATE INDEX IF NOT EXISTS idx_prompt_tenant_category ON goodle_prompt_template (tenant_id, category);
 
 
 -- ============================================================================
 --  KNOWLEDGE MODULE (aligned with spring-agent-start table names for Dify parity)
---    · dataset               — knowledge bases (was agent_dataset)
---    · documents             — one row per uploaded doc (was agent_knowledge_document)
---    · document_segments     — chunks / embed units (was agent_segment)
---    · embeddings            — JDBC vector-store fallback rows (was agent_vector)
---    · dataset_query         — retrieval + dry-run history (was agent_dataset_hit_test_log)
+--    · goodle_dataset               — knowledge bases (was agent_dataset)
+--    · goodle_documents             — one row per uploaded doc (was agent_knowledge_document)
+--    · goodle_document_segments     — chunks / embed units (was agent_segment)
+--    · goodle_embeddings            — JDBC vector-store fallback rows (was agent_vector)
+--    · goodle_dataset_query         — retrieval + dry-run history (was agent_dataset_hit_test_log)
 -- ============================================================================
 
-CREATE TABLE IF NOT EXISTS dataset (
+CREATE TABLE IF NOT EXISTS goodle_dataset (
     id                    VARCHAR(64)  NOT NULL,
     tenant_id             VARCHAR(64)  NOT NULL DEFAULT 'default',
     name                  VARCHAR(255) NOT NULL,
@@ -182,7 +182,7 @@ CREATE TABLE IF NOT EXISTS dataset (
     PRIMARY KEY (id)
 );
 
-CREATE TABLE IF NOT EXISTS documents (
+CREATE TABLE IF NOT EXISTS goodle_documents (
     id            VARCHAR(64)  NOT NULL,
     tenant_id     VARCHAR(64)  NOT NULL DEFAULT 'default',
     dataset_id    VARCHAR(64)  NOT NULL,
@@ -201,9 +201,9 @@ CREATE TABLE IF NOT EXISTS documents (
 -- Sidecar for the async ingest queue (opt-in via
 -- spring-agent.knowledge.async.enabled=true). Presence of a row = still
 -- in-flight; the worker deletes it on COMPLETED. Kept separate from
--- `documents` so `SELECT * FROM documents` on the card grid doesn't drag
+-- `goodle_documents` so `SELECT * FROM goodle_documents` on the card grid doesn't drag
 -- multi-MB raw_text blobs.
-CREATE TABLE IF NOT EXISTS document_ingest_queue (
+CREATE TABLE IF NOT EXISTS goodle_document_ingest_queue (
     document_id VARCHAR(64) NOT NULL,
     dataset_id  VARCHAR(64) NOT NULL,
     tenant_id   VARCHAR(64) NOT NULL DEFAULT 'default',
@@ -215,9 +215,9 @@ CREATE TABLE IF NOT EXISTS document_ingest_queue (
     updated_at  TIMESTAMP,
     PRIMARY KEY (document_id)
 );
-CREATE INDEX IF NOT EXISTS idx_ingest_queue_dataset ON document_ingest_queue (dataset_id);
+CREATE INDEX IF NOT EXISTS idx_ingest_queue_dataset ON goodle_document_ingest_queue (dataset_id);
 
-CREATE TABLE IF NOT EXISTS document_segments (
+CREATE TABLE IF NOT EXISTS goodle_document_segments (
     id            VARCHAR(64)  NOT NULL,
     tenant_id     VARCHAR(64)  NOT NULL DEFAULT 'default',
     dataset_id    VARCHAR(64)  NOT NULL,
@@ -236,7 +236,7 @@ CREATE TABLE IF NOT EXISTS document_segments (
     PRIMARY KEY (id)
 );
 
-CREATE TABLE IF NOT EXISTS embeddings (
+CREATE TABLE IF NOT EXISTS goodle_embeddings (
     id            VARCHAR(64) NOT NULL,
     dataset_id    VARCHAR(64) NOT NULL,
     content       TEXT,
@@ -245,12 +245,12 @@ CREATE TABLE IF NOT EXISTS embeddings (
     PRIMARY KEY (id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_doc_dataset       ON documents (dataset_id);
-CREATE INDEX IF NOT EXISTS idx_segment_dataset   ON document_segments (dataset_id);
-CREATE INDEX IF NOT EXISTS idx_segment_document  ON document_segments (document_id);
-CREATE INDEX IF NOT EXISTS idx_embeddings_dataset ON embeddings (dataset_id);
+CREATE INDEX IF NOT EXISTS idx_doc_dataset       ON goodle_documents (dataset_id);
+CREATE INDEX IF NOT EXISTS idx_segment_dataset   ON goodle_document_segments (dataset_id);
+CREATE INDEX IF NOT EXISTS idx_segment_document  ON goodle_document_segments (document_id);
+CREATE INDEX IF NOT EXISTS idx_embeddings_dataset ON goodle_embeddings (dataset_id);
 
-CREATE TABLE IF NOT EXISTS dataset_query (
+CREATE TABLE IF NOT EXISTS goodle_dataset_query (
     id           VARCHAR(64) NOT NULL,
     tenant_id    VARCHAR(64) NOT NULL DEFAULT 'default',
     dataset_id   VARCHAR(64) NOT NULL,
@@ -265,21 +265,21 @@ CREATE TABLE IF NOT EXISTS dataset_query (
     PRIMARY KEY (id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_dataset_query_dataset ON dataset_query (dataset_id);
+CREATE INDEX IF NOT EXISTS idx_dataset_query_dataset ON goodle_dataset_query (dataset_id);
 
 
 -- ============================================================================
 --  WORKFLOW MODULE (aligned with spring-agent-start table names)
---    · workflows       — persisted graph definitions (was agent_workflow)
---    · workflow_runs   — one row per execution (was agent_workflow_run)
+--    · goodle_workflows       — persisted graph definitions (was agent_workflow)
+--    · goodle_workflow_runs   — one row per execution (was agent_workflow_run)
 -- ============================================================================
 
--- workflows carries app-scoped drafts + published snapshots (Dify parity).
+-- goodle_workflows carries app-scoped drafts + published snapshots (Dify parity).
 -- Invariant: the draft row's primary key equals the owning app's id, and its
 -- version stays 'draft' forever. Publishing copies the graph into a new row
 -- with a fresh id + timestamp-shaped version; the draft row is never replaced,
 -- so subsequent edits always know where to write.
-CREATE TABLE IF NOT EXISTS workflows (
+CREATE TABLE IF NOT EXISTS goodle_workflows (
     id                      VARCHAR(64)  NOT NULL,
     tenant_id               VARCHAR(64)  NOT NULL DEFAULT 'default',
     app_id                  VARCHAR(64),
@@ -300,10 +300,10 @@ CREATE TABLE IF NOT EXISTS workflows (
     PRIMARY KEY (id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_workflow_app ON workflows (app_id, version);
-CREATE INDEX IF NOT EXISTS idx_workflow_tenant ON workflows (tenant_id);
+CREATE INDEX IF NOT EXISTS idx_workflow_app ON goodle_workflows (app_id, version);
+CREATE INDEX IF NOT EXISTS idx_workflow_tenant ON goodle_workflows (tenant_id);
 
-CREATE TABLE IF NOT EXISTS workflow_runs (
+CREATE TABLE IF NOT EXISTS goodle_workflow_runs (
     id              VARCHAR(64) NOT NULL,
     tenant_id       VARCHAR(64) NOT NULL DEFAULT 'default',
     workflow_id     VARCHAR(64),
@@ -319,16 +319,16 @@ CREATE TABLE IF NOT EXISTS workflow_runs (
     PRIMARY KEY (id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_run_workflow ON workflow_runs (workflow_id);
+CREATE INDEX IF NOT EXISTS idx_run_workflow ON goodle_workflow_runs (workflow_id);
 
 
 -- ============================================================================
---  AGENT MODULE (Dify parity — 智能体应用 as `apps`)
---    · apps        — persisted agent/app config (was agent_definition)
---    · messages    — chat history rows (was agent_chat_message)
+--  AGENT MODULE (Dify parity — 智能体应用 as `goodle_apps`)
+--    · goodle_apps        — persisted agent/app config (was agent_definition)
+--    · goodle_messages    — chat history rows (was agent_chat_message)
 -- ============================================================================
 
-CREATE TABLE IF NOT EXISTS apps (
+CREATE TABLE IF NOT EXISTS goodle_apps (
     id                        VARCHAR(64)  NOT NULL,
     tenant_id                 VARCHAR(64)  NOT NULL DEFAULT 'default',
     name                      VARCHAR(255) NOT NULL,
@@ -353,8 +353,8 @@ CREATE TABLE IF NOT EXISTS apps (
     file_upload_json          TEXT,
     dataset_ids_json          TEXT,
     retrieval_config_json     TEXT,
-    -- FK to workflows.id — the DRAFT workflow this app edits (id == app.id
-    -- invariant, see workflows table comment). Runtime consumers follow
+    -- FK to goodle_workflows.id — the DRAFT workflow this app edits (id == app.id
+    -- invariant, see goodle_workflows table comment). Runtime consumers follow
     -- published snapshots via the same field once a publish has happened.
     workflow_id               VARCHAR(64),
     model_id                  VARCHAR(64),
@@ -371,10 +371,10 @@ CREATE TABLE IF NOT EXISTS apps (
     PRIMARY KEY (id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_apps_tenant_mode ON apps (tenant_id, mode);
-CREATE INDEX IF NOT EXISTS idx_apps_published ON apps (published);
+CREATE INDEX IF NOT EXISTS idx_apps_tenant_mode ON goodle_apps (tenant_id, mode);
+CREATE INDEX IF NOT EXISTS idx_apps_published ON goodle_apps (published);
 
-CREATE TABLE IF NOT EXISTS messages (
+CREATE TABLE IF NOT EXISTS goodle_messages (
     id              VARCHAR(64) NOT NULL,
     tenant_id       VARCHAR(64) NOT NULL DEFAULT 'default',
     conversation_id VARCHAR(64) NOT NULL,
@@ -387,10 +387,10 @@ CREATE TABLE IF NOT EXISTS messages (
     PRIMARY KEY (id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_chat_conversation ON messages (conversation_id, seq);
-CREATE INDEX IF NOT EXISTS idx_chat_agent_conv   ON messages (agent_id, conversation_id);
+CREATE INDEX IF NOT EXISTS idx_chat_conversation ON goodle_messages (conversation_id, seq);
+CREATE INDEX IF NOT EXISTS idx_chat_agent_conv   ON goodle_messages (agent_id, conversation_id);
 
-CREATE TABLE IF NOT EXISTS app_annotations (
+CREATE TABLE IF NOT EXISTS goodle_app_annotations (
     id         VARCHAR(64) NOT NULL,
     tenant_id  VARCHAR(64) NOT NULL DEFAULT 'default',
     app_id     VARCHAR(64) NOT NULL,
@@ -403,11 +403,11 @@ CREATE TABLE IF NOT EXISTS app_annotations (
     PRIMARY KEY (id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_annotation_app ON app_annotations (app_id);
+CREATE INDEX IF NOT EXISTS idx_annotation_app ON goodle_app_annotations (app_id);
 
 -- Per-app annotation retrieval configuration (score threshold + embedding
 -- model). Effectively singleton per app; upsert by app_id.
-CREATE TABLE IF NOT EXISTS app_annotation_settings (
+CREATE TABLE IF NOT EXISTS goodle_app_annotation_settings (
     id                 VARCHAR(64) NOT NULL,
     tenant_id          VARCHAR(64) NOT NULL DEFAULT 'default',
     app_id             VARCHAR(64) NOT NULL,
@@ -418,10 +418,10 @@ CREATE TABLE IF NOT EXISTS app_annotation_settings (
     updated_at         TIMESTAMP,
     PRIMARY KEY (id)
 );
-CREATE INDEX IF NOT EXISTS idx_annotation_setting_app ON app_annotation_settings (app_id);
+CREATE INDEX IF NOT EXISTS idx_annotation_setting_app ON goodle_app_annotation_settings (app_id);
 
--- Chat sessions grouping messages under an app.
-CREATE TABLE IF NOT EXISTS conversations (
+-- Chat sessions grouping goodle_messages under an app.
+CREATE TABLE IF NOT EXISTS goodle_conversations (
     id                VARCHAR(64) NOT NULL,
     tenant_id         VARCHAR(64) NOT NULL DEFAULT 'default',
     app_id            VARCHAR(64) NOT NULL,
@@ -437,10 +437,10 @@ CREATE TABLE IF NOT EXISTS conversations (
     updated_at        TIMESTAMP,
     PRIMARY KEY (id)
 );
-CREATE INDEX IF NOT EXISTS idx_conversation_app ON conversations (app_id);
+CREATE INDEX IF NOT EXISTS idx_conversation_app ON goodle_conversations (app_id);
 
 -- Per-app API access tokens.
-CREATE TABLE IF NOT EXISTS api_tokens (
+CREATE TABLE IF NOT EXISTS goodle_api_tokens (
     id           VARCHAR(64) NOT NULL,
     tenant_id    VARCHAR(64) NOT NULL DEFAULT 'default',
     app_id       VARCHAR(64) NOT NULL,
@@ -452,11 +452,11 @@ CREATE TABLE IF NOT EXISTS api_tokens (
     updated_at   TIMESTAMP,
     PRIMARY KEY (id)
 );
-CREATE INDEX IF NOT EXISTS idx_api_token_app   ON api_tokens (app_id);
-CREATE INDEX IF NOT EXISTS idx_api_token_value ON api_tokens (token);
+CREATE INDEX IF NOT EXISTS idx_api_token_app   ON goodle_api_tokens (app_id);
+CREATE INDEX IF NOT EXISTS idx_api_token_value ON goodle_api_tokens (token);
 
 -- Published widget / hosted-site config for an app. Singleton per app.
-CREATE TABLE IF NOT EXISTS app_sites (
+CREATE TABLE IF NOT EXISTS goodle_app_sites (
     id                        VARCHAR(64) NOT NULL,
     tenant_id                 VARCHAR(64) NOT NULL DEFAULT 'default',
     app_id                    VARCHAR(64) NOT NULL,
@@ -479,11 +479,11 @@ CREATE TABLE IF NOT EXISTS app_sites (
     updated_at                TIMESTAMP,
     PRIMARY KEY (id)
 );
-CREATE INDEX IF NOT EXISTS idx_app_site_app  ON app_sites (app_id);
-CREATE INDEX IF NOT EXISTS idx_app_site_code ON app_sites (code);
+CREATE INDEX IF NOT EXISTS idx_app_site_app  ON goodle_app_sites (app_id);
+CREATE INDEX IF NOT EXISTS idx_app_site_code ON goodle_app_sites (code);
 
--- Tenant-scoped organisational tags applied to apps or datasets.
-CREATE TABLE IF NOT EXISTS tags (
+-- Tenant-scoped organisational goodle_tags applied to goodle_apps or datasets.
+CREATE TABLE IF NOT EXISTS goodle_tags (
     id         VARCHAR(64) NOT NULL,
     tenant_id  VARCHAR(64) NOT NULL DEFAULT 'default',
     type       VARCHAR(32) DEFAULT 'app',
@@ -492,9 +492,9 @@ CREATE TABLE IF NOT EXISTS tags (
     updated_at TIMESTAMP,
     PRIMARY KEY (id)
 );
-CREATE INDEX IF NOT EXISTS idx_tag_tenant_type ON tags (tenant_id, type);
+CREATE INDEX IF NOT EXISTS idx_tag_tenant_type ON goodle_tags (tenant_id, type);
 
-CREATE TABLE IF NOT EXISTS tag_bindings (
+CREATE TABLE IF NOT EXISTS goodle_tag_bindings (
     id          VARCHAR(64) NOT NULL,
     tenant_id   VARCHAR(64) NOT NULL DEFAULT 'default',
     tag_id      VARCHAR(64) NOT NULL,
@@ -504,17 +504,17 @@ CREATE TABLE IF NOT EXISTS tag_bindings (
     updated_at  TIMESTAMP,
     PRIMARY KEY (id)
 );
-CREATE INDEX IF NOT EXISTS idx_tag_binding_target ON tag_bindings (target_id, target_type);
-CREATE INDEX IF NOT EXISTS idx_tag_binding_tag    ON tag_bindings (tag_id);
+CREATE INDEX IF NOT EXISTS idx_tag_binding_target ON goodle_tag_bindings (target_id, target_type);
+CREATE INDEX IF NOT EXISTS idx_tag_binding_tag    ON goodle_tag_bindings (tag_id);
 
 
 -- ============================================================================
 --  TRIGGER MODULE (aligned with spring-agent-start table names)
---    · app_triggers          — webhook / cron / event triggers (was agent_trigger)
---    · trigger_invocations   — every fire recorded here (was agent_trigger_invocation)
+--    · goodle_app_triggers          — webhook / cron / event triggers (was agent_trigger)
+--    · goodle_trigger_invocations   — every fire recorded here (was agent_trigger_invocation)
 -- ============================================================================
 
-CREATE TABLE IF NOT EXISTS app_triggers (
+CREATE TABLE IF NOT EXISTS goodle_app_triggers (
     id          VARCHAR(64)  NOT NULL,
     tenant_id   VARCHAR(64)  NOT NULL DEFAULT 'default',
     name        VARCHAR(255),
@@ -528,7 +528,7 @@ CREATE TABLE IF NOT EXISTS app_triggers (
     PRIMARY KEY (id)
 );
 
-CREATE TABLE IF NOT EXISTS trigger_invocations (
+CREATE TABLE IF NOT EXISTS goodle_trigger_invocations (
     id           VARCHAR(64) NOT NULL,
     tenant_id    VARCHAR(64) NOT NULL DEFAULT 'default',
     trigger_id   VARCHAR(64) NOT NULL,
@@ -544,16 +544,16 @@ CREATE TABLE IF NOT EXISTS trigger_invocations (
     PRIMARY KEY (id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_trigger_type          ON app_triggers (type, enabled);
-CREATE INDEX IF NOT EXISTS idx_invocation_trigger    ON trigger_invocations (trigger_id);
+CREATE INDEX IF NOT EXISTS idx_trigger_type          ON goodle_app_triggers (type, enabled);
+CREATE INDEX IF NOT EXISTS idx_invocation_trigger    ON goodle_trigger_invocations (trigger_id);
 
 
 -- ============================================================================
 --  OBSERVABILITY MODULE
---    · llm_calls — per-LLM-call metrics (tokens / cost / latency); was agent_llm_call
+--    · goodle_llm_calls — per-LLM-call metrics (tokens / cost / latency); was agent_llm_call
 -- ============================================================================
 
-CREATE TABLE IF NOT EXISTS llm_calls (
+CREATE TABLE IF NOT EXISTS goodle_llm_calls (
     id                VARCHAR(64) NOT NULL,
     tenant_id         VARCHAR(64) NOT NULL DEFAULT 'default',
     provider          VARCHAR(128),
@@ -570,14 +570,14 @@ CREATE TABLE IF NOT EXISTS llm_calls (
     PRIMARY KEY (id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_llm_call_model    ON llm_calls (model);
-CREATE INDEX IF NOT EXISTS idx_llm_call_created  ON llm_calls (created_at);
+CREATE INDEX IF NOT EXISTS idx_llm_call_model    ON goodle_llm_calls (model);
+CREATE INDEX IF NOT EXISTS idx_llm_call_created  ON goodle_llm_calls (created_at);
 
 
 -- ============================================================================
---  Done. If you want pgvector for embeddings instead of the built-in JDBC store:
+--  Done. If you want pgvector for goodle_embeddings instead of the built-in JDBC store:
 --    1. CREATE EXTENSION IF NOT EXISTS vector;
 --    2. Add agent-start-store-pgvector to your pom.
 --    3. Set spring-agent.knowledge.vector-store=pgvector.
---    Each dataset then gets its own {dataset_id}-scoped pgvector table.
+--    Each goodle_dataset then gets its own {dataset_id}-scoped pgvector table.
 -- ============================================================================

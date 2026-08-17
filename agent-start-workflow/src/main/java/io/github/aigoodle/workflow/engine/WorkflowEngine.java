@@ -1,5 +1,6 @@
 package io.github.aigoodle.workflow.engine;
 
+import io.github.aigoodle.common.context.UserContextHolder;
 import io.github.aigoodle.common.exception.AgentException;
 import io.github.aigoodle.workflow.graph.EdgeDef;
 import io.github.aigoodle.workflow.graph.NodeDef;
@@ -81,6 +82,11 @@ public class WorkflowEngine {
                                   io.github.aigoodle.workflow.chat.ChatStreamSink chatSink) {
         graph.reindex();
         ExecutionContext context = ExecutionContext.start(inputs, conversationId, chatSink);
+        // Capture the request tenant before node execution switches to per-run
+        // virtual threads. UserContextHolder is backed by a regular ThreadLocal,
+        // so reading it inside NodeExecutor/NodeModelResolver would otherwise
+        // lose the authenticated tenant and silently fall back to "default".
+        context.setTenantId(UserContextHolder.currentTenantId());
         WorkflowRunResult result = WorkflowRunResult.forRun(context.getRunId(), context.getSteps());
         RunState run = new RunState(context, stepListener);
 

@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+import static io.github.aigoodle.common.context.UserContextHolder.currentTenantId;
+
 /**
  * REST facade over {@link LlmMetricsService}. Exposes the numbers an LLMOps view
  * needs: per-model aggregates, a running total and the most recent raw calls.
@@ -30,13 +32,13 @@ public class ObservabilityController {
     }
 
     @GetMapping("/stats")
-    public ApiResponse<List<LlmUsageStats>> statsByModel(@RequestParam(required = false) String tenantId) {
-        return ApiResponse.ok(metrics.statsByModel(tenantId));
+    public ApiResponse<List<LlmUsageStats>> statsByModel() {
+        return ApiResponse.ok(metrics.statsByModel(currentTenantId()));
     }
 
     @GetMapping("/total")
-    public ApiResponse<LlmUsageStats> total(@RequestParam(required = false) String tenantId) {
-        return ApiResponse.ok(metrics.total(tenantId));
+    public ApiResponse<LlmUsageStats> total() {
+        return ApiResponse.ok(metrics.total(currentTenantId()));
     }
 
     @GetMapping("/recent")

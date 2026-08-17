@@ -12,7 +12,7 @@ import lombok.EqualsAndHashCode;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("agent_prompt_template")
+@TableName("goodle_prompt_template")
 public class PromptTemplateEntity extends BaseEntity {
 
     private String name;
