@@ -33,6 +33,23 @@ public final class AppAccessResolver {
         return token.getAppId();
     }
 
+    /**
+     * Resolves an application exclusively from a persisted API key.
+     *
+     * <p>This is the production-facing OpenAI-compatible access path: callers do
+     * not provide an app id, and an unknown/missing bearer value must never fall
+     * back to being treated as one.</p>
+     */
+    public String requireTokenApp(String authorizationHeader) {
+        ApiTokenEntity token = findToken(authorizationHeader);
+        if (token == null) {
+            throw new AgentException("invalid_api_key",
+                    "缺少或无效的 API Key，请使用 Authorization: Bearer <API_KEY>", null);
+        }
+        touch(token);
+        return token.getAppId();
+    }
+
     public String resolveDifyApp(String queryAppId, String headerAppId,
                                  String authorizationHeader,
                                  DifyChatMessagesRequest request) {

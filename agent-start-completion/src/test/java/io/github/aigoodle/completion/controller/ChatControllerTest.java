@@ -1,6 +1,8 @@
 package io.github.aigoodle.completion.controller;
 
 import io.github.aigoodle.agent.entity.ConversationEntity;
+import io.github.aigoodle.agent.entity.ApiTokenEntity;
+import io.github.aigoodle.agent.service.ApiTokenService;
 import io.github.aigoodle.agent.service.ConversationService;
 import io.github.aigoodle.common.exception.AgentException;
 import io.github.aigoodle.completion.service.AppGenerateService;
@@ -14,6 +16,34 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class ChatControllerTest {
+
+    @Test
+    void openAIEndpointRejectsMissingApiKey() {
+        ChatController controller = new ChatController(
+                mock(AppGenerateService.class),
+                new AppAccessResolver(emptyProvider()),
+                mock(ConversationHistoryService.class));
+
+        assertThatThrownBy(() -> controller.openAICompletions(null,
+                new io.github.aigoodle.completion.dto.openai.OpenAIChatRequest()))
+                .isInstanceOf(AgentException.class)
+                .hasMessageContaining("API Key");
+    }
+
+    @Test
+    void apiKeyResolvesApplicationWithoutClientSuppliedAppId() {
+        ApiTokenService tokenService = mock(ApiTokenService.class);
+        ApiTokenEntity token = new ApiTokenEntity();
+        token.setId("token-1");
+        token.setAppId("app-from-key");
+        when(tokenService.findByToken("secret-key")).thenReturn(token);
+
+        AppAccessResolver resolver = new AppAccessResolver(providerOf(tokenService));
+
+        org.assertj.core.api.Assertions.assertThat(
+                resolver.requireTokenApp("Bearer secret-key"))
+                .isEqualTo("app-from-key");
+    }
 
     @Test
     void rejectsConversationOwnedByAnotherApplication() {

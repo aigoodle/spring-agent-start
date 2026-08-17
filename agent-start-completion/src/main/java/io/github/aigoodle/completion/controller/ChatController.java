@@ -49,6 +49,33 @@ public class ChatController {
         this.appAccessResolver = appAccessResolver;
     }
 
+    /**
+     * OpenAI-compatible endpoint for end-user chat windows. The target app is
+     * resolved from the API key, so the browser request never carries appId.
+     */
+    @PostMapping(
+            value = "/v1/chat/completions",
+            consumes = {MediaType.APPLICATION_JSON_VALUE,
+                    MediaType.APPLICATION_JSON_VALUE + ";charset=UTF-8"},
+            produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.TEXT_EVENT_STREAM_VALUE})
+    public ResponseEntity<?> openAICompletions(
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false)
+            String authorizationHeader,
+            @RequestBody OpenAIChatRequest request) {
+        String appId = appAccessResolver.requireTokenApp(authorizationHeader);
+        // Public OpenAI-compatible calls may only execute the app's published binding.
+        request.setDebug(null);
+        request.setWorkflowId(null);
+        request.setAppId(null);
+        if (request.streaming()) {
+            return eventStream(appGenerateService.generateStream(appId, request));
+        }
+        Mono<OpenAIChatResponse> response = Mono.fromCallable(
+                        () -> appGenerateService.generateBlocking(appId, request))
+                .subscribeOn(BLOCKING_SCHEDULER);
+        return json(response);
+    }
+
     @PostMapping(
             value = "/chat/completions/{appId}",
             consumes = {MediaType.APPLICATION_JSON_VALUE,
