@@ -42,18 +42,28 @@ public class AppGenerateService {
     }
 
     public OpenAIChatResponse generateBlocking(String appId, OpenAIChatRequest request) {
-        AgentEntity application = prepareRequest(appId, request);
+        return generateBlocking(appId, null, request);
+    }
+
+    public OpenAIChatResponse generateBlocking(String appId, String executionTenantId,
+                                               OpenAIChatRequest request) {
+        AgentEntity application = prepareRequest(appId, executionTenantId, request);
         return runtimeRouter.generateBlocking(application, request);
     }
 
     public Flux<ServerSentEvent<Object>> generateStream(String appId, OpenAIChatRequest request) {
-        AgentEntity application = prepareRequest(appId, request);
+        return generateStream(appId, null, request);
+    }
+
+    public Flux<ServerSentEvent<Object>> generateStream(String appId, String executionTenantId,
+                                                        OpenAIChatRequest request) {
+        AgentEntity application = prepareRequest(appId, executionTenantId, request);
         return SseBridge.stream(emitter ->
                 runtimeRouter.generateStream(application, request, emitter));
     }
 
     public Flux<ServerSentEvent<Object>> generateDifyStream(String appId, OpenAIChatRequest request) {
-        AgentEntity application = prepareRequest(appId, request);
+        AgentEntity application = prepareRequest(appId, null, request);
         String taskId = "task-" + UUID.randomUUID();
         return SseBridge.stream(emitter -> runtimeRouter.generateStream(
                 application,
@@ -61,8 +71,12 @@ public class AppGenerateService {
                 new DifyEmitAdapter(emitter, taskId, request.getConversationId())));
     }
 
-    private AgentEntity prepareRequest(String appId, OpenAIChatRequest request) {
+    private AgentEntity prepareRequest(String appId, String executionTenantId,
+                                       OpenAIChatRequest request) {
         AgentEntity application = agentService.require(appId);
+        if (executionTenantId != null && !executionTenantId.isBlank()) {
+            application.setTenantId(executionTenantId);
+        }
         requestInitializer.initialize(application, request);
         return application;
     }

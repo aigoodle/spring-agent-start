@@ -23,6 +23,12 @@ import lombok.EqualsAndHashCode;
 @TableName("goodle_apps")
 public class AgentEntity extends BaseEntity {
 
+    /** Stable tenant-scoped identifier used by internal SaaS integrations. */
+    private String appCode;
+
+    /** PRIVATE / TENANT_LIST / GLOBAL. GLOBAL apps may be executed by other tenants. */
+    private String visibility;
+
     private String name;
 
     /** Short summary shown on the agent list card (Dify parity). */

@@ -63,7 +63,8 @@ public class IterationNodeExecutor implements NodeExecutor {
         for (int index = 0; index < items.size(); index++) {
             Map<String, Object> iterationInputs = configuration.inputsFor(items.get(index), index);
             WorkflowRunResult iterationResult = workflowEngine.run(
-                    subGraph, iterationInputs, context.getConversationId());
+                    subGraph, iterationInputs, context.getConversationId(), null, null,
+                    context.getTenantId());
             if (iterationResult.isSuccess()) {
                 collectedOutputs.add(iterationResult.getOutputs());
                 continue;

@@ -1,5 +1,7 @@
 package io.github.aigoodle.workflow.node.builtin;
 
+import io.github.aigoodle.common.context.CurrentUser;
+import io.github.aigoodle.common.context.UserContextHolder;
 import io.github.aigoodle.model.entity.ModelEntity;
 import io.github.aigoodle.model.enums.ModelType;
 import io.github.aigoodle.model.service.ModelService;
@@ -85,5 +87,28 @@ class NodeModelReferenceTest {
 
         verify(modelService).findOrMaterialize(
                 "default", "zhipu", "glm-4", ModelType.LLM);
+    }
+
+    @Test
+    void fallsBackToCurrentUserTenantWhenExecutionContextHasNoTenant() {
+        ModelService modelService = mock(ModelService.class);
+        ModelEntity materializedModel = new ModelEntity();
+        materializedModel.setId("model-id");
+        when(modelService.findOrMaterialize(
+                "tenant-from-user", "qwen", "qwen-plus", ModelType.LLM))
+                .thenReturn(materializedModel);
+        NodeDef node = NodeDef.of("llm", NodeType.LLM)
+                .with("modelProvider", "qwen")
+                .with("modelName", "qwen-plus");
+        CurrentUser user = CurrentUser.builder()
+                .userId("user-1")
+                .tenantId("tenant-from-user")
+                .build();
+
+        UserContextHolder.runAs(user,
+                () -> NodeModelResolver.resolve(node, new ExecutionContext(), modelService));
+
+        verify(modelService).findOrMaterialize(
+                "tenant-from-user", "qwen", "qwen-plus", ModelType.LLM);
     }
 }

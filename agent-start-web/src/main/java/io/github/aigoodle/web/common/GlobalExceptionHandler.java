@@ -11,6 +11,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.LinkedHashMap;
@@ -93,6 +94,12 @@ public class GlobalExceptionHandler {
             default -> ApiErrorCode.SERVER_ERROR;
         };
         return build(code, ex.getReason(), null);
+    }
+
+    /** The SSE client has gone away; the response is already committed and must not be rewritten. */
+    @ExceptionHandler(AsyncRequestNotUsableException.class)
+    public void handleClientDisconnect(AsyncRequestNotUsableException ex) {
+        log.debug("SSE client disconnected: {}", ex.getMessage());
     }
 
     @ExceptionHandler(Exception.class)

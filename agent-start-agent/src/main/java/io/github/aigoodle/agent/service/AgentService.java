@@ -156,6 +156,41 @@ public class AgentService implements AgentRuntime {
                 .orderByDesc(AgentEntity::getId));
     }
 
+    /** Resolve an internal app by stable code, preferring a tenant-owned override. */
+    public AgentEntity requireVisibleByCode(String appCode, String executionTenantId,
+                                            String rootTenantId) {
+        String code = valueOrDefault(appCode, "").trim().toLowerCase(java.util.Locale.ROOT);
+        if (code.isEmpty()) {
+            throw new AgentException("app_code_required", "应用编码不能为空", null);
+        }
+        String tenant = valueOrDefault(executionTenantId, DEFAULT_TENANT_ID);
+        AgentEntity owned = findByTenantAndCode(tenant, code);
+        if (owned != null) {
+            return requireRunnable(owned);
+        }
+        String root = valueOrDefault(rootTenantId, "root");
+        AgentEntity shared = findByTenantAndCode(root, code);
+        if (shared == null || !"GLOBAL".equalsIgnoreCase(shared.getVisibility())) {
+            throw new AgentException("app_not_found", "应用不存在或无权访问", null);
+        }
+        return requireRunnable(shared);
+    }
+
+    private AgentEntity findByTenantAndCode(String tenantId, String appCode) {
+        return agentMapper.selectOne(new LambdaQueryWrapper<AgentEntity>()
+                .eq(AgentEntity::getTenantId, tenantId)
+                .eq(AgentEntity::getAppCode, appCode)
+                .last("LIMIT 1"));
+    }
+
+    private static AgentEntity requireRunnable(AgentEntity app) {
+        if (!Boolean.TRUE.equals(app.getPublished())
+                || "disabled".equalsIgnoreCase(app.getStatus())) {
+            throw new AgentException("app_unavailable", "应用尚未发布或已停用", null);
+        }
+        return app;
+    }
+
     @Transactional
     public AgentEntity update(String agentId, CreateAgentRequest request) {
         AgentEntity agent = require(agentId);

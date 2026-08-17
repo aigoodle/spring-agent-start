@@ -246,7 +246,8 @@ public class WorkflowService {
         scopedInputs.putIfAbsent("_memory_tenant_id",
                 workflow.getTenantId() == null ? "default" : workflow.getTenantId());
         WorkflowRunResult result = workflowEngine.run(
-                graph, scopedInputs, conversationId, stepListener, chatSink);
+                graph, scopedInputs, conversationId, stepListener, chatSink,
+                workflow.getTenantId());
         runStore.recordStoredRun(workflowId, conversationId, scopedInputs, result);
         return result;
     }

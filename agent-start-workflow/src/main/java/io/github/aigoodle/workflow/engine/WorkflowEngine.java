@@ -80,13 +80,22 @@ public class WorkflowEngine {
     public WorkflowRunResult run(WorkflowGraph graph, Map<String, Object> inputs, String conversationId,
                                   Consumer<StepRecord> stepListener,
                                   io.github.aigoodle.workflow.chat.ChatStreamSink chatSink) {
+        return run(graph, inputs, conversationId, stepListener, chatSink,
+                UserContextHolder.currentTenantId());
+    }
+
+    public WorkflowRunResult run(WorkflowGraph graph, Map<String, Object> inputs, String conversationId,
+                                  Consumer<StepRecord> stepListener,
+                                  io.github.aigoodle.workflow.chat.ChatStreamSink chatSink,
+                                  String tenantId) {
         graph.reindex();
         ExecutionContext context = ExecutionContext.start(inputs, conversationId, chatSink);
         // Capture the request tenant before node execution switches to per-run
         // virtual threads. UserContextHolder is backed by a regular ThreadLocal,
         // so reading it inside NodeExecutor/NodeModelResolver would otherwise
         // lose the authenticated tenant and silently fall back to "default".
-        context.setTenantId(UserContextHolder.currentTenantId());
+        context.setTenantId(tenantId == null || tenantId.isBlank()
+                ? UserContextHolder.currentTenantId() : tenantId);
         WorkflowRunResult result = WorkflowRunResult.forRun(context.getRunId(), context.getSteps());
         RunState run = new RunState(context, stepListener);
 

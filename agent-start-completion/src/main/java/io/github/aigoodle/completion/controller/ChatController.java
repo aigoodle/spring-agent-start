@@ -68,7 +68,22 @@ public class ChatController {
         request.setDebug(null);
         request.setWorkflowId(null);
         request.setAppId(null);
-        return generateOpenAI(access.appId(), request);
+        return generateOpenAI(access, request);
+    }
+
+    @PostMapping(
+            value = "/internal/apps/by-code/{appCode}/chat/completions",
+            consumes = {MediaType.APPLICATION_JSON_VALUE,
+                    MediaType.APPLICATION_JSON_VALUE + ";charset=UTF-8"},
+            produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.TEXT_EVENT_STREAM_VALUE})
+    public ResponseEntity<?> internalCompletionsByCode(
+            @PathVariable String appCode,
+            @RequestBody OpenAIChatRequest request) {
+        ChatAccessContext access = chatAccessPolicy.authorizeInternalByCode(appCode);
+        request.setDebug(null);
+        request.setWorkflowId(null);
+        request.setAppId(null);
+        return generateOpenAI(access, request);
     }
 
     @PostMapping(
@@ -86,7 +101,7 @@ public class ChatController {
         request.setDebug(workflowId == null);
         request.setWorkflowId(workflowId);
         request.setAppId(null);
-        return generateOpenAI(access.appId(), request);
+        return generateOpenAI(access, request);
     }
 
     /**
@@ -108,7 +123,7 @@ public class ChatController {
         request.setDebug(null);
         request.setWorkflowId(null);
         request.setAppId(null);
-        return generateOpenAI(access.appId(), request);
+        return generateOpenAI(access, request);
     }
 
     @PostMapping(
@@ -204,6 +219,34 @@ public class ChatController {
                 appId, conversationId, limit));
     }
 
+    /**
+     * JSON-only history endpoints used by the embedded chat client. Keeping these
+     * on the chat facade ensures chat streaming and history ship as one service.
+     */
+    @PostMapping(
+            value = "/conversations",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ApiResponse<List<Map<String, Object>>> listConversationsJson(
+            @RequestBody HistoryQuery query) {
+        String appId = requiredHistoryValue(query == null ? null : query.appId, "appId");
+        return ApiResponse.ok(conversationHistoryService.conversations(
+                appId, resolveLimit(query, 100, 500)));
+    }
+
+    @PostMapping(
+            value = "/conversations/messages",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ApiResponse<List<Map<String, Object>>> conversationMessagesJson(
+            @RequestBody HistoryQuery query) {
+        String appId = requiredHistoryValue(query == null ? null : query.appId, "appId");
+        String conversationId = requiredHistoryValue(
+                query == null ? null : query.conversationId, "conversationId");
+        return ApiResponse.ok(conversationHistoryService.messages(
+                appId, conversationId, resolveLimit(query, 500, 500)));
+    }
+
     private static ResponseEntity<?> eventStream(Flux<ServerSentEvent<Object>> stream) {
         return ResponseEntity.ok().contentType(MediaType.TEXT_EVENT_STREAM).body(stream);
     }
@@ -214,6 +257,18 @@ public class ChatController {
         }
         Mono<OpenAIChatResponse> response = Mono.fromCallable(
                         () -> appGenerateService.generateBlocking(appId, request))
+                .subscribeOn(BLOCKING_SCHEDULER);
+        return json(response);
+    }
+
+    private ResponseEntity<?> generateOpenAI(ChatAccessContext access, OpenAIChatRequest request) {
+        if (request.streaming()) {
+            return eventStream(appGenerateService.generateStream(
+                    access.appId(), access.tenantId(), request));
+        }
+        Mono<OpenAIChatResponse> response = Mono.fromCallable(() ->
+                        appGenerateService.generateBlocking(
+                                access.appId(), access.tenantId(), request))
                 .subscribeOn(BLOCKING_SCHEDULER);
         return json(response);
     }
@@ -268,9 +323,37 @@ public class ChatController {
         return Math.min(maximum, query.limit);
     }
 
+    private static String requiredHistoryValue(String value, String field) {
+        String normalized = AppAccessResolver.trimToNull(value);
+        if (normalized == null) {
+            throw new IllegalArgumentException(field + " is required");
+        }
+        return normalized;
+    }
+
     public static class HistoryQuery {
 
+        public String appId;
+
+        public String conversationId;
+
         public Integer limit;
+
+        public String getAppId() {
+            return appId;
+        }
+
+        public void setAppId(String appId) {
+            this.appId = appId;
+        }
+
+        public String getConversationId() {
+            return conversationId;
+        }
+
+        public void setConversationId(String conversationId) {
+            this.conversationId = conversationId;
+        }
 
         public Integer getLimit() {
             return limit;

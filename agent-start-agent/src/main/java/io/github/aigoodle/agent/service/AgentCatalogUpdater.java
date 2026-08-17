@@ -9,9 +9,11 @@ final class AgentCatalogUpdater {
 
     private static final String DEFAULT_MODE = "agent";
     private static final String DEFAULT_STATUS = "normal";
+    private static final String DEFAULT_VISIBILITY = "PRIVATE";
 
     void applyRequest(CreateAgentRequest request, AgentEntity agent) {
         applyWhenPresent(request.getName(), agent::setName);
+        applyWhenPresent(request.getAppCode(), value -> agent.setAppCode(normalizeCode(value)));
         applyWhenPresent(request.getDescription(), agent::setDescription);
         applyWhenPresent(request.getIcon(), agent::setIcon);
         applyWhenPresent(request.getIconBackground(), agent::setIconBackground);
@@ -29,7 +31,26 @@ final class AgentCatalogUpdater {
                 request.getMode(), agent.getMode(), DEFAULT_MODE));
         agent.setStatus(requestedOrCurrentOrDefault(
                 request.getStatus(), agent.getStatus(), DEFAULT_STATUS));
+        agent.setVisibility(requestedOrCurrentOrDefault(
+                normalizeVisibility(request.getVisibility()), agent.getVisibility(), DEFAULT_VISIBILITY));
         agent.setPublished(request.isPublished());
+    }
+
+    private static String normalizeCode(String value) {
+        String normalized = value == null ? null : value.trim().toLowerCase(java.util.Locale.ROOT);
+        if (normalized != null && !normalized.matches("[a-z0-9][a-z0-9_-]{1,99}")) {
+            throw new IllegalArgumentException("appCode must contain 2-100 lowercase letters, digits, '_' or '-'");
+        }
+        return normalized;
+    }
+
+    private static String normalizeVisibility(String value) {
+        if (!hasText(value)) return null;
+        String normalized = value.trim().toUpperCase(java.util.Locale.ROOT);
+        if (!java.util.Set.of("PRIVATE", "TENANT_LIST", "GLOBAL").contains(normalized)) {
+            throw new IllegalArgumentException("visibility must be PRIVATE, TENANT_LIST or GLOBAL");
+        }
+        return normalized;
     }
 
     private static String requestedOrCurrentOrDefault(String requestedValue,

@@ -32,7 +32,8 @@ public class AgentChatGenerator {
     }
 
     public OpenAIChatResponse generateBlocking(AgentEntity application, OpenAIChatRequest request) {
-        AgentResponse response = agentService.run(application.getId(), toAgentRequest(request));
+        AgentResponse response = agentService.runDefinition(
+                agentService.toDefinition(application), toAgentRequest(request));
         return OpenAIChatResponse.completion(request.getModel(), response.getText());
     }
 
@@ -52,7 +53,7 @@ public class AgentChatGenerator {
         AtomicBoolean contentWasStreamed = new AtomicBoolean(false);
         AgentResponse response;
         try {
-            response = agentService.run(application.getId(), agentRequest,
+            response = agentService.runDefinition(agentService.toDefinition(application), agentRequest,
                     step -> emitter.event("step", AgentStreamEventPayloads.step(taskId, step)),
                     delta -> {
                         if (delta == null || delta.isEmpty()) {

@@ -1,6 +1,7 @@
 package io.github.aigoodle.workflow.node.builtin;
 
 import io.github.aigoodle.model.entity.ModelEntity;
+import io.github.aigoodle.common.context.UserContextHolder;
 import io.github.aigoodle.model.enums.ModelType;
 import io.github.aigoodle.model.options.ChatOptionsFactory;
 import io.github.aigoodle.model.service.ModelService;
@@ -65,10 +66,11 @@ final class NodeModelResolver {
                 "Node '" + node.getId() + "' has no resolvable model (need modelProvider + modelName)");
     }
 
-    /** Mirror {@code ModelService#tenant()} — blank tenant defaults to {@code "default"}. */
+    /** Prefer the run-bound tenant and fall back to the current authenticated user. */
     private static String tenantOf(ExecutionContext context) {
         String tenantId = context == null ? null : context.getTenantId();
-        return tenantId == null || tenantId.isBlank() ? "default" : tenantId;
+        return tenantId == null || tenantId.isBlank()
+                ? UserContextHolder.currentTenantId() : tenantId;
     }
 
     /**

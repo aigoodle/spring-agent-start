@@ -331,6 +331,8 @@ CREATE INDEX IF NOT EXISTS idx_run_workflow ON goodle_workflow_runs (workflow_id
 CREATE TABLE IF NOT EXISTS goodle_apps (
     id                        VARCHAR(64)  NOT NULL,
     tenant_id                 VARCHAR(64)  NOT NULL DEFAULT 'default',
+    app_code                  VARCHAR(100),
+    visibility                VARCHAR(20) NOT NULL DEFAULT 'PRIVATE',
     name                      VARCHAR(255) NOT NULL,
     description               VARCHAR(1024),
     icon                      VARCHAR(64),
@@ -373,6 +375,7 @@ CREATE TABLE IF NOT EXISTS goodle_apps (
 
 CREATE INDEX IF NOT EXISTS idx_apps_tenant_mode ON goodle_apps (tenant_id, mode);
 CREATE INDEX IF NOT EXISTS idx_apps_published ON goodle_apps (published);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_apps_tenant_code ON goodle_apps (tenant_id, app_code);
 
 CREATE TABLE IF NOT EXISTS goodle_messages (
     id              VARCHAR(64) NOT NULL,

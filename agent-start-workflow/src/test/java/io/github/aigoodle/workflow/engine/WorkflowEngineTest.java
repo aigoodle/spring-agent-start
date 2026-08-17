@@ -117,6 +117,34 @@ class WorkflowEngineTest {
     }
 
     @Test
+    void usesExplicitRunTenantWithoutDependingOnThreadLocalContext() {
+        AtomicReference<String> executedTenant = new AtomicReference<>();
+        NodeExecutor capturingStart = new NodeExecutor() {
+            @Override
+            public NodeType type() {
+                return NodeType.START;
+            }
+
+            @Override
+            public NodeResult execute(NodeDef node,
+                                      io.github.aigoodle.workflow.node.ExecutionContext context) {
+                executedTenant.set(context.getTenantId());
+                return NodeResult.empty();
+            }
+        };
+        WorkflowEngine tenantAwareEngine = new WorkflowEngine(
+                new NodeExecutorRegistry(List.of(capturingStart)));
+        WorkflowGraph graph = new WorkflowGraph();
+        graph.addNode(NodeDef.of("start", NodeType.START));
+
+        WorkflowRunResult result = tenantAwareEngine.run(
+                graph, Map.of(), null, null, null, "stored-workflow-tenant");
+
+        assertTrue(result.isSuccess(), result.getError());
+        assertEquals("stored-workflow-tenant", executedTenant.get());
+    }
+
+    @Test
     void httpNodeCallsRealServer() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/ping", exchange -> {

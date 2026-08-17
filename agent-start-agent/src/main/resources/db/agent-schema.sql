@@ -19,6 +19,8 @@
 CREATE TABLE IF NOT EXISTS goodle_apps (
     id                        VARCHAR(64)  NOT NULL,
     tenant_id                 VARCHAR(64)  NOT NULL DEFAULT 'default',
+    app_code                  VARCHAR(100),
+    visibility                VARCHAR(20) NOT NULL DEFAULT 'PRIVATE',
     name                      VARCHAR(255) NOT NULL,
     description               VARCHAR(1024),
     icon                      VARCHAR(64),
@@ -47,8 +49,13 @@ CREATE TABLE IF NOT EXISTS goodle_apps (
     PRIMARY KEY (id)
 );
 
+-- Upgrade existing installations; CREATE TABLE IF NOT EXISTS does not add new columns.
+ALTER TABLE goodle_apps ADD COLUMN IF NOT EXISTS app_code VARCHAR(100);
+ALTER TABLE goodle_apps ADD COLUMN IF NOT EXISTS visibility VARCHAR(20) NOT NULL DEFAULT 'PRIVATE';
+
 CREATE INDEX IF NOT EXISTS idx_apps_tenant_mode ON goodle_apps (tenant_id, mode);
 CREATE INDEX IF NOT EXISTS idx_apps_published ON goodle_apps (published);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_apps_tenant_code ON goodle_apps (tenant_id, app_code);
 
 -- ============================================================================
 -- goodle_app_model_configs — 1:1 sidecar with goodle_apps.id (id == app_id). Carries the

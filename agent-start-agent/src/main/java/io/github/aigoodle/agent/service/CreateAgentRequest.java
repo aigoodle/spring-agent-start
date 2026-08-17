@@ -15,6 +15,10 @@ import java.util.Set;
 public class CreateAgentRequest {
 
     private String tenantId;
+    /** Stable tenant-scoped identifier used by internal integrations. */
+    private String appCode;
+    /** PRIVATE / TENANT_LIST / GLOBAL. */
+    private String visibility;
     private String name;
     /** One-line summary shown on the agent card. */
     private String description;
