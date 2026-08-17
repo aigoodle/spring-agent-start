@@ -1,6 +1,6 @@
 package io.github.aigoodle.workflow.graph;
 
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import lombok.Data;
 
 import java.util.ArrayList;
@@ -32,14 +32,14 @@ public class WorkflowGraph {
         }
         NodeDef n = index.get(id);
         if (n == null) {
-            throw new AgentException("node_not_found", "No node with id " + id, null);
+            throw new PlatformException("node_not_found", "No node with id " + id, null);
         }
         return n;
     }
 
     public NodeDef startNode() {
         return nodes.stream().filter(n -> n.getType() == NodeType.START).findFirst()
-                .orElseThrow(() -> new AgentException("no_start_node", "Workflow has no START node", null));
+                .orElseThrow(() -> new PlatformException("no_start_node", "Workflow has no START node", null));
     }
 
     public List<EdgeDef> outgoing(String nodeId) {

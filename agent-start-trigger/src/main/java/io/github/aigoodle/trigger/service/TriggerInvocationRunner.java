@@ -32,6 +32,7 @@ public final class TriggerInvocationRunner {
         TriggerInvocationEntity invocation = new TriggerInvocationEntity();
         invocation.setTriggerId(invocationDraft.triggerId());
         invocation.setSource(invocationDraft.source());
+        invocation.setConversationId(invocationDraft.conversationId());
         invocation.setStatus(InvocationStatus.PENDING);
         invocation.setPayloadJson(JsonUtils.toJson(invocationDraft.payload()));
         invocation.setReplayOf(invocationDraft.replayedInvocationId());
@@ -46,7 +47,9 @@ public final class TriggerInvocationRunner {
         save(invocation);
         try {
             DispatchResult dispatchResult = dispatcherRegistry.get(trigger.getTargetType())
-                    .dispatch(trigger.getTargetId(), payload, invocation.getId());
+                    .dispatch(trigger.getTargetId(), payload,
+                            invocation.getConversationId() == null
+                                    ? invocation.getId() : invocation.getConversationId());
             recordResult(invocation, dispatchResult);
             return dispatchResult;
         } catch (RuntimeException dispatchFailure) {

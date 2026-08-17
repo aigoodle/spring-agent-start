@@ -1,7 +1,7 @@
 package io.github.aigoodle.web.support;
 
-import io.github.aigoodle.agent.entity.ConversationEntity;
-import io.github.aigoodle.agent.service.ConversationService;
+import io.github.aigoodle.agent.entity.AppConversationEntity;
+import io.github.aigoodle.agent.service.AppConversationService;
 import io.github.aigoodle.memory.MemoryItem;
 import io.github.aigoodle.memory.MemoryRole;
 import io.github.aigoodle.web.dto.dify.DifyConversationVO;
@@ -16,9 +16,9 @@ import java.util.Collections;
 import java.util.List;
 
 @Component
-@ConditionalOnClass(ConversationService.class)
+@ConditionalOnClass(AppConversationService.class)
 public final class DifyHistoryViewMapper {
-    public DifyConversationVO toConversation(ConversationEntity conversation) {
+    public DifyConversationVO toConversation(AppConversationEntity conversation) {
         DifyConversationVO view = new DifyConversationVO();
         view.setId(conversation.getId());
         view.setName(conversation.getName());

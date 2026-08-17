@@ -9,7 +9,7 @@ public interface ChatAccessPolicy {
     ChatAccessContext authorizeInternal(String appId);
 
     default ChatAccessContext authorizeInternalByCode(String appCode) {
-        throw new io.github.aigoodle.common.exception.AgentException(
+        throw new io.github.aigoodle.common.exception.PlatformException(
                 "app_code_unsupported", "当前宿主未启用应用编码访问", null);
     }
 

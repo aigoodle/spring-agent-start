@@ -3,6 +3,8 @@ package io.github.aigoodle.trigger.service;
 import io.github.aigoodle.trigger.api.TriggerType;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -12,6 +14,8 @@ import java.util.Map;
  */
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class CreateTriggerRequest {
 
     private String tenantId;

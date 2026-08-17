@@ -25,7 +25,7 @@
           - agent-start-observability LLM 调用 / token 消耗记录
 
         主类保持普通 @SpringBootApplication 即可。各模块 @AutoConfiguration 通过
-        META-INF/spring/*.imports 加载,SpringAgentCompletionAutoConfiguration 通过
+        META-INF/spring/*.imports 加载,GoodleCompletionAutoConfiguration 通过
         @AutoConfigureAfter 排序到运行时 autoconfig 之后,保证 @ConditionalOnBean 稳。
 
         CRUD 类的 REST 端点(app/model/knowledge 管理)在姊妹模块

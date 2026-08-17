@@ -1,6 +1,6 @@
 package io.github.aigoodle.model.service;
 
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.model.entity.ProviderCredentialEntity;
 import io.github.aigoodle.model.provider.ModelEndpoint;
 import io.github.aigoodle.model.provider.ModelProvider;
@@ -41,7 +41,7 @@ public class ProviderCatalogClient {
                                                      String missingCredentialMessage) {
         ProviderCredentialEntity credential = credentialService.findPrimary(tenantId, providerName);
         if (credential == null) {
-            throw new AgentException("provider_credential_missing",
+            throw new PlatformException("provider_credential_missing",
                     missingCredentialMessage, null);
         }
         Map<String, Object> credentials = credentialCodec.decode(

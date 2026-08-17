@@ -1,7 +1,7 @@
 package io.github.aigoodle.completion.support;
 
 import io.github.aigoodle.common.context.UserContextHolder;
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.completion.service.ChatAccessService;
 
 /** Convenience policy for hosts that populate {@link UserContextHolder}. */
@@ -44,7 +44,7 @@ public final class UserContextChatAccessPolicy implements ChatAccessPolicy {
 
     private static void requireUser() {
         if (!UserContextHolder.isAuthenticated()) {
-            throw new AgentException("authentication_required", "请先登录后再使用 AI 聊天", null);
+            throw new PlatformException("authentication_required", "请先登录后再使用 AI 聊天", null);
         }
     }
 

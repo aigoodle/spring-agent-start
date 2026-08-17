@@ -1,7 +1,7 @@
 package io.github.aigoodle.model.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.model.entity.ProviderCredentialEntity;
 import io.github.aigoodle.model.mapper.ProviderCredentialMapper;
 import org.springframework.transaction.annotation.Transactional;
@@ -62,7 +62,7 @@ public class ProviderCredentialService {
     public ProviderCredentialEntity require(String id) {
         ProviderCredentialEntity credential = credentialMapper.selectById(id);
         if (credential == null) {
-            throw new AgentException("credential_not_found", "Provider credential not found: " + id, null);
+            throw new PlatformException("credential_not_found", "Provider credential not found: " + id, null);
         }
         return credential;
     }

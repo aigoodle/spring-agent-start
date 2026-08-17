@@ -1,6 +1,6 @@
 package io.github.aigoodle.knowledge.pgvector;
 
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.knowledge.entity.DatasetEntity;
 import io.github.aigoodle.knowledge.index.VectorStoreFactory;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -37,7 +37,7 @@ public class PgVectorStoreFactory implements VectorStoreFactory {
         try {
             store.afterPropertiesSet();
         } catch (Exception e) {
-            throw new AgentException("pgvector_init_failed",
+            throw new PlatformException("pgvector_init_failed",
                     "Failed to initialize pgvector store for dataset " + dataset.getId(), e);
         }
         return store;

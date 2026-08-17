@@ -2,7 +2,7 @@ package io.github.aigoodle.model.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.common.util.JsonUtils;
 import io.github.aigoodle.model.entity.ModelEntity;
 import io.github.aigoodle.model.entity.PredefinedModelEntity;
@@ -76,7 +76,7 @@ public class ModelService {
     public ModelEntity register(ModelRegistration registration) {
         ModelProvider provider = providerRegistry.get(registration.getProviderName());
         if (!provider.supports(registration.getModelType())) {
-            throw new AgentException("model_type_unsupported",
+            throw new PlatformException("model_type_unsupported",
                     "Provider '" + provider.getName() + "' does not support "
                             + registration.getModelType(), null);
         }
@@ -217,7 +217,7 @@ public class ModelService {
     public ModelEntity require(String id) {
         ModelEntity entity = modelMapper.selectById(id);
         if (entity == null) {
-            throw new AgentException("model_not_found", "Model not found: " + id, null);
+            throw new PlatformException("model_not_found", "Model not found: " + id, null);
         }
         return entity;
     }
@@ -373,7 +373,7 @@ public class ModelService {
     public ModelInstance getDefaultInstance(String tenantId, ModelType type) {
         ModelEntity defaultModel = getDefault(tenantId, type);
         if (defaultModel == null) {
-            throw new AgentException("no_default_model",
+            throw new PlatformException("no_default_model",
                     "No " + type + " model configured for tenant '"
                             + normalizeTenantId(tenantId) + "'", null);
         }

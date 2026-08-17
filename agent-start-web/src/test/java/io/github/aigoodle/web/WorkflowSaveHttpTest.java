@@ -199,7 +199,7 @@ class WorkflowSaveHttpTest {
     @Test
     void putAppWorkflowDraftPersistsGraphJsonEndToEnd() throws Exception {
         // Create a workflow-mode app via /agents; that also mints the paired
-        // draft workflow row (id == app.id invariant) via AgentController.
+        // draft workflow row (id == app.id invariant) via AppController.
         Map<String, Object> agentBody = Map.of(
                 "tenantId", "wire-test",
                 "name", "flow-app",
@@ -307,7 +307,7 @@ class WorkflowSaveHttpTest {
         assertThat(agentService.require(appId).getWorkflowId()).isEqualTo(snapshot.getId());
     }
 
-    /** Envelope shape for endpoints returning a raw map (e.g. AgentEntity view). */
+    /** Envelope shape for endpoints returning a raw map (e.g. AppEntity view). */
     static class EnvelopeOfMap {
         private String code;
         private String message;

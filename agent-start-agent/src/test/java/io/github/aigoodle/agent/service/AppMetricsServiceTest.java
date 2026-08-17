@@ -1,7 +1,7 @@
 package io.github.aigoodle.agent.service;
 
 import io.github.aigoodle.memory.*;
-import io.github.aigoodle.agent.mapper.AgentMapper;
+import io.github.aigoodle.agent.mapper.AppMapper;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -22,7 +22,7 @@ class AppMetricsServiceTest {
                 item("2", "c1", MemoryRole.ASSISTANT, Instant.parse("2026-01-01T00:01:00Z")),
                 item("3", "c2", MemoryRole.USER, Instant.parse("2026-01-02T00:00:00Z"))));
 
-        AppMetricsView view = new AppMetricsService(memory, mock(AgentMapper.class)).summarize("app-1");
+        AppMetricsView view = new AppMetricsService(memory, mock(AppMapper.class)).summarize("app-1");
 
         assertThat(view.getTotalConversations()).isEqualTo(2);
         assertThat(view.getTotalMessages()).isEqualTo(3);
@@ -36,7 +36,7 @@ class AppMetricsServiceTest {
     void emptyMemoryProducesZeroMetrics() {
         MemoryManager memory = mock(MemoryManager.class);
         when(memory.recall(any())).thenReturn(List.of());
-        assertThat(new AppMetricsService(memory, mock(AgentMapper.class)).summarize("app-1").getTotalMessages()).isZero();
+        assertThat(new AppMetricsService(memory, mock(AppMapper.class)).summarize("app-1").getTotalMessages()).isZero();
     }
 
     private static MemoryItem item(String id, String conversationId, MemoryRole role, Instant time) {

@@ -1,6 +1,6 @@
 package io.github.aigoodle.knowledge.reader;
 
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.knowledge.reader.model.BlockType;
 import io.github.aigoodle.knowledge.reader.model.DocumentBlock;
 import io.github.aigoodle.knowledge.reader.model.ParsedDocument;
@@ -52,7 +52,7 @@ public class SpreadsheetDocumentReader implements DocumentReader {
                     .mediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
                     .blocks(blocks).metadata(Map.of("sheetCount", workbook.getNumberOfSheets())).build();
         } catch (Exception e) {
-            throw new AgentException("extract_failed", "Failed to parse spreadsheet " + filename, e);
+            throw new PlatformException("extract_failed", "Failed to parse spreadsheet " + filename, e);
         }
     }
 }

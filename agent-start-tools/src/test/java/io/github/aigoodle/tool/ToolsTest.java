@@ -1,7 +1,7 @@
 package io.github.aigoodle.tool;
 
 import com.sun.net.httpserver.HttpServer;
-import io.github.aigoodle.tool.adapter.AgentToolCallback;
+import io.github.aigoodle.tool.adapter.ToolDefinitionCallback;
 import io.github.aigoodle.tool.builtin.CalculatorTool;
 import io.github.aigoodle.tool.builtin.CurrentTimeTool;
 import io.github.aigoodle.tool.builtin.HttpGetTool;
@@ -92,7 +92,7 @@ class ToolsTest {
 
     @Test
     void callbackAdapterParsesJsonAndReturnsString() {
-        ToolCallback cb = new AgentToolCallback(new CalculatorTool());
+        ToolCallback cb = new ToolDefinitionCallback(new CalculatorTool());
         assertEquals("calculator", cb.getToolDefinition().name());
         assertNotNull(cb.getToolDefinition().inputSchema());
         // Spring AI hands the tool a JSON arguments string

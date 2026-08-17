@@ -1,6 +1,6 @@
 package io.github.aigoodle.tool.builtin;
 
-import io.github.aigoodle.tool.AbstractAgentTool;
+import io.github.aigoodle.tool.AbstractToolDefinition;
 
 import java.io.IOException;
 import java.net.URI;
@@ -14,7 +14,7 @@ import java.util.Map;
  * Performs an HTTP GET and returns the response body (truncated). Argument: {@code url}.
  * A simple but genuinely useful connector for agents that need to read web/API data.
  */
-public class HttpGetTool extends AbstractAgentTool {
+public class HttpGetTool extends AbstractToolDefinition {
 
     private static final int MAX_RESPONSE_LENGTH = 8_000;
 

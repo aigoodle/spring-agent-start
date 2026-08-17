@@ -19,6 +19,9 @@ public class TriggerInvocationEntity extends BaseEntity {
     /** {@code webhook}, {@code cron}, {@code event}, {@code manual}, {@code replay}. */
     private String source;
 
+    /** Conversation to resume when a scheduled workflow is dispatched. */
+    private String conversationId;
+
     private InvocationStatus status;
 
     /** The trigger payload, stored so the invocation can be replayed exactly. */

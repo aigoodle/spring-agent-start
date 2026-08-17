@@ -1,6 +1,6 @@
 package io.github.aigoodle.completion.service;
 
-import io.github.aigoodle.agent.entity.AgentEntity;
+import io.github.aigoodle.agent.entity.AppEntity;
 import io.github.aigoodle.completion.dto.openai.OpenAIChatRequest;
 import io.github.aigoodle.completion.dto.openai.OpenAIMessage;
 import io.github.aigoodle.workflow.engine.WorkflowRunResult;
@@ -16,7 +16,7 @@ class WorkflowChatContextTest {
 
     @Test
     void explicitWorkflowOverrideWins() {
-        AgentEntity application = application("app-1", "published-workflow");
+        AppEntity application = application("app-1", "published-workflow");
         OpenAIChatRequest request = request("Hello");
         request.setWorkflowId("requested-workflow");
         request.setDebug(true);
@@ -28,7 +28,7 @@ class WorkflowChatContextTest {
 
     @Test
     void debugModeUsesDraftAndBuildsRuntimeInputs() {
-        AgentEntity application = application("app-1", "published-workflow");
+        AppEntity application = application("app-1", "published-workflow");
         OpenAIChatRequest request = request("Latest question");
         request.setDebug(true);
         request.setData(Map.of("language", "java"));
@@ -55,15 +55,15 @@ class WorkflowChatContextTest {
         assertThat(WorkflowAnswerExtractor.extract(result)).isEqualTo("42");
     }
 
-    private static WorkflowChatContext resolve(AgentEntity application, OpenAIChatRequest request) {
+    private static WorkflowChatContext resolve(AppEntity application, OpenAIChatRequest request) {
         return WorkflowChatContext.resolve(
                 application,
                 request,
                 LoggerFactory.getLogger(WorkflowChatContextTest.class));
     }
 
-    private static AgentEntity application(String id, String workflowId) {
-        AgentEntity application = new AgentEntity();
+    private static AppEntity application(String id, String workflowId) {
+        AppEntity application = new AppEntity();
         application.setId(id);
         application.setWorkflowId(workflowId);
         return application;

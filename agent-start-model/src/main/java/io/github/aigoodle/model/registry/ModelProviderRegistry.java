@@ -1,6 +1,6 @@
 package io.github.aigoodle.model.registry;
 
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.model.provider.ModelProvider;
 
 import java.util.Collection;
@@ -35,7 +35,7 @@ public class ModelProviderRegistry {
 
     public ModelProvider get(String providerName) {
         if (providerName == null) {
-            throw new AgentException("provider_name_required", "Provider name must not be null", null);
+            throw new PlatformException("provider_name_required", "Provider name must not be null", null);
         }
         ModelProvider provider = providers.get(providerName.toLowerCase());
         if (provider == null) {
@@ -44,7 +44,7 @@ public class ModelProviderRegistry {
             provider = byImplKey.get(providerName.toLowerCase());
         }
         if (provider == null) {
-            throw new AgentException("provider_not_found",
+            throw new PlatformException("provider_not_found",
                     "No model provider registered with name or impl-key '" + providerName + "'. Registered: "
                             + providers.keySet(), null);
         }

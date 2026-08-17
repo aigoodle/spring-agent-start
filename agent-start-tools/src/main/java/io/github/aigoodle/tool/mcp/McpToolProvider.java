@@ -1,7 +1,7 @@
 package io.github.aigoodle.tool.mcp;
 
 import io.github.aigoodle.common.util.JsonUtils;
-import io.github.aigoodle.tool.AgentTool;
+import io.github.aigoodle.tool.ToolDefinition;
 import io.github.aigoodle.tool.ToolProvider;
 import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.spec.McpSchema;
@@ -23,14 +23,14 @@ public class McpToolProvider implements ToolProvider {
     private static final Logger logger = LoggerFactory.getLogger(McpToolProvider.class);
 
     private final McpClientManager clientManager;
-    private volatile List<AgentTool> discoveredTools;
+    private volatile List<ToolDefinition> discoveredTools;
 
     public McpToolProvider(McpClientManager clientManager) {
         this.clientManager = clientManager;
     }
 
     @Override
-    public List<AgentTool> getTools() {
+    public List<ToolDefinition> getTools() {
         if (discoveredTools != null) {
             return discoveredTools;
         }
@@ -42,8 +42,8 @@ public class McpToolProvider implements ToolProvider {
         }
     }
 
-    private List<AgentTool> discoverTools() {
-        List<AgentTool> tools = new ArrayList<>();
+    private List<ToolDefinition> discoverTools() {
+        List<ToolDefinition> tools = new ArrayList<>();
         for (McpProperties.Server server : clientManager.servers()) {
             try {
                 McpSyncClient client = clientManager.client(server);
@@ -61,11 +61,11 @@ public class McpToolProvider implements ToolProvider {
         return List.copyOf(tools);
     }
 
-    private static AgentTool toAgentTool(McpSyncClient client, McpSchema.Tool tool) {
+    private static ToolDefinition toAgentTool(McpSyncClient client, McpSchema.Tool tool) {
         String inputSchema = tool.inputSchema() == null
                 ? null
                 : JsonUtils.toJson(tool.inputSchema());
-        return new McpAgentTool(
+        return new McpToolDefinition(
                 client, tool.name(), tool.description(), inputSchema);
     }
 }

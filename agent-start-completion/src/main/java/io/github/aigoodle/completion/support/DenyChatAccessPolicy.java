@@ -1,6 +1,6 @@
 package io.github.aigoodle.completion.support;
 
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 
 /** Secure fallback used when a host has not supplied its own policy. */
 public final class DenyChatAccessPolicy implements ChatAccessPolicy {
@@ -20,8 +20,8 @@ public final class DenyChatAccessPolicy implements ChatAccessPolicy {
         throw missingPolicy();
     }
 
-    private static AgentException missingPolicy() {
-        return new AgentException("chat_access_policy_missing",
+    private static PlatformException missingPolicy() {
+        return new PlatformException("chat_access_policy_missing",
                 "宿主项目尚未配置 ChatAccessPolicy，已拒绝聊天请求", null);
     }
 }

@@ -1,7 +1,7 @@
 package io.github.aigoodle.model.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.model.entity.PredefinedModelEntity;
 import io.github.aigoodle.model.entity.ProviderDefinitionEntity;
 import io.github.aigoodle.model.enums.ModelFeature;
@@ -82,7 +82,7 @@ public class ProviderDefinitionService {
     public ProviderDefinitionEntity requireByName(String tenantId, String name) {
         ProviderDefinitionEntity entity = findByName(tenantId, name);
         if (entity == null) {
-            throw new AgentException("provider_not_found",
+            throw new PlatformException("provider_not_found",
                     "No provider definition '" + name + "' for tenant '" + tenantId + "'", null);
         }
         return entity;
@@ -132,7 +132,7 @@ public class ProviderDefinitionService {
     public void updatePartial(String id, Map<String, Object> patch) {
         ProviderDefinitionEntity entity = providerMapper.selectById(id);
         if (entity == null) {
-            throw new AgentException("provider_not_found", "No provider definition with id " + id, null);
+            throw new PlatformException("provider_not_found", "No provider definition with id " + id, null);
         }
         ProviderDefinitionPatch.apply(entity, patch);
         providerMapper.updateById(entity);
@@ -145,7 +145,7 @@ public class ProviderDefinitionService {
         // Refuse to delete a builtin — deleting metadata would leave the Java bean
         // dangling. Callers should disable it via `enabled=false` instead.
         if ("builtin".equalsIgnoreCase(entity.getSource())) {
-            throw new AgentException("provider_immutable",
+            throw new PlatformException("provider_immutable",
                     "Built-in providers cannot be deleted — set enabled=false to hide them", null);
         }
         providerMapper.deleteById(id);

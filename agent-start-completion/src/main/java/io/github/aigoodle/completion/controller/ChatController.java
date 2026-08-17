@@ -72,7 +72,8 @@ public class ChatController {
     }
 
     @PostMapping(
-            value = "/internal/apps/by-code/{appCode}/chat/completions",
+            value = {"/chat/{appCode}/completions",
+                    "/internal/apps/by-code/{appCode}/chat/completions"},
             consumes = {MediaType.APPLICATION_JSON_VALUE,
                     MediaType.APPLICATION_JSON_VALUE + ";charset=UTF-8"},
             produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.TEXT_EVENT_STREAM_VALUE})

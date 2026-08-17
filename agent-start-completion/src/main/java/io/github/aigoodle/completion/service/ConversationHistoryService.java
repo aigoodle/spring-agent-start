@@ -1,11 +1,11 @@
 package io.github.aigoodle.completion.service;
 
-import io.github.aigoodle.agent.entity.ConversationEntity;
+import io.github.aigoodle.agent.entity.AppConversationEntity;
 import io.github.aigoodle.memory.MemoryItem;
 import io.github.aigoodle.memory.MemoryManager;
 import io.github.aigoodle.memory.MemoryRole;
-import io.github.aigoodle.agent.service.ConversationService;
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.agent.service.AppConversationService;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.completion.support.AppAccessResolver;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
@@ -21,17 +21,17 @@ import java.util.Objects;
 @Service
 public class ConversationHistoryService {
 
-    private final ObjectProvider<ConversationService> conversationServices;
+    private final ObjectProvider<AppConversationService> conversationServices;
     private final ObjectProvider<MemoryManager> memoryManagers;
 
-    public ConversationHistoryService(ObjectProvider<ConversationService> conversationServices,
+    public ConversationHistoryService(ObjectProvider<AppConversationService> conversationServices,
                                       ObjectProvider<MemoryManager> memoryManagers) {
         this.conversationServices = conversationServices;
         this.memoryManagers = memoryManagers;
     }
 
     public List<Map<String, Object>> conversations(String appId, int limit) {
-        ConversationService conversationService = conversationServices.getIfAvailable();
+        AppConversationService conversationService = conversationServices.getIfAvailable();
         if (conversationService == null) {
             return List.of();
         }
@@ -50,16 +50,16 @@ public class ConversationHistoryService {
         if (memory == null) {
             return List.of();
         }
-        ConversationService conversationService = conversationServices.getIfAvailable();
+        AppConversationService conversationService = conversationServices.getIfAvailable();
         if (conversationService == null) return List.of();
-        ConversationEntity conversation = conversationService.require(conversationId);
+        AppConversationEntity conversation = conversationService.require(conversationId);
         return memory.history(conversation.getTenantId(), appId, conversationId, limit).stream()
                 .map(ConversationHistoryService::toMessageView)
                 .toList();
     }
 
     private Map<String, Object> toConversationView(
-            ConversationEntity conversation, MemoryManager memory) {
+            AppConversationEntity conversation, MemoryManager memory) {
         Map<String, Object> view = new LinkedHashMap<>();
         view.put("conversationId", conversation.getId());
         view.put("name", conversation.getName());
@@ -78,7 +78,7 @@ public class ConversationHistoryService {
         return view;
     }
 
-    private String firstMessageOf(ConversationEntity conversation, MemoryManager memory) {
+    private String firstMessageOf(AppConversationEntity conversation, MemoryManager memory) {
         if (conversation.getSummary() != null && !conversation.getSummary().isBlank()) {
             return conversation.getSummary();
         }
@@ -98,18 +98,18 @@ public class ConversationHistoryService {
     }
 
     private void verifyOwnership(String appId, String conversationId) {
-        ConversationService conversationService = conversationServices.getIfAvailable();
+        AppConversationService conversationService = conversationServices.getIfAvailable();
         if (conversationService == null) {
             return;
         }
-        ConversationEntity conversation = conversationService.require(conversationId);
+        AppConversationEntity conversation = conversationService.require(conversationId);
         if (!Objects.equals(appId, conversation.getAppId())) {
-            throw new AgentException("conversation_not_found",
+            throw new PlatformException("conversation_not_found",
                     "Conversation not found: " + conversationId, null);
         }
     }
 
-    private static String userIdOf(ConversationEntity conversation) {
+    private static String userIdOf(AppConversationEntity conversation) {
         String endUserId = AppAccessResolver.trimToNull(conversation.getFromEndUserId());
         return endUserId != null
                 ? endUserId

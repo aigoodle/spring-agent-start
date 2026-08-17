@@ -2,7 +2,7 @@ package io.github.aigoodle.workflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.JsonNode;
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.workflow.chat.ChatStreamSink;
 import io.github.aigoodle.workflow.engine.WorkflowEngine;
 import io.github.aigoodle.workflow.engine.WorkflowRunResult;
@@ -70,7 +70,7 @@ public class WorkflowService {
     public WorkflowEntity require(String workflowId) {
         WorkflowEntity workflow = workflowMapper.selectById(workflowId);
         if (workflow == null) {
-            throw new AgentException(
+            throw new PlatformException(
                     "workflow_not_found", "Workflow not found: " + workflowId, null);
         }
         return workflow;
@@ -178,7 +178,7 @@ public class WorkflowService {
     public WorkflowEntity publishDraft(String appId, WorkflowPublication publication) {
         WorkflowEntity draft = findDraft(appId);
         if (draft == null) {
-            throw new AgentException(
+            throw new PlatformException(
                     "draft_not_found", "No draft workflow for app " + appId + "; nothing to publish", null);
         }
 
@@ -267,7 +267,7 @@ public class WorkflowService {
 
     private static void requireAppId(String appId) {
         if (!hasText(appId)) {
-            throw new AgentException(
+            throw new PlatformException(
                     "app_id_required", "appId is required for every workflow draft", null);
         }
     }

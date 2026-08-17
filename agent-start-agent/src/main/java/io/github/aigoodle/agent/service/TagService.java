@@ -5,7 +5,7 @@ import io.github.aigoodle.agent.entity.TagBindingEntity;
 import io.github.aigoodle.agent.entity.TagEntity;
 import io.github.aigoodle.agent.mapper.TagBindingMapper;
 import io.github.aigoodle.agent.mapper.TagMapper;
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -38,7 +38,7 @@ public class TagService {
     public TagEntity require(String tagId) {
         TagEntity tag = tagMapper.selectById(tagId);
         if (tag == null) {
-            throw new AgentException("tag_not_found", "Tag not found: " + tagId, null);
+            throw new PlatformException("tag_not_found", "Tag not found: " + tagId, null);
         }
         return tag;
     }

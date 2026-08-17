@@ -1,7 +1,7 @@
 package io.github.aigoodle.server.config;
 
-import io.github.aigoodle.agent.service.AgentService;
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.agent.service.AppService;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.completion.service.ChatAccessService;
 import io.github.aigoodle.completion.support.ChatAccessContext;
 import io.github.aigoodle.completion.support.ChatAccessMode;
@@ -20,11 +20,11 @@ public class DemoChatAccessConfiguration {
 
     @Bean
     ChatAccessPolicy demoChatAccessPolicy(
-            AgentService agentService,
+            AppService appService,
             ObjectProvider<WorkflowService> workflowServices,
             @Value("${spring-agent.demo.tenant-id:default}") String tenantId,
             @Value("${spring-agent.demo.allow-debug:true}") boolean allowDebug) {
-        ChatAccessService resources = new ChatAccessService(agentService, workflowServices);
+        ChatAccessService resources = new ChatAccessService(appService, workflowServices);
         return new ChatAccessPolicy() {
             @Override
             public ChatAccessContext authorizeInternal(String appId) {
@@ -35,7 +35,7 @@ public class DemoChatAccessConfiguration {
             @Override
             public ChatAccessContext authorizeDebug(String appId, String workflowId) {
                 if (!allowDebug) {
-                    throw new AgentException("demo_debug_disabled", "演示环境未开放调试", null);
+                    throw new PlatformException("demo_debug_disabled", "演示环境未开放调试", null);
                 }
                 String resolved = resources.requireOwnedWorkflow(appId, tenantId, workflowId);
                 return context(resolved, ChatAccessMode.DEBUG);

@@ -1,6 +1,6 @@
 package io.github.aigoodle.trigger.dispatch;
 
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -32,7 +32,7 @@ class TriggerDispatcherRegistryTest {
         TriggerDispatcherRegistry registry = new TriggerDispatcherRegistry(List.of());
 
         assertThatThrownBy(() -> registry.get(null))
-                .isInstanceOf(AgentException.class)
+                .isInstanceOf(PlatformException.class)
                 .hasMessageContaining("workflow");
     }
 

@@ -1,6 +1,6 @@
 package io.github.aigoodle.workflow.engine;
 
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.workflow.graph.NodeType;
 import io.github.aigoodle.workflow.node.NodeExecutor;
 
@@ -28,7 +28,7 @@ public class NodeExecutorRegistry {
     public NodeExecutor get(NodeType type) {
         NodeExecutor executor = executors.get(type);
         if (executor == null) {
-            throw new AgentException("no_executor",
+            throw new PlatformException("no_executor",
                     "No executor registered for node type " + type + " (registered: " + executors.keySet() + ")",
                     null);
         }

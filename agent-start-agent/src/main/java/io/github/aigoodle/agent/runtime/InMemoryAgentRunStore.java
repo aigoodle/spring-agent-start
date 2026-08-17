@@ -3,7 +3,7 @@ package io.github.aigoodle.agent.runtime;
 import io.github.aigoodle.agent.api.AgentDefinition;
 import io.github.aigoodle.agent.api.AgentRequest;
 import io.github.aigoodle.agent.api.AgentResponse;
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.common.util.JsonUtils;
 
 import java.time.LocalDateTime;
@@ -29,7 +29,7 @@ public class InMemoryAgentRunStore implements AgentRunStore {
                 JsonUtils.toJson(definition), JsonUtils.toJson(request), null, null,
                 0, null, null, now, now);
         if (runs.putIfAbsent(runId, created) != null) {
-            throw new AgentException("agent_run_exists", "Agent run already exists: " + runId, null);
+            throw new PlatformException("agent_run_exists", "Agent run already exists: " + runId, null);
         }
         append(created, "RUN_CREATED", created.requestJson());
         return created;
@@ -40,10 +40,10 @@ public class InMemoryAgentRunStore implements AgentRunStore {
                                        AgentResponse response, String error) {
         AgentRunSnapshot updated = runs.compute(runId, (id, current) -> {
             if (current == null) {
-                throw new AgentException("agent_run_not_found", "Agent run not found: " + runId, null);
+                throw new PlatformException("agent_run_not_found", "Agent run not found: " + runId, null);
             }
             if (!current.status().canTransitionTo(target)) {
-                throw new AgentException("invalid_run_transition",
+                throw new PlatformException("invalid_run_transition",
                         "Agent run " + runId + " cannot transition from "
                                 + current.status() + " to " + target, null);
             }
@@ -82,7 +82,7 @@ public class InMemoryAgentRunStore implements AgentRunStore {
     public void appendEvent(String runId, String type, String payloadJson) {
         AgentRunSnapshot run = runs.get(runId);
         if (run == null) {
-            throw new AgentException("agent_run_not_found", "Agent run not found: " + runId, null);
+            throw new PlatformException("agent_run_not_found", "Agent run not found: " + runId, null);
         }
         append(run, type, payloadJson);
     }

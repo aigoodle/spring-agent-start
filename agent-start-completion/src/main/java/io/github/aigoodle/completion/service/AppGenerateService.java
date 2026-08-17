@@ -1,9 +1,10 @@
 package io.github.aigoodle.completion.service;
 
-import io.github.aigoodle.agent.entity.AgentEntity;
+import io.github.aigoodle.agent.entity.AppEntity;
 import io.github.aigoodle.memory.MemoryManager;
 import io.github.aigoodle.agent.service.AgentService;
-import io.github.aigoodle.agent.service.ConversationService;
+import io.github.aigoodle.agent.service.AppService;
+import io.github.aigoodle.agent.service.AppConversationService;
 import io.github.aigoodle.completion.common.SseBridge;
 import io.github.aigoodle.completion.dto.openai.OpenAIChatRequest;
 import io.github.aigoodle.completion.dto.openai.OpenAIChatResponse;
@@ -25,15 +26,16 @@ public class AppGenerateService {
 
     private static final Logger log = LoggerFactory.getLogger(AppGenerateService.class);
 
-    private final AgentService agentService;
+    private final AppService appService;
     private final ChatRequestInitializer requestInitializer;
     private final AppChatRuntimeRouter runtimeRouter;
 
-    public AppGenerateService(AgentService agentService,
+    public AppGenerateService(AppService appService,
+                              AgentService agentService,
                               ObjectProvider<WorkflowService> workflowServiceProvider,
-                              ObjectProvider<ConversationService> conversationServiceProvider,
+                              ObjectProvider<AppConversationService> conversationServiceProvider,
                               ObjectProvider<MemoryManager> memoryManagerProvider) {
-        this.agentService = agentService;
+        this.appService = appService;
         this.requestInitializer = new ChatRequestInitializer(conversationServiceProvider, log);
         this.runtimeRouter = new AppChatRuntimeRouter(
                 new AgentChatGenerator(agentService),
@@ -47,7 +49,7 @@ public class AppGenerateService {
 
     public OpenAIChatResponse generateBlocking(String appId, String executionTenantId,
                                                OpenAIChatRequest request) {
-        AgentEntity application = prepareRequest(appId, executionTenantId, request);
+        AppEntity application = prepareRequest(appId, executionTenantId, request);
         return runtimeRouter.generateBlocking(application, request);
     }
 
@@ -57,13 +59,13 @@ public class AppGenerateService {
 
     public Flux<ServerSentEvent<Object>> generateStream(String appId, String executionTenantId,
                                                         OpenAIChatRequest request) {
-        AgentEntity application = prepareRequest(appId, executionTenantId, request);
+        AppEntity application = prepareRequest(appId, executionTenantId, request);
         return SseBridge.stream(emitter ->
                 runtimeRouter.generateStream(application, request, emitter));
     }
 
     public Flux<ServerSentEvent<Object>> generateDifyStream(String appId, OpenAIChatRequest request) {
-        AgentEntity application = prepareRequest(appId, null, request);
+        AppEntity application = prepareRequest(appId, null, request);
         String taskId = "task-" + UUID.randomUUID();
         return SseBridge.stream(emitter -> runtimeRouter.generateStream(
                 application,
@@ -71,9 +73,9 @@ public class AppGenerateService {
                 new DifyEmitAdapter(emitter, taskId, request.getConversationId())));
     }
 
-    private AgentEntity prepareRequest(String appId, String executionTenantId,
+    private AppEntity prepareRequest(String appId, String executionTenantId,
                                        OpenAIChatRequest request) {
-        AgentEntity application = agentService.require(appId);
+        AppEntity application = appService.require(appId);
         if (executionTenantId != null && !executionTenantId.isBlank()) {
             application.setTenantId(executionTenantId);
         }

@@ -1,6 +1,6 @@
 package io.github.aigoodle.agent.strategy;
 
-import io.github.aigoodle.tool.AgentTool;
+import io.github.aigoodle.tool.ToolDefinition;
 import org.springframework.ai.chat.messages.SystemMessage;
 
 /** Keeps the plan-and-execute model contract separate from runtime orchestration. */
@@ -28,12 +28,12 @@ final class PlanExecutePrompts {
                 + "\nProduce the final answer for the user.";
     }
 
-    static SystemMessage system(AgentRunContext context, Iterable<AgentTool> tools) {
+    static SystemMessage system(AgentRunContext context, Iterable<ToolDefinition> tools) {
         String instructions = context.getDefinition().getInstructions();
         StringBuilder prompt = new StringBuilder(
                 instructions == null ? "You are a capable planning agent." : instructions);
         prompt.append("\n\nAvailable tools:\n");
-        for (AgentTool tool : tools) {
+        for (ToolDefinition tool : tools) {
             prompt.append("- ").append(tool.name()).append(": ")
                     .append(tool.description()).append('\n');
         }

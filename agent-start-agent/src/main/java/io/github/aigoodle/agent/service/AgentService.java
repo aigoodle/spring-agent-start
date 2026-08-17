@@ -10,10 +10,11 @@ import io.github.aigoodle.agent.context.AgentContextEngine;
 import io.github.aigoodle.agent.context.AgentContextRequest;
 import io.github.aigoodle.agent.context.DefaultAgentContextEngine;
 import io.github.aigoodle.agent.config.AgentProperties;
-import io.github.aigoodle.agent.entity.AgentEntity;
-import io.github.aigoodle.agent.entity.AppModelConfig;
+import io.github.aigoodle.agent.entity.AppEntity;
+import io.github.aigoodle.agent.entity.AppMode;
+import io.github.aigoodle.agent.entity.AppModelConfigEntity;
 import io.github.aigoodle.agent.hitl.ApprovalGate;
-import io.github.aigoodle.agent.mapper.AgentMapper;
+import io.github.aigoodle.agent.mapper.AppMapper;
 import io.github.aigoodle.agent.runtime.AgentRuntime;
 import io.github.aigoodle.agent.runtime.AgentRunEvent;
 import io.github.aigoodle.agent.runtime.AgentRunSnapshot;
@@ -27,7 +28,7 @@ import io.github.aigoodle.agent.strategy.AgentRunContext;
 import io.github.aigoodle.agent.strategy.AgentStrategyRegistry;
 import io.github.aigoodle.agent.strategy.ResumableAgentStrategy;
 import io.github.aigoodle.agent.strategy.AgentRunInterruptedException;
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.common.util.JsonUtils;
 import io.github.aigoodle.model.service.ModelService;
 import io.github.aigoodle.memory.MemoryItem;
@@ -56,13 +57,13 @@ public class AgentService implements AgentRuntime {
     private static final String DEFAULT_TENANT_ID = "default";
     private static final int MAX_HISTORY_SIZE = 500;
 
-    private final AgentMapper agentMapper;
+    private final AppMapper appMapper;
     private final AppModelConfigService modelConfigService;
     private final ModelService modelService;
     private final AgentStrategyRegistry strategyRegistry;
     private final MemoryManager memory;
     private final ApprovalGate approvalGate;
-    private final AgentCatalogUpdater catalogUpdater;
+    private final AppCatalogUpdater catalogUpdater;
     private final AgentDefinitionFactory definitionFactory;
     private final AgentToolResolver toolResolver;
     private final AgentRunStore runStore;
@@ -71,51 +72,51 @@ public class AgentService implements AgentRuntime {
     private final List<AgentRunObserver> runObservers;
     private final ConcurrentHashMap<String, Thread> activeRuns = new ConcurrentHashMap<>();
 
-    public AgentService(AgentMapper agentMapper, AppModelConfigService modelConfigService,
+    public AgentService(AppMapper appMapper, AppModelConfigService modelConfigService,
                         ModelService modelService, ToolRegistry toolRegistry,
                         AgentStrategyRegistry strategyRegistry, MemoryManager memory,
                         ApprovalGate approvalGate) {
-        this(agentMapper, modelConfigService, modelService, toolRegistry, strategyRegistry,
+        this(appMapper, modelConfigService, modelService, toolRegistry, strategyRegistry,
                 memory, approvalGate, new InMemoryAgentRunStore(), ToolExecutionGateway.direct(),
                 new DefaultAgentContextEngine(memory, new AgentProperties()), List.of());
     }
 
-    public AgentService(AgentMapper agentMapper, AppModelConfigService modelConfigService,
+    public AgentService(AppMapper appMapper, AppModelConfigService modelConfigService,
                         ModelService modelService, ToolRegistry toolRegistry,
                         AgentStrategyRegistry strategyRegistry, MemoryManager memory,
                         ApprovalGate approvalGate, AgentRunStore runStore) {
-        this(agentMapper, modelConfigService, modelService, toolRegistry, strategyRegistry,
+        this(appMapper, modelConfigService, modelService, toolRegistry, strategyRegistry,
                 memory, approvalGate, runStore, ToolExecutionGateway.direct(),
                 new DefaultAgentContextEngine(memory, new AgentProperties()), List.of());
     }
 
-    public AgentService(AgentMapper agentMapper, AppModelConfigService modelConfigService,
+    public AgentService(AppMapper appMapper, AppModelConfigService modelConfigService,
                         ModelService modelService, ToolRegistry toolRegistry,
                         AgentStrategyRegistry strategyRegistry, MemoryManager memory,
                         ApprovalGate approvalGate, AgentRunStore runStore,
                         ToolExecutionGateway toolExecutionGateway) {
-        this(agentMapper, modelConfigService, modelService, toolRegistry, strategyRegistry,
+        this(appMapper, modelConfigService, modelService, toolRegistry, strategyRegistry,
                 memory, approvalGate, runStore, toolExecutionGateway,
                 new DefaultAgentContextEngine(memory, new AgentProperties()), List.of());
     }
 
-    public AgentService(AgentMapper agentMapper, AppModelConfigService modelConfigService,
+    public AgentService(AppMapper appMapper, AppModelConfigService modelConfigService,
                         ModelService modelService, ToolRegistry toolRegistry,
                         AgentStrategyRegistry strategyRegistry, MemoryManager memory,
                         ApprovalGate approvalGate, AgentRunStore runStore,
                         ToolExecutionGateway toolExecutionGateway,
                         AgentContextEngine contextEngine) {
-        this(agentMapper, modelConfigService, modelService, toolRegistry, strategyRegistry,
+        this(appMapper, modelConfigService, modelService, toolRegistry, strategyRegistry,
                 memory, approvalGate, runStore, toolExecutionGateway, contextEngine, List.of());
     }
 
-    public AgentService(AgentMapper agentMapper, AppModelConfigService modelConfigService,
+    public AgentService(AppMapper appMapper, AppModelConfigService modelConfigService,
                         ModelService modelService, ToolRegistry toolRegistry,
                         AgentStrategyRegistry strategyRegistry, MemoryManager memory,
                         ApprovalGate approvalGate, AgentRunStore runStore,
                         ToolExecutionGateway toolExecutionGateway,
                         AgentContextEngine contextEngine, List<AgentRunObserver> runObservers) {
-        this.agentMapper = agentMapper;
+        this.appMapper = appMapper;
         this.modelConfigService = modelConfigService;
         this.modelService = modelService;
         this.strategyRegistry = strategyRegistry;
@@ -125,77 +126,77 @@ public class AgentService implements AgentRuntime {
         this.toolExecutionGateway = toolExecutionGateway;
         this.contextEngine = contextEngine;
         this.runObservers = runObservers == null ? List.of() : List.copyOf(runObservers);
-        this.catalogUpdater = new AgentCatalogUpdater();
+        this.catalogUpdater = new AppCatalogUpdater();
         this.definitionFactory = new AgentDefinitionFactory(modelConfigService);
-        this.toolResolver = new AgentToolResolver(agentMapper, modelConfigService, toolRegistry);
+        this.toolResolver = new AgentToolResolver(appMapper, modelConfigService, toolRegistry);
     }
 
     @Transactional
-    public AgentEntity create(CreateAgentRequest request) {
-        AgentEntity agent = new AgentEntity();
+    public AppEntity create(SaveAppRequest request) {
+        AppEntity agent = new AppEntity();
         agent.setTenantId(valueOrDefault(request.getTenantId(), DEFAULT_TENANT_ID));
         catalogUpdater.applyRequest(request, agent);
-        agentMapper.insert(agent);
+        appMapper.insert(agent);
         saveModelConfig(agent, request);
         return agent;
     }
 
-    public AgentEntity require(String agentId) {
-        AgentEntity agent = agentMapper.selectById(agentId);
+    public AppEntity require(String agentId) {
+        AppEntity agent = appMapper.selectById(agentId);
         if (agent == null) {
-            throw new AgentException("agent_not_found", "Agent not found: " + agentId, null);
+            throw new PlatformException("app_not_found", "Application not found: " + agentId, null);
         }
         return agent;
     }
 
-    public List<AgentEntity> list(String tenantId) {
+    public List<AppEntity> list(String tenantId) {
         String effectiveTenant = valueOrDefault(tenantId, DEFAULT_TENANT_ID);
-        return agentMapper.selectList(new LambdaQueryWrapper<AgentEntity>()
-                .eq(AgentEntity::getTenantId, effectiveTenant)
-                .orderByDesc(AgentEntity::getCreatedAt)
-                .orderByDesc(AgentEntity::getId));
+        return appMapper.selectList(new LambdaQueryWrapper<AppEntity>()
+                .eq(AppEntity::getTenantId, effectiveTenant)
+                .orderByDesc(AppEntity::getCreatedAt)
+                .orderByDesc(AppEntity::getId));
     }
 
     /** Resolve an internal app by stable code, preferring a tenant-owned override. */
-    public AgentEntity requireVisibleByCode(String appCode, String executionTenantId,
+    public AppEntity requireVisibleByCode(String appCode, String executionTenantId,
                                             String rootTenantId) {
         String code = valueOrDefault(appCode, "").trim().toLowerCase(java.util.Locale.ROOT);
         if (code.isEmpty()) {
-            throw new AgentException("app_code_required", "应用编码不能为空", null);
+            throw new PlatformException("app_code_required", "应用编码不能为空", null);
         }
         String tenant = valueOrDefault(executionTenantId, DEFAULT_TENANT_ID);
-        AgentEntity owned = findByTenantAndCode(tenant, code);
+        AppEntity owned = findByTenantAndCode(tenant, code);
         if (owned != null) {
             return requireRunnable(owned);
         }
         String root = valueOrDefault(rootTenantId, "root");
-        AgentEntity shared = findByTenantAndCode(root, code);
+        AppEntity shared = findByTenantAndCode(root, code);
         if (shared == null || !"GLOBAL".equalsIgnoreCase(shared.getVisibility())) {
-            throw new AgentException("app_not_found", "应用不存在或无权访问", null);
+            throw new PlatformException("app_not_found", "应用不存在或无权访问", null);
         }
         return requireRunnable(shared);
     }
 
-    private AgentEntity findByTenantAndCode(String tenantId, String appCode) {
-        return agentMapper.selectOne(new LambdaQueryWrapper<AgentEntity>()
-                .eq(AgentEntity::getTenantId, tenantId)
-                .eq(AgentEntity::getAppCode, appCode)
+    private AppEntity findByTenantAndCode(String tenantId, String appCode) {
+        return appMapper.selectOne(new LambdaQueryWrapper<AppEntity>()
+                .eq(AppEntity::getTenantId, tenantId)
+                .eq(AppEntity::getAppCode, appCode)
                 .last("LIMIT 1"));
     }
 
-    private static AgentEntity requireRunnable(AgentEntity app) {
+    private static AppEntity requireRunnable(AppEntity app) {
         if (!Boolean.TRUE.equals(app.getPublished())
                 || "disabled".equalsIgnoreCase(app.getStatus())) {
-            throw new AgentException("app_unavailable", "应用尚未发布或已停用", null);
+            throw new PlatformException("app_unavailable", "应用尚未发布或已停用", null);
         }
         return app;
     }
 
     @Transactional
-    public AgentEntity update(String agentId, CreateAgentRequest request) {
-        AgentEntity agent = require(agentId);
+    public AppEntity update(String agentId, SaveAppRequest request) {
+        AppEntity agent = require(agentId);
         catalogUpdater.applyRequest(request, agent);
-        agentMapper.updateById(agent);
+        appMapper.updateById(agent);
         saveModelConfig(agent, request);
         return agent;
     }
@@ -203,22 +204,22 @@ public class AgentService implements AgentRuntime {
     @Transactional
     public void delete(String agentId) {
         modelConfigService.deleteByAppId(agentId);
-        agentMapper.deleteById(agentId);
+        appMapper.deleteById(agentId);
     }
 
-    public AppModelConfig getModelConfig(String appId) {
+    public AppModelConfigEntity getModelConfig(String appId) {
         return modelConfigService.findByAppId(appId);
     }
 
-    public AgentEntity enrich(AgentEntity agent) {
+    public AppEntity enrich(AppEntity agent) {
         return definitionFactory.enrich(agent);
     }
 
     @Transactional
-    public AgentEntity bindWorkflowId(String appId, String workflowId) {
-        AgentEntity agent = require(appId);
+    public AppEntity bindWorkflowId(String appId, String workflowId) {
+        AppEntity agent = require(appId);
         agent.setWorkflowId(workflowId);
-        agentMapper.updateById(agent);
+        appMapper.updateById(agent);
         return agent;
     }
 
@@ -227,7 +228,7 @@ public class AgentService implements AgentRuntime {
         return toAgentMessages(memory.history(DEFAULT_TENANT_ID, null, conversationId, historySize));
     }
 
-    public AgentDefinition toDefinition(AgentEntity agent) {
+    public AgentDefinition toDefinition(AppEntity agent) {
         return definitionFactory.create(agent);
     }
 
@@ -241,7 +242,14 @@ public class AgentService implements AgentRuntime {
 
     public AgentResponse run(String agentId, AgentRequest request, Consumer<AgentStep> stepListener,
                              Consumer<String> tokenListener) {
-        return runDefinition(toDefinition(require(agentId)), request, stepListener, tokenListener);
+        AppEntity application = require(agentId);
+        if (!AppMode.from(application.getMode()).isAgent()) {
+            throw new PlatformException(
+                    "app_mode_mismatch",
+                    "Only an application with mode 'agent' can use the Agent runtime.",
+                    null);
+        }
+        return runDefinition(toDefinition(application), request, stepListener, tokenListener);
     }
 
     public AgentResponse runDefinition(AgentDefinition definition, AgentRequest request) {
@@ -309,9 +317,9 @@ public class AgentService implements AgentRuntime {
     @Override
     public AgentResponse resume(String runId, AgentResumeCommand command) {
         AgentRunSnapshot pausedRun = runStore.find(runId).orElseThrow(() ->
-                new AgentException("agent_run_not_found", "Agent run not found: " + runId, null));
+                new PlatformException("agent_run_not_found", "Agent run not found: " + runId, null));
         if (pausedRun.status() != AgentRunStatus.WAITING_APPROVAL) {
-            throw new AgentException("agent_run_not_paused",
+            throw new PlatformException("agent_run_not_paused",
                     "Agent run " + runId + " is not waiting for approval", null);
         }
         AgentDefinition definition = JsonUtils.parse(pausedRun.definitionJson(), AgentDefinition.class);
@@ -319,7 +327,7 @@ public class AgentService implements AgentRuntime {
         AgentResponse paused = JsonUtils.parse(pausedRun.responseJson(), AgentResponse.class);
         var strategy = strategyRegistry.get(definition.getStrategy());
         if (!(strategy instanceof ResumableAgentStrategy resumable)) {
-            throw new AgentException("strategy_not_resumable",
+            throw new PlatformException("strategy_not_resumable",
                     "Agent strategy " + definition.getStrategy() + " does not support checkpoints", null);
         }
 
@@ -353,7 +361,7 @@ public class AgentService implements AgentRuntime {
     @Override
     public AgentRunSnapshot cancel(String runId) {
         AgentRunSnapshot run = runStore.find(runId).orElseThrow(() ->
-                new AgentException("agent_run_not_found", "Agent run not found: " + runId, null));
+                new PlatformException("agent_run_not_found", "Agent run not found: " + runId, null));
         if (run.status().isTerminal()) {
             return run;
         }
@@ -447,7 +455,7 @@ public class AgentService implements AgentRuntime {
         String provider = definition.getModelProvider();
         String modelName = definition.getModelName();
         if (provider == null || provider.isBlank() || modelName == null || modelName.isBlank()) {
-            throw new AgentException(
+            throw new PlatformException(
                     "model_not_configured",
                     "Agent '" + definition.getName() + "' has no model configured (provider + name required)",
                     null);
@@ -477,8 +485,8 @@ public class AgentService implements AgentRuntime {
         }
     }
 
-    private void saveModelConfig(AgentEntity agent, CreateAgentRequest request) {
-        AppModelConfig modelConfig = AppModelConfigService.fromRequest(request);
+    private void saveModelConfig(AppEntity agent, SaveAppRequest request) {
+        AppModelConfigEntity modelConfig = AppModelConfigService.fromRequest(request);
         if (modelConfig != null) {
             modelConfigService.upsert(new AppModelConfigRegistration(
                     agent.getId(), agent.getTenantId(), modelConfig));

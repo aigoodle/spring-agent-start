@@ -1,7 +1,7 @@
 package io.github.aigoodle.completion.service;
 
-import io.github.aigoodle.agent.entity.AgentEntity;
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.agent.entity.AppEntity;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.completion.dto.openai.OpenAIChatRequest;
 import org.slf4j.Logger;
 
@@ -13,7 +13,7 @@ import java.util.UUID;
 record WorkflowChatContext(String workflowId, String conversationId,
                            Map<String, Object> inputs) {
 
-    static WorkflowChatContext resolve(AgentEntity application, OpenAIChatRequest request,
+    static WorkflowChatContext resolve(AppEntity application, OpenAIChatRequest request,
                                        Logger logger) {
         String conversationId = ensureConversationId(request);
         return new WorkflowChatContext(
@@ -22,7 +22,7 @@ record WorkflowChatContext(String workflowId, String conversationId,
                 buildInputs(request, conversationId));
     }
 
-    private static String resolveWorkflowId(AgentEntity application, OpenAIChatRequest request,
+    private static String resolveWorkflowId(AppEntity application, OpenAIChatRequest request,
                                             Logger logger) {
         String requestedWorkflowId = request.getWorkflowId();
         if (requestedWorkflowId != null && !requestedWorkflowId.isBlank()) {
@@ -39,7 +39,7 @@ record WorkflowChatContext(String workflowId, String conversationId,
                 ? application.getId()
                 : boundWorkflowId;
         if (workflowId == null || workflowId.isBlank()) {
-            throw new AgentException(
+            throw new PlatformException(
                     "workflow_id_missing",
                     "App " + application.getId() + " has no workflow bound; publish a workflow first.",
                     null);

@@ -4,7 +4,7 @@ import io.github.aigoodle.agent.api.AgentMessage;
 import io.github.aigoodle.agent.api.AgentResponse;
 import io.github.aigoodle.agent.api.AgentStep;
 import io.github.aigoodle.agent.api.AgentStrategyType;
-import io.github.aigoodle.tool.AgentTool;
+import io.github.aigoodle.tool.ToolDefinition;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
@@ -35,7 +35,7 @@ public class PlanExecuteStrategy implements AgentStrategy {
     @Override
     public AgentResponse run(AgentRunContext context) {
         context.checkActive();
-        Map<String, AgentTool> tools = new LinkedHashMap<>();
+        Map<String, ToolDefinition> tools = new LinkedHashMap<>();
         context.getTools().forEach(tool -> tools.put(tool.name(), tool));
         ChatClient chatClient = context.getChatClient();
         org.springframework.ai.chat.prompt.ChatOptions chatOptions =

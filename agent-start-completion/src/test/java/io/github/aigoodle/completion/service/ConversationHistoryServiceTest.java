@@ -1,11 +1,11 @@
 package io.github.aigoodle.completion.service;
 
-import io.github.aigoodle.agent.entity.ConversationEntity;
+import io.github.aigoodle.agent.entity.AppConversationEntity;
 import io.github.aigoodle.memory.MemoryItem;
 import io.github.aigoodle.memory.MemoryManager;
 import io.github.aigoodle.memory.MemoryRole;
 import io.github.aigoodle.memory.MemoryTier;
-import io.github.aigoodle.agent.service.ConversationService;
+import io.github.aigoodle.agent.service.AppConversationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
@@ -21,9 +21,9 @@ class ConversationHistoryServiceTest {
 
     @Test
     void buildsAReadableConversationSummaryFromTheFirstUserMessage() {
-        ConversationService conversations = mock(ConversationService.class);
+        AppConversationService conversations = mock(AppConversationService.class);
         MemoryManager memory = mock(MemoryManager.class);
-        ConversationEntity conversation = new ConversationEntity();
+        AppConversationEntity conversation = new AppConversationEntity();
         conversation.setId("conversation-1");
         conversation.setName("New conversation");
         conversation.setAppId("app-1");

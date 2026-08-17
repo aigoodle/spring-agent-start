@@ -1,10 +1,10 @@
 package io.github.aigoodle.web.support;
 
-import io.github.aigoodle.agent.entity.ConversationEntity;
+import io.github.aigoodle.agent.entity.AppConversationEntity;
 import io.github.aigoodle.memory.MemoryItem;
 import io.github.aigoodle.memory.MemoryRole;
 import io.github.aigoodle.memory.MemoryTier;
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.web.dto.dify.DifyConversationVO;
 import io.github.aigoodle.web.dto.dify.DifyMessageVO;
 import org.junit.jupiter.api.Test;
@@ -54,7 +54,7 @@ class DifyHistoryViewMapperTest {
 
     @Test
     void mapsConversationDefaultsAndTimestamps() {
-        ConversationEntity conversation = new ConversationEntity();
+        AppConversationEntity conversation = new AppConversationEntity();
         conversation.setId("conversation-1");
         conversation.setName("Readable title");
         conversation.setCreatedAt(LocalDateTime.of(2026, 1, 1, 0, 0));
@@ -75,7 +75,7 @@ class DifyHistoryViewMapperTest {
         assertThat(DifyAppIdResolver.resolve(null, null, "Bearer token-app"))
                 .isEqualTo("token-app");
         assertThatThrownBy(() -> DifyAppIdResolver.resolve(null, " ", null))
-                .isInstanceOf(AgentException.class);
+                .isInstanceOf(PlatformException.class);
     }
 
     private static MemoryItem message(String id, MemoryRole role, String content, long sequence) {

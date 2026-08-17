@@ -1,7 +1,7 @@
 package io.github.aigoodle.model.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.model.entity.ProviderModelSettingEntity;
 import io.github.aigoodle.model.entity.TenantDefaultModelEntity;
 import io.github.aigoodle.model.enums.ModelType;
@@ -140,7 +140,7 @@ public class ProviderModelSettingsService {
     public TenantDefaultModelEntity setDefault(String tenantId, String providerName,
                                                String modelName, ModelType modelType) {
         if (providerName == null || modelName == null || modelType == null) {
-            throw new AgentException("invalid_default",
+            throw new PlatformException("invalid_default",
                     "provider_name / model_name / model_type must not be null", null);
         }
         String effectiveTenantId = normalizeTenantId(tenantId);

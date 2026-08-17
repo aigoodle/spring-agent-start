@@ -1,2 +1,2 @@
-io.github.aigoodle.observability.config.SpringAgentObservabilityAutoConfiguration
-io.github.aigoodle.observability.config.SpringAgentOpsAutoConfiguration
+io.github.aigoodle.observability.config.GoodleObservabilityAutoConfiguration
+io.github.aigoodle.observability.config.AgentOpsAutoConfiguration

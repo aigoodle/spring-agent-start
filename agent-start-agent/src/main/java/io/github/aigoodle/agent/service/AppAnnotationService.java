@@ -3,7 +3,7 @@ package io.github.aigoodle.agent.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.github.aigoodle.agent.entity.AppAnnotationEntity;
 import io.github.aigoodle.agent.mapper.AppAnnotationMapper;
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -34,7 +34,7 @@ public class AppAnnotationService {
                         .eq(AppAnnotationEntity::getAppId, appId)
                         .last("LIMIT 1"));
         if (annotation == null) {
-            throw new AgentException("annotation_not_found",
+            throw new PlatformException("annotation_not_found",
                     "Annotation not found: " + annotationId, null);
         }
         return annotation;

@@ -3,7 +3,7 @@ package io.github.aigoodle.agent.strategy;
 import io.github.aigoodle.agent.api.AgentResponse;
 import io.github.aigoodle.agent.api.AgentStep;
 import io.github.aigoodle.common.util.JsonUtils;
-import io.github.aigoodle.tool.AgentTool;
+import io.github.aigoodle.tool.ToolDefinition;
 
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -17,7 +17,7 @@ final class PlannedStepExecutor {
             Pattern.compile("Action\\s*Input\\s*:\\s*(.+)", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
     String execute(String modelOutput,
-                   Map<String, AgentTool> tools,
+                   Map<String, ToolDefinition> tools,
                    AgentResponse response,
                    AgentRunContext context) {
         Matcher actionMatch = ACTION.matcher(modelOutput);
@@ -35,7 +35,7 @@ final class PlannedStepExecutor {
         return observation;
     }
 
-    private static String invokeTool(AgentTool tool, String toolName, String argumentsJson,
+    private static String invokeTool(ToolDefinition tool, String toolName, String argumentsJson,
                                      AgentRunContext context) {
         if (tool == null) {
             return "error: unknown tool '" + toolName + "'";

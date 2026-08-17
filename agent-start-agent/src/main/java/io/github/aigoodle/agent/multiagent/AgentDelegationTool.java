@@ -2,15 +2,15 @@ package io.github.aigoodle.agent.multiagent;
 
 import io.github.aigoodle.agent.api.AgentRequest;
 import io.github.aigoodle.agent.api.AgentResponse;
-import io.github.aigoodle.common.exception.AgentException;
-import io.github.aigoodle.tool.AbstractAgentTool;
+import io.github.aigoodle.common.exception.PlatformException;
+import io.github.aigoodle.tool.AbstractToolDefinition;
 
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.BiFunction;
 
 /** Exposes one delegated agent as a model-callable tool. */
-public class AgentDelegationTool extends AbstractAgentTool {
+public class AgentDelegationTool extends AbstractToolDefinition {
 
     private static final String INPUT_SCHEMA = """
             {
@@ -69,7 +69,7 @@ public class AgentDelegationTool extends AbstractAgentTool {
         String legacyQuery = stringArgument(arguments, "query");
         String task = stringArgument(arguments, "input", legacyQuery);
         if (task == null || task.isBlank()) {
-            throw new AgentException(
+            throw new PlatformException(
                     "delegation_input_required",
                     "Delegation tool '" + toolName + "' requires a non-blank input",
                     null);
@@ -85,7 +85,7 @@ public class AgentDelegationTool extends AbstractAgentTool {
             return response.getText() == null ? "" : response.getText();
         }
         if (response.getStatus() == AgentResponse.Status.AWAITING_APPROVAL) {
-            throw new AgentException(
+            throw new PlatformException(
                     "delegation_awaiting_approval",
                     "Delegated agent " + delegatedAgentId + " is awaiting approval",
                     null);
@@ -97,8 +97,8 @@ public class AgentDelegationTool extends AbstractAgentTool {
         throw delegationFailed(details);
     }
 
-    private AgentException delegationFailed(String details) {
-        return new AgentException(
+    private PlatformException delegationFailed(String details) {
+        return new PlatformException(
                 "delegation_failed",
                 "Delegated agent " + delegatedAgentId + " failed: " + details,
                 null);

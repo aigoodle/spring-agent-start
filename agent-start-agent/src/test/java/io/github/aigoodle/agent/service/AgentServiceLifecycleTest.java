@@ -3,9 +3,9 @@ package io.github.aigoodle.agent.service;
 import io.github.aigoodle.agent.api.AgentDefinition;
 import io.github.aigoodle.agent.api.AgentRequest;
 import io.github.aigoodle.agent.api.AgentResponse;
-import io.github.aigoodle.agent.entity.AgentEntity;
+import io.github.aigoodle.agent.entity.AppEntity;
 import io.github.aigoodle.agent.hitl.ApprovalGate;
-import io.github.aigoodle.agent.mapper.AgentMapper;
+import io.github.aigoodle.agent.mapper.AppMapper;
 import io.github.aigoodle.memory.MemoryManager;
 import io.github.aigoodle.agent.strategy.AgentStrategy;
 import io.github.aigoodle.agent.strategy.AgentStrategyRegistry;
@@ -33,15 +33,15 @@ class AgentServiceLifecycleTest {
     void createsAnAgentInTheDefaultTenantWhenTenantIsBlank() {
         Dependencies dependencies = new Dependencies();
         doAnswer(invocation -> {
-            invocation.<AgentEntity>getArgument(0).setId("agent-1");
+            invocation.<AppEntity>getArgument(0).setId("agent-1");
             return 1;
-        }).when(dependencies.agentMapper).insert(any(AgentEntity.class));
+        }).when(dependencies.appMapper).insert(any(AppEntity.class));
         AgentService agentService = dependencies.createService();
 
-        agentService.create(CreateAgentRequest.builder().tenantId(" ").name("Researcher").build());
+        agentService.create(SaveAppRequest.builder().tenantId(" ").name("Researcher").build());
 
-        ArgumentCaptor<AgentEntity> insertedAgent = ArgumentCaptor.forClass(AgentEntity.class);
-        verify(dependencies.agentMapper).insert(insertedAgent.capture());
+        ArgumentCaptor<AppEntity> insertedAgent = ArgumentCaptor.forClass(AppEntity.class);
+        verify(dependencies.appMapper).insert(insertedAgent.capture());
         assertThat(insertedAgent.getValue().getTenantId()).isEqualTo("default");
         assertThat(insertedAgent.getValue().getName()).isEqualTo("Researcher");
     }
@@ -53,9 +53,9 @@ class AgentServiceLifecycleTest {
 
         agentService.delete("agent-1");
 
-        InOrder deletionOrder = inOrder(dependencies.modelConfigService, dependencies.agentMapper);
+        InOrder deletionOrder = inOrder(dependencies.modelConfigService, dependencies.appMapper);
         deletionOrder.verify(dependencies.modelConfigService).deleteByAppId("agent-1");
-        deletionOrder.verify(dependencies.agentMapper).deleteById("agent-1");
+        deletionOrder.verify(dependencies.appMapper).deleteById("agent-1");
     }
 
     @Test
@@ -87,7 +87,7 @@ class AgentServiceLifecycleTest {
 
     private static final class Dependencies {
 
-        private final AgentMapper agentMapper = mock(AgentMapper.class);
+        private final AppMapper appMapper = mock(AppMapper.class);
         private final AppModelConfigService modelConfigService = mock(AppModelConfigService.class);
         private final ModelService modelService = mock(ModelService.class);
         private final ToolRegistry toolRegistry = mock(ToolRegistry.class);
@@ -96,7 +96,7 @@ class AgentServiceLifecycleTest {
         private final ApprovalGate approvalGate = mock(ApprovalGate.class);
 
         AgentService createService() {
-            return new AgentService(agentMapper, modelConfigService, modelService, toolRegistry,
+            return new AgentService(appMapper, modelConfigService, modelService, toolRegistry,
                     strategyRegistry, memory, approvalGate);
         }
     }

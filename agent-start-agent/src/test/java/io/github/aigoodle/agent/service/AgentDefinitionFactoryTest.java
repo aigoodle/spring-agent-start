@@ -2,9 +2,9 @@ package io.github.aigoodle.agent.service;
 
 import io.github.aigoodle.agent.api.AgentDefinition;
 import io.github.aigoodle.agent.api.AgentStrategyType;
-import io.github.aigoodle.agent.entity.AgentEntity;
-import io.github.aigoodle.agent.entity.AppModelConfig;
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.agent.entity.AppEntity;
+import io.github.aigoodle.agent.entity.AppModelConfigEntity;
+import io.github.aigoodle.common.exception.PlatformException;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -18,7 +18,7 @@ class AgentDefinitionFactoryTest {
     void createsRunnableDefaultsWhenNoSidecarExists() {
         AppModelConfigService modelConfigService = mock(AppModelConfigService.class);
         AgentDefinitionFactory definitionFactory = new AgentDefinitionFactory(modelConfigService);
-        AgentEntity agent = agent("agent-1");
+        AppEntity agent = agent("agent-1");
         agent.setModelProvider("openai");
         agent.setModelName("gpt-test");
 
@@ -37,7 +37,7 @@ class AgentDefinitionFactoryTest {
     @Test
     void acceptsHumanFriendlyStrategyNamesAndBlankJsonFields() {
         AppModelConfigService modelConfigService = mock(AppModelConfigService.class);
-        AppModelConfig modelConfig = new AppModelConfig();
+        AppModelConfigEntity modelConfig = new AppModelConfigEntity();
         modelConfig.setStrategy(" function-calling ");
         modelConfig.setToolNamesJson(" ");
         modelConfig.setApprovalToolsJson("");
@@ -58,13 +58,13 @@ class AgentDefinitionFactoryTest {
     @Test
     void reportsUnsupportedStrategiesAsDomainErrors() {
         AppModelConfigService modelConfigService = mock(AppModelConfigService.class);
-        AppModelConfig modelConfig = new AppModelConfig();
+        AppModelConfigEntity modelConfig = new AppModelConfigEntity();
         modelConfig.setStrategy("guess-and-hope");
         when(modelConfigService.findByAppId("agent-1")).thenReturn(modelConfig);
         AgentDefinitionFactory definitionFactory = new AgentDefinitionFactory(modelConfigService);
 
         assertThatThrownBy(() -> definitionFactory.create(agent("agent-1")))
-                .isInstanceOfSatisfying(AgentException.class, exception -> {
+                .isInstanceOfSatisfying(PlatformException.class, exception -> {
                     assertThat(exception.getCode()).isEqualTo("invalid_agent_strategy");
                     assertThat(exception).hasMessageContaining("guess-and-hope");
                 });
@@ -73,23 +73,23 @@ class AgentDefinitionFactoryTest {
     @Test
     void sidecarModelOnlyOverridesCatalogValuesWhenItHasText() {
         AppModelConfigService modelConfigService = mock(AppModelConfigService.class);
-        AppModelConfig modelConfig = new AppModelConfig();
+        AppModelConfigEntity modelConfig = new AppModelConfigEntity();
         modelConfig.setModelProvider(" ");
         modelConfig.setModelName("sidecar-model");
         when(modelConfigService.findByAppId("agent-1")).thenReturn(modelConfig);
         AgentDefinitionFactory definitionFactory = new AgentDefinitionFactory(modelConfigService);
-        AgentEntity agent = agent("agent-1");
+        AppEntity agent = agent("agent-1");
         agent.setModelProvider("catalog-provider");
         agent.setModelName("catalog-model");
 
-        AgentEntity enriched = definitionFactory.enrich(agent);
+        AppEntity enriched = definitionFactory.enrich(agent);
 
         assertThat(enriched.getModelProvider()).isEqualTo("catalog-provider");
         assertThat(enriched.getModelName()).isEqualTo("sidecar-model");
     }
 
-    private static AgentEntity agent(String agentId) {
-        AgentEntity agent = new AgentEntity();
+    private static AppEntity agent(String agentId) {
+        AppEntity agent = new AppEntity();
         agent.setId(agentId);
         agent.setTenantId("default");
         agent.setName("Researcher");

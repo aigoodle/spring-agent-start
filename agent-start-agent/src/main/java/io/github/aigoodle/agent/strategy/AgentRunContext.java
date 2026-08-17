@@ -5,7 +5,7 @@ import io.github.aigoodle.agent.api.AgentMessage;
 import io.github.aigoodle.agent.api.AgentStep;
 import io.github.aigoodle.agent.hitl.ApprovalGate;
 import io.github.aigoodle.agent.hitl.AutoApproveGate;
-import io.github.aigoodle.tool.AgentTool;
+import io.github.aigoodle.tool.ToolDefinition;
 import io.github.aigoodle.tool.execution.ToolExecutionContext;
 import io.github.aigoodle.tool.execution.ToolExecutionGateway;
 import lombok.Builder;
@@ -40,7 +40,7 @@ public class AgentRunContext {
     private ChatClient chatClient;
 
     @Builder.Default
-    private List<AgentTool> tools = List.of();
+    private List<ToolDefinition> tools = List.of();
 
     @Builder.Default
     private ApprovalGate approvalGate = DEFAULT_APPROVAL_GATE;
@@ -60,7 +60,7 @@ public class AgentRunContext {
     }
 
     /** Never exposes a nullable tool collection to strategy implementations. */
-    public List<AgentTool> getTools() {
+    public List<ToolDefinition> getTools() {
         return tools == null ? List.of() : tools;
     }
 
@@ -74,7 +74,7 @@ public class AgentRunContext {
     }
 
     /** Executes through the shared governance boundary with run identity attached. */
-    public Object executeTool(AgentTool tool, Map<String, Object> arguments) {
+    public Object executeTool(ToolDefinition tool, Map<String, Object> arguments) {
         checkActive();
         AgentDefinition agent = getDefinition();
         return getToolExecutionGateway().execute(tool, arguments,

@@ -1,6 +1,6 @@
 package io.github.aigoodle.knowledge.reader;
 
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.knowledge.reader.model.BlockType;
 import io.github.aigoodle.knowledge.reader.model.DocumentBlock;
 import io.github.aigoodle.knowledge.reader.model.ParsedDocument;
@@ -45,7 +45,7 @@ public class PdfDocumentReader implements DocumentReader {
                     .title(title).blocks(blocks).warnings(warnings)
                     .metadata(Map.of("pageCount", pdf.getNumberOfPages())).build();
         } catch (Exception e) {
-            throw new AgentException("extract_failed", "Failed to parse PDF " + filename, e);
+            throw new PlatformException("extract_failed", "Failed to parse PDF " + filename, e);
         }
     }
 }

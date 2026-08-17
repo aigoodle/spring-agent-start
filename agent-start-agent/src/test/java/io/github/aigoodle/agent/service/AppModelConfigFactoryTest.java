@@ -1,7 +1,7 @@
 package io.github.aigoodle.agent.service;
 
 import io.github.aigoodle.agent.api.AgentStrategyType;
-import io.github.aigoodle.agent.entity.AppModelConfig;
+import io.github.aigoodle.agent.entity.AppModelConfigEntity;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -13,7 +13,7 @@ class AppModelConfigFactoryTest {
 
     @Test
     void mapsRuntimeSettingsUsingTheEditorsPreferredPrompt() {
-        CreateAgentRequest request = CreateAgentRequest.builder()
+        SaveAppRequest request = SaveAppRequest.builder()
                 .instructions("Legacy instructions")
                 .prePrompt("Explicit system prompt")
                 .modelProvider("qwen")
@@ -27,7 +27,7 @@ class AppModelConfigFactoryTest {
                 .memoryEnabled(true)
                 .build();
 
-        AppModelConfig configuration = AppModelConfigFactory.from(request);
+        AppModelConfigEntity configuration = AppModelConfigFactory.from(request);
 
         assertThat(configuration.getPrePrompt()).isEqualTo("Explicit system prompt");
         assertThat(configuration.getModelProvider()).isEqualTo("qwen");
@@ -42,14 +42,14 @@ class AppModelConfigFactoryTest {
 
     @Test
     void fallsBackToLegacyInstructionsAndLeavesNonPositiveLimitsUnspecified() {
-        CreateAgentRequest request = CreateAgentRequest.builder()
+        SaveAppRequest request = SaveAppRequest.builder()
                 .instructions("Legacy instructions")
                 .prePrompt(" ")
                 .maxIterations(-1)
                 .memoryWindow(0)
                 .build();
 
-        AppModelConfig configuration = AppModelConfigFactory.from(request);
+        AppModelConfigEntity configuration = AppModelConfigFactory.from(request);
 
         assertThat(configuration.getPrePrompt()).isEqualTo("Legacy instructions");
         assertThat(configuration.getMaxIterations()).isNull();
@@ -58,13 +58,13 @@ class AppModelConfigFactoryTest {
 
     @Test
     void keepsNullableEditorPayloadsAbsentInsteadOfSerializingJsonNull() {
-        CreateAgentRequest request = CreateAgentRequest.builder().build();
+        SaveAppRequest request = SaveAppRequest.builder().build();
         request.setModelSettings(null);
         request.setUserInputForm(null);
         request.setFileUpload(null);
         request.setRetrievalConfig(null);
 
-        AppModelConfig configuration = AppModelConfigFactory.from(request);
+        AppModelConfigEntity configuration = AppModelConfigFactory.from(request);
 
         assertThat(configuration.getConfigs()).isNull();
         assertThat(configuration.getUserInputFormJson()).isNull();

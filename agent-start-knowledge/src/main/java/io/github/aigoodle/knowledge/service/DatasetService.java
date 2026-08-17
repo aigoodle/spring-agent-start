@@ -1,7 +1,7 @@
 package io.github.aigoodle.knowledge.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.common.util.JsonUtils;
 import io.github.aigoodle.knowledge.config.ProcessRule;
 import io.github.aigoodle.knowledge.config.RetrievalConfig;
@@ -36,7 +36,7 @@ public class DatasetService {
     public DatasetEntity require(String id) {
         DatasetEntity dataset = datasetMapper.selectById(id);
         if (dataset == null) {
-            throw new AgentException("dataset_not_found", "Dataset not found: " + id, null);
+            throw new PlatformException("dataset_not_found", "Dataset not found: " + id, null);
         }
         return dataset;
     }

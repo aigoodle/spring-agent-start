@@ -1,8 +1,8 @@
 package io.github.aigoodle.completion.service;
 
-import io.github.aigoodle.agent.entity.AgentEntity;
+import io.github.aigoodle.agent.entity.AppEntity;
 import io.github.aigoodle.memory.MemoryManager;
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.completion.common.SseBridge;
 import io.github.aigoodle.completion.dto.openai.OpenAIChatRequest;
 import io.github.aigoodle.completion.dto.openai.OpenAIChatResponse;
@@ -24,7 +24,7 @@ public class WorkflowChatGenerator {
         this.memoryManager = memoryManager;
     }
 
-    public OpenAIChatResponse generateBlocking(AgentEntity application, OpenAIChatRequest request) {
+    public OpenAIChatResponse generateBlocking(AppEntity application, OpenAIChatRequest request) {
         WorkflowChatContext chatContext = WorkflowChatContext.resolve(application, request, logger);
         WorkflowRunResult runResult = workflowService.run(
                 chatContext.workflowId(), chatContext.inputs(), chatContext.conversationId());
@@ -36,7 +36,7 @@ public class WorkflowChatGenerator {
         return OpenAIChatResponse.completion(request.getModel(), answer);
     }
 
-    public void generateStream(AgentEntity application, OpenAIChatRequest request,
+    public void generateStream(AppEntity application, OpenAIChatRequest request,
                                SseBridge.Emit emitter) {
         WorkflowChatContext chatContext = WorkflowChatContext.resolve(application, request, logger);
         WorkflowStreamSession streamSession = new WorkflowStreamSession(
@@ -82,7 +82,7 @@ public class WorkflowChatGenerator {
 
     private static void requireSuccess(WorkflowRunResult runResult) {
         if (!runResult.isSuccess()) {
-            throw new AgentException(
+            throw new PlatformException(
                     "workflow_failed",
                     runResult.getError() == null ? "Workflow failed" : runResult.getError(),
                     null);

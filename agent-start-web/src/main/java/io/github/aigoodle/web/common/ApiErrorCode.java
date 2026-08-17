@@ -61,7 +61,7 @@ public enum ApiErrorCode {
         return defaultMessage;
     }
 
-    /** Map a raw slug (e.g. from {@code AgentException.getCode()}) to an enum entry. */
+    /** Map a raw slug (e.g. from {@code PlatformException.getCode()}) to an enum entry. */
     public static ApiErrorCode fromSlug(String slug) {
         if (slug == null) return SERVER_ERROR;
         for (ApiErrorCode c : values()) {

@@ -1,8 +1,8 @@
 package io.github.aigoodle.web.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import io.github.aigoodle.agent.entity.AgentEntity;
-import io.github.aigoodle.agent.service.AgentService;
+import io.github.aigoodle.agent.entity.AppEntity;
+import io.github.aigoodle.agent.service.AppService;
 import io.github.aigoodle.workflow.entity.WorkflowEntity;
 import io.github.aigoodle.workflow.service.WorkflowDraftChanges;
 import io.github.aigoodle.workflow.service.WorkflowDraftDefinition;
@@ -14,12 +14,12 @@ import org.springframework.beans.factory.ObjectProvider;
 public final class WorkflowDraftCoordinator {
 
     private final WorkflowService workflowService;
-    private final ObjectProvider<AgentService> agentServiceProvider;
+    private final ObjectProvider<AppService> appServiceProvider;
 
     public WorkflowDraftCoordinator(WorkflowService workflowService,
-                                    ObjectProvider<AgentService> agentServiceProvider) {
+                                    ObjectProvider<AppService> appServiceProvider) {
         this.workflowService = workflowService;
-        this.agentServiceProvider = agentServiceProvider;
+        this.appServiceProvider = appServiceProvider;
     }
 
     /** Returns the existing draft or creates it for a legacy workflow-mode application. */
@@ -29,8 +29,8 @@ public final class WorkflowDraftCoordinator {
             return draft;
         }
 
-        AgentService agentService = agentServiceProvider.getIfAvailable();
-        AgentEntity application = findFlowApplication(agentService, appId);
+        AppService appService = appServiceProvider.getIfAvailable();
+        AppEntity application = findFlowApplication(appService, appId);
         if (application == null) {
             return null;
         }
@@ -41,7 +41,7 @@ public final class WorkflowDraftCoordinator {
                 application.getName(),
                 application.getMode(),
                 null));
-        bindWorkflowQuietly(agentService, application.getId(), createdDraft.getId());
+        bindWorkflowQuietly(appService, application.getId(), createdDraft.getId());
         return createdDraft;
     }
 
@@ -54,28 +54,28 @@ public final class WorkflowDraftCoordinator {
         findOrCreate(appId);
         WorkflowEntity snapshot = workflowService.publishDraft(
                 appId, new WorkflowPublication(markedName, markedComment));
-        bindWorkflowQuietly(agentServiceProvider.getIfAvailable(), appId, snapshot.getId());
+        bindWorkflowQuietly(appServiceProvider.getIfAvailable(), appId, snapshot.getId());
         return snapshot;
     }
 
-    private static AgentEntity findFlowApplication(AgentService agentService, String appId) {
-        if (agentService == null) {
+    private static AppEntity findFlowApplication(AppService appService, String appId) {
+        if (appService == null) {
             return null;
         }
         try {
-            AgentEntity application = agentService.require(appId);
+            AppEntity application = appService.require(appId);
             return isFlowMode(application.getMode()) ? application : null;
         } catch (Exception ignored) {
             return null;
         }
     }
 
-    private static void bindWorkflowQuietly(AgentService agentService, String appId, String workflowId) {
-        if (agentService == null) {
+    private static void bindWorkflowQuietly(AppService appService, String appId, String workflowId) {
+        if (appService == null) {
             return;
         }
         try {
-            agentService.bindWorkflowId(appId, workflowId);
+            appService.bindWorkflowId(appId, workflowId);
         } catch (Exception ignored) {
             // The workflow is durable even if its application disappeared during the operation.
         }

@@ -1,30 +1,30 @@
 package io.github.aigoodle.completion.support;
 
-import io.github.aigoodle.agent.entity.ApiTokenEntity;
-import io.github.aigoodle.agent.service.ApiTokenService;
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.agent.entity.AppApiTokenEntity;
+import io.github.aigoodle.agent.service.AppApiTokenService;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.completion.dto.dify.DifyChatMessagesRequest;
 import org.springframework.beans.factory.ObjectProvider;
 
 /** Resolves hosted applications from explicit ids or persisted API tokens. */
 public final class AppAccessResolver {
 
-    private final ObjectProvider<ApiTokenService> apiTokenServiceProvider;
+    private final ObjectProvider<AppApiTokenService> apiTokenServiceProvider;
 
-    public AppAccessResolver(ObjectProvider<ApiTokenService> apiTokenServiceProvider) {
+    public AppAccessResolver(ObjectProvider<AppApiTokenService> apiTokenServiceProvider) {
         this.apiTokenServiceProvider = apiTokenServiceProvider;
     }
 
     public String enforcePathApp(String pathAppId, String authorizationHeader,
                                  boolean debugRun) {
-        ApiTokenEntity token = findToken(authorizationHeader);
+        AppApiTokenEntity token = findToken(authorizationHeader);
         if (token == null) {
-            throw new AgentException("invalid_api_key",
+            throw new PlatformException("invalid_api_key",
                     "缺少或无效的 API Key；控制台调试请使用独立 debug 接口", null);
         }
         if (pathAppId != null && !pathAppId.isBlank()
                 && !pathAppId.equals(token.getAppId())) {
-            throw new AgentException("api_key_app_mismatch",
+            throw new PlatformException("api_key_app_mismatch",
                     "该 API Key 不属于目标应用 " + pathAppId, null);
         }
         touch(token);
@@ -39,9 +39,9 @@ public final class AppAccessResolver {
      * back to being treated as one.</p>
      */
     public String requireTokenApp(String authorizationHeader) {
-        ApiTokenEntity token = findToken(authorizationHeader);
+        AppApiTokenEntity token = findToken(authorizationHeader);
         if (token == null) {
-            throw new AgentException("invalid_api_key",
+            throw new PlatformException("invalid_api_key",
                     "缺少或无效的 API Key，请使用 Authorization: Bearer <API_KEY>", null);
         }
         touch(token);
@@ -51,7 +51,7 @@ public final class AppAccessResolver {
     public String resolveDifyApp(String queryAppId, String headerAppId,
                                  String authorizationHeader,
                                  DifyChatMessagesRequest request) {
-        ApiTokenEntity token = findToken(authorizationHeader);
+        AppApiTokenEntity token = findToken(authorizationHeader);
         if (token != null) {
             touch(token);
             return token.getAppId();
@@ -72,7 +72,7 @@ public final class AppAccessResolver {
                 return appId;
             }
         }
-        throw new AgentException("missing_app_id",
+        throw new PlatformException("missing_app_id",
                 "无法识别目标应用，请通过 appId 参数、X-App-Id、Authorization、"
                         + "body.appId 或 inputs.app_id 提供", null);
     }
@@ -98,17 +98,17 @@ public final class AppAccessResolver {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
-    private ApiTokenEntity findToken(String authorizationHeader) {
+    private AppApiTokenEntity findToken(String authorizationHeader) {
         String bearerToken = extractBearerToken(authorizationHeader);
-        ApiTokenService tokenService = apiTokenServiceProvider.getIfAvailable();
+        AppApiTokenService tokenService = apiTokenServiceProvider.getIfAvailable();
         if (bearerToken == null || tokenService == null) {
             return null;
         }
         return tokenService.findByToken(bearerToken);
     }
 
-    private void touch(ApiTokenEntity token) {
-        ApiTokenService tokenService = apiTokenServiceProvider.getIfAvailable();
+    private void touch(AppApiTokenEntity token) {
+        AppApiTokenService tokenService = apiTokenServiceProvider.getIfAvailable();
         if (tokenService != null) {
             tokenService.touchLastUsed(token.getId());
         }

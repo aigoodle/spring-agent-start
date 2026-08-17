@@ -1,8 +1,8 @@
 package io.github.aigoodle.completion.service;
 
-import io.github.aigoodle.agent.entity.AgentEntity;
-import io.github.aigoodle.agent.service.AgentService;
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.agent.entity.AppEntity;
+import io.github.aigoodle.agent.service.AppService;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.workflow.entity.WorkflowEntity;
 import io.github.aigoodle.workflow.service.WorkflowService;
 import org.junit.jupiter.api.Test;
@@ -17,8 +17,8 @@ class ChatAccessServiceTest {
 
     @Test
     void tenantCanResolveItsOwnApplication() {
-        AgentService agents = mock(AgentService.class);
-        AgentEntity app = app("app-1", "tenant-a");
+        AppService agents = mock(AppService.class);
+        AppEntity app = app("app-1", "tenant-a");
         when(agents.require("app-1")).thenReturn(app);
         ChatAccessService access = new ChatAccessService(agents, emptyProvider());
 
@@ -27,18 +27,18 @@ class ChatAccessServiceTest {
 
     @Test
     void rejectsApplicationOwnedByAnotherTenant() {
-        AgentService agents = mock(AgentService.class);
+        AppService agents = mock(AppService.class);
         when(agents.require("app-1")).thenReturn(app("app-1", "tenant-b"));
         ChatAccessService access = new ChatAccessService(agents, emptyProvider());
 
         assertThatThrownBy(() -> access.requireOwnedApp("app-1", "tenant-a"))
-                .isInstanceOf(AgentException.class)
+                .isInstanceOf(PlatformException.class)
                 .hasMessageContaining("无权访问");
     }
 
     @Test
     void rejectsWorkflowOverrideFromAnotherApplication() {
-        AgentService agents = mock(AgentService.class);
+        AppService agents = mock(AppService.class);
         when(agents.require("app-1")).thenReturn(app("app-1", "tenant-a"));
         WorkflowService workflows = mock(WorkflowService.class);
         WorkflowEntity workflow = new WorkflowEntity();
@@ -50,21 +50,21 @@ class ChatAccessServiceTest {
 
         assertThatThrownBy(() -> access.requireOwnedWorkflow(
                 "app-1", "tenant-a", "workflow-2"))
-                .isInstanceOf(AgentException.class)
+                .isInstanceOf(PlatformException.class)
                 .hasMessageContaining("不属于当前应用");
     }
 
     @Test
     void externalApiRequiresPublishedEnabledApplication() {
-        AgentService agents = mock(AgentService.class);
-        AgentEntity app = app("app-1", "tenant-a");
+        AppService agents = mock(AppService.class);
+        AppEntity app = app("app-1", "tenant-a");
         app.setPublished(false);
         app.setEnableApi(true);
         when(agents.require("app-1")).thenReturn(app);
         ChatAccessService access = new ChatAccessService(agents, emptyProvider());
 
         assertThatThrownBy(() -> access.requireExternalApp("app-1"))
-                .isInstanceOf(AgentException.class)
+                .isInstanceOf(PlatformException.class)
                 .hasMessageContaining("尚未发布");
 
         app.setPublished(true);
@@ -73,8 +73,8 @@ class ChatAccessServiceTest {
 
     @Test
     void resolvesRootGlobalApplicationForCurrentTenantByCode() {
-        AgentService agents = mock(AgentService.class);
-        AgentEntity shared = app("root-app", "root");
+        AppService agents = mock(AppService.class);
+        AppEntity shared = app("root-app", "root");
         shared.setAppCode("campus-admin-assistant");
         shared.setVisibility("GLOBAL");
         when(agents.requireVisibleByCode(
@@ -87,8 +87,8 @@ class ChatAccessServiceTest {
                 "campus-admin-assistant", "tenant-a")).isSameAs(shared);
     }
 
-    private static AgentEntity app(String id, String tenantId) {
-        AgentEntity app = new AgentEntity();
+    private static AppEntity app(String id, String tenantId) {
+        AppEntity app = new AppEntity();
         app.setId(id);
         app.setTenantId(tenantId);
         return app;

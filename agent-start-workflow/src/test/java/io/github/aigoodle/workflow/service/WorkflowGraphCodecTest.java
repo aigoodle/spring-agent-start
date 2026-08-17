@@ -1,7 +1,7 @@
 package io.github.aigoodle.workflow.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.workflow.graph.EdgeDef;
 import io.github.aigoodle.workflow.graph.NodeDef;
 import io.github.aigoodle.workflow.graph.NodeType;
@@ -45,7 +45,7 @@ class WorkflowGraphCodecTest {
     @Test
     void rejectsMissingGraphWithDomainError() {
         assertThatThrownBy(() -> graphCodec.read(null))
-                .isInstanceOf(AgentException.class)
+                .isInstanceOf(PlatformException.class)
                 .hasMessage("Workflow graph is required");
     }
 }

@@ -1,6 +1,6 @@
 package io.github.aigoodle.tool.mcp;
 
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.client.transport.HttpClientSseClientTransport;
@@ -61,13 +61,13 @@ public class McpClientManager {
     private McpClientTransport transport(McpProperties.Server server) {
         if ("http".equalsIgnoreCase(server.getType())) {
             if (server.getUrl() == null || server.getUrl().isBlank()) {
-                throw new AgentException("mcp_url_required",
+                throw new PlatformException("mcp_url_required",
                         "MCP server '" + server.getName() + "' is type=http but has no url", null);
             }
             return HttpClientSseClientTransport.builder(server.getUrl()).build();
         }
         if (server.getCommand() == null || server.getCommand().isBlank()) {
-            throw new AgentException("mcp_command_required",
+            throw new PlatformException("mcp_command_required",
                     "MCP server '" + server.getName() + "' is type=stdio but has no command", null);
         }
         ServerParameters serverParameters = ServerParameters.builder(server.getCommand())

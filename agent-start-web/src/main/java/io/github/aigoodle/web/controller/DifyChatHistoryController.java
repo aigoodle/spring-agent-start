@@ -1,7 +1,7 @@
 package io.github.aigoodle.web.controller;
 
-import io.github.aigoodle.agent.entity.ConversationEntity;
-import io.github.aigoodle.agent.service.ConversationService;
+import io.github.aigoodle.agent.entity.AppConversationEntity;
+import io.github.aigoodle.agent.service.AppConversationService;
 import io.github.aigoodle.web.dto.dify.DifyConversationNameRequest;
 import io.github.aigoodle.web.dto.dify.DifyConversationVO;
 import io.github.aigoodle.web.dto.dify.DifyMessageVO;
@@ -27,17 +27,17 @@ import java.util.Map;
 
 /** Dify-compatible conversation and message-history endpoints. */
 @RestController
-@ConditionalOnBean(ConversationService.class)
+@ConditionalOnBean(AppConversationService.class)
 public class DifyChatHistoryController {
 
     private static final int DEFAULT_PAGE_SIZE = 20;
     private static final int MAX_PAGE_SIZE = 100;
 
-    private final ConversationService conversationService;
+    private final AppConversationService conversationService;
     private final DifyMessageHistory messageHistory;
     private final DifyHistoryViewMapper viewMapper;
 
-    public DifyChatHistoryController(ConversationService conversationService,
+    public DifyChatHistoryController(AppConversationService conversationService,
                                      DifyMessageHistory messageHistory,
                                      DifyHistoryViewMapper viewMapper) {
         this.conversationService = conversationService;
@@ -56,7 +56,7 @@ public class DifyChatHistoryController {
             @RequestParam(value = "sort_by", required = false) String sortBy) {
         String appId = DifyAppIdResolver.resolve(queryAppId, headerAppId, authorizationHeader);
         int pageSize = pageSize(requestedPageSize);
-        List<ConversationEntity> conversations = conversationService.listByApp(appId);
+        List<AppConversationEntity> conversations = conversationService.listByApp(appId);
         conversations.sort(conversationComparator(sortBy));
 
         int pageStart = indexAfter(conversations, lastConversationId);
@@ -91,7 +91,7 @@ public class DifyChatHistoryController {
         if (requestedName == null && request != null && request.requestsAutomaticName()) {
             requestedName = messageHistory.suggestTitle(conversationId);
         }
-        ConversationEntity conversation = requestedName == null
+        AppConversationEntity conversation = requestedName == null
                 ? conversationService.require(conversationId)
                 : conversationService.rename(conversationId, requestedName);
         return viewMapper.toConversation(conversation);
@@ -126,7 +126,7 @@ public class DifyChatHistoryController {
         return Math.min(MAX_PAGE_SIZE, requestedPageSize);
     }
 
-    private static int indexAfter(List<ConversationEntity> conversations, String conversationId) {
+    private static int indexAfter(List<AppConversationEntity> conversations, String conversationId) {
         if (conversationId == null || conversationId.isBlank()) {
             return 0;
         }
@@ -150,18 +150,18 @@ public class DifyChatHistoryController {
         return messages;
     }
 
-    private static Comparator<ConversationEntity> conversationComparator(String sortBy) {
+    private static Comparator<AppConversationEntity> conversationComparator(String sortBy) {
         String ordering = sortBy == null ? "-updated_at" : sortBy.trim().toLowerCase();
         return switch (ordering) {
-            case "created_at" -> comparing(ConversationEntity::getCreatedAt, false);
-            case "-created_at" -> comparing(ConversationEntity::getCreatedAt, true);
-            case "updated_at" -> comparing(ConversationEntity::getUpdatedAt, false);
-            default -> comparing(ConversationEntity::getUpdatedAt, true);
+            case "created_at" -> comparing(AppConversationEntity::getCreatedAt, false);
+            case "-created_at" -> comparing(AppConversationEntity::getCreatedAt, true);
+            case "updated_at" -> comparing(AppConversationEntity::getUpdatedAt, false);
+            default -> comparing(AppConversationEntity::getUpdatedAt, true);
         };
     }
 
-    private static Comparator<ConversationEntity> comparing(
-            java.util.function.Function<ConversationEntity, java.time.LocalDateTime> timestamp,
+    private static Comparator<AppConversationEntity> comparing(
+            java.util.function.Function<AppConversationEntity, java.time.LocalDateTime> timestamp,
             boolean descending) {
         Comparator<java.time.LocalDateTime> order = descending
                 ? Comparator.reverseOrder()

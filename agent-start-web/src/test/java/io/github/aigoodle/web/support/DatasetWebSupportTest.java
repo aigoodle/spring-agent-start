@@ -1,6 +1,6 @@
 package io.github.aigoodle.web.support;
 
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.knowledge.enums.RetrievalMethod;
 import io.github.aigoodle.knowledge.retrieve.RetrievalRequest;
 import io.github.aigoodle.web.dto.RetrieveRequestDto;
@@ -31,7 +31,7 @@ class DatasetWebSupportTest {
         MockMultipartFile emptyFile = new MockMultipartFile("file", new byte[0]);
 
         assertThatThrownBy(() -> UploadedDocument.from(emptyFile))
-                .isInstanceOf(AgentException.class)
+                .isInstanceOf(PlatformException.class)
                 .hasMessageContaining("uploaded file");
     }
 

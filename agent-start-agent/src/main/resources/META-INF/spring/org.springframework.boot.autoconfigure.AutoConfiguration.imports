@@ -1,1 +1,1 @@
-io.github.aigoodle.agent.config.SpringAgentAgentAutoConfiguration
+io.github.aigoodle.agent.config.AgentRuntimeAutoConfiguration

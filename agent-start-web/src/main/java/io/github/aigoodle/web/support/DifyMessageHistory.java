@@ -1,7 +1,7 @@
 package io.github.aigoodle.web.support;
 
-import io.github.aigoodle.agent.entity.ConversationEntity;
-import io.github.aigoodle.agent.service.ConversationService;
+import io.github.aigoodle.agent.entity.AppConversationEntity;
+import io.github.aigoodle.agent.service.AppConversationService;
 import io.github.aigoodle.memory.MemoryItem;
 import io.github.aigoodle.memory.MemoryManager;
 import io.github.aigoodle.memory.MemoryRole;
@@ -17,15 +17,15 @@ public final class DifyMessageHistory {
     private static final int MAX_HISTORY_SIZE = 500;
 
     private final MemoryManager memoryManager;
-    private final ConversationService conversationService;
+    private final AppConversationService conversationService;
 
-    public DifyMessageHistory(MemoryManager memoryManager, ConversationService conversationService) {
+    public DifyMessageHistory(MemoryManager memoryManager, AppConversationService conversationService) {
         this.memoryManager = memoryManager;
         this.conversationService = conversationService;
     }
 
     public List<MemoryItem> findAll(String conversationId) {
-        ConversationEntity conversation = conversationService.require(conversationId);
+        AppConversationEntity conversation = conversationService.require(conversationId);
         return memoryManager.history(conversation.getTenantId(), conversation.getAppId(),
                 conversationId, MAX_HISTORY_SIZE);
     }

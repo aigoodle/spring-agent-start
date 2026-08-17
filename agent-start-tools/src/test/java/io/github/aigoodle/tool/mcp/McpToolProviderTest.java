@@ -1,6 +1,6 @@
 package io.github.aigoodle.tool.mcp;
 
-import io.github.aigoodle.tool.AgentTool;
+import io.github.aigoodle.tool.ToolDefinition;
 import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.spec.McpSchema;
 import org.junit.jupiter.api.Test;
@@ -32,8 +32,8 @@ class McpToolProviderTest {
         when(clientManager.client(server)).thenReturn(client);
         McpToolProvider provider = new McpToolProvider(clientManager);
 
-        List<AgentTool> firstDiscovery = provider.getTools();
-        List<AgentTool> cachedDiscovery = provider.getTools();
+        List<ToolDefinition> firstDiscovery = provider.getTools();
+        List<ToolDefinition> cachedDiscovery = provider.getTools();
 
         assertThat(firstDiscovery).isSameAs(cachedDiscovery).hasSize(1);
         assertThat(firstDiscovery.getFirst().name()).isEqualTo("find-product");

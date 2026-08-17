@@ -1,1 +1,1 @@
-io.github.aigoodle.knowledge.pgvector.SpringAgentPgVectorStoreAutoConfiguration
+io.github.aigoodle.knowledge.pgvector.GoodlePgVectorStoreAutoConfiguration

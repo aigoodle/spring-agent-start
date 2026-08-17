@@ -3,10 +3,10 @@ package io.github.aigoodle.agent.service;
 import io.github.aigoodle.agent.api.AgentDefinition;
 import io.github.aigoodle.agent.api.AgentRequest;
 import io.github.aigoodle.agent.api.AgentResponse;
-import io.github.aigoodle.agent.entity.AgentEntity;
-import io.github.aigoodle.agent.mapper.AgentMapper;
-import io.github.aigoodle.common.exception.AgentException;
-import io.github.aigoodle.tool.AgentTool;
+import io.github.aigoodle.agent.entity.AppEntity;
+import io.github.aigoodle.agent.mapper.AppMapper;
+import io.github.aigoodle.common.exception.PlatformException;
+import io.github.aigoodle.tool.ToolDefinition;
 import io.github.aigoodle.tool.ToolRegistry;
 import org.junit.jupiter.api.Test;
 
@@ -24,87 +24,87 @@ class AgentToolResolverTest {
 
     @Test
     void exposesAllRegisteredToolsWhenNoWhitelistIsConfigured() {
-        AgentTool search = new NamedTool("search");
-        AgentTool calculator = new NamedTool("calculator");
+        ToolDefinition search = new NamedTool("search");
+        ToolDefinition calculator = new NamedTool("calculator");
         AgentToolResolver resolver = resolver(
-                mock(AgentMapper.class), new ToolRegistry(List.of(search, calculator), List.of()));
+                mock(AppMapper.class), new ToolRegistry(List.of(search, calculator), List.of()));
 
         AgentDefinition definition = definition("agent-1");
         definition.setToolNames(List.of());
 
-        List<AgentTool> resolved = resolver.resolve(definition, this::emptyRun);
+        List<ToolDefinition> resolved = resolver.resolve(definition, this::emptyRun);
 
-        assertThat(resolved).extracting(AgentTool::name)
+        assertThat(resolved).extracting(ToolDefinition::name)
                 .containsExactly("search", "calculator");
     }
 
     @Test
     void resolvesAWhitelistOnceAndSkipsBlankOrUnknownNames() {
-        AgentTool search = new NamedTool("search");
+        ToolDefinition search = new NamedTool("search");
         AgentToolResolver resolver = resolver(
-                mock(AgentMapper.class), new ToolRegistry(List.of(search), List.of()));
+                mock(AppMapper.class), new ToolRegistry(List.of(search), List.of()));
         AgentDefinition definition = definition("agent-1");
         definition.setToolNames(List.of("search", " ", "missing", "search"));
 
-        List<AgentTool> resolved = resolver.resolve(definition, this::emptyRun);
+        List<ToolDefinition> resolved = resolver.resolve(definition, this::emptyRun);
 
-        assertThat(resolved).extracting(AgentTool::name).containsExactly("search");
+        assertThat(resolved).extracting(ToolDefinition::name).containsExactly("search");
     }
 
     @Test
     void rejectsSelfDelegationBeforeLoadingTheAgent() {
-        AgentMapper agentMapper = mock(AgentMapper.class);
-        AgentToolResolver resolver = resolver(agentMapper, emptyRegistry());
+        AppMapper appMapper = mock(AppMapper.class);
+        AgentToolResolver resolver = resolver(appMapper, emptyRegistry());
         AgentDefinition definition = definition("agent-1");
         definition.setDelegateAgentIds(List.of("agent-1"));
 
         assertThatThrownBy(() -> resolver.resolve(definition, this::emptyRun))
-                .isInstanceOfSatisfying(AgentException.class, exception ->
+                .isInstanceOfSatisfying(PlatformException.class, exception ->
                         assertThat(exception.getCode()).isEqualTo("invalid_agent_delegation"));
-        verify(agentMapper, never()).selectById("agent-1");
+        verify(appMapper, never()).selectById("agent-1");
     }
 
     @Test
     void rejectsDelegationAcrossTenantBoundaries() {
-        AgentMapper agentMapper = mock(AgentMapper.class);
-        AgentEntity delegate = delegate("worker-1", "tenant-b", "Worker");
-        when(agentMapper.selectById("worker-1")).thenReturn(delegate);
-        AgentToolResolver resolver = resolver(agentMapper, emptyRegistry());
+        AppMapper appMapper = mock(AppMapper.class);
+        AppEntity delegate = delegate("worker-1", "tenant-b", "Worker");
+        when(appMapper.selectById("worker-1")).thenReturn(delegate);
+        AgentToolResolver resolver = resolver(appMapper, emptyRegistry());
         AgentDefinition definition = definition("agent-1");
         definition.setTenantId("tenant-a");
         definition.setDelegateAgentIds(List.of("worker-1"));
 
         assertThatThrownBy(() -> resolver.resolve(definition, this::emptyRun))
-                .isInstanceOfSatisfying(AgentException.class, exception ->
+                .isInstanceOfSatisfying(PlatformException.class, exception ->
                         assertThat(exception.getCode()).isEqualTo("delegate_cross_tenant"));
     }
 
     @Test
     void buildsAStableToolNameWhenTheDisplayNameHasNoAsciiCharacters() {
-        AgentMapper agentMapper = mock(AgentMapper.class);
-        AgentEntity delegate = delegate("worker-1", " ", "研究助手");
-        when(agentMapper.selectById("worker-1")).thenReturn(delegate);
-        AgentToolResolver resolver = resolver(agentMapper, emptyRegistry());
+        AppMapper appMapper = mock(AppMapper.class);
+        AppEntity delegate = delegate("worker-1", " ", "研究助手");
+        when(appMapper.selectById("worker-1")).thenReturn(delegate);
+        AgentToolResolver resolver = resolver(appMapper, emptyRegistry());
         AgentDefinition definition = definition("agent-1");
         definition.setTenantId(null);
         definition.setDelegateAgentIds(List.of("worker-1", "worker-1", " "));
 
-        List<AgentTool> resolved = resolver.resolve(definition, this::emptyRun);
+        List<ToolDefinition> resolved = resolver.resolve(definition, this::emptyRun);
 
         assertThat(resolved).hasSize(1);
         assertThat(resolved.getFirst().name()).isEqualTo("delegate_to_worker_1");
         assertThat(resolved.getFirst().description())
                 .isEqualTo("Delegate a subtask to the '研究助手' agent.");
-        verify(agentMapper).selectById("worker-1");
+        verify(appMapper).selectById("worker-1");
     }
 
     private AgentResponse emptyRun(String agentId, AgentRequest request) {
         return new AgentResponse();
     }
 
-    private static AgentToolResolver resolver(AgentMapper agentMapper, ToolRegistry toolRegistry) {
+    private static AgentToolResolver resolver(AppMapper appMapper, ToolRegistry toolRegistry) {
         return new AgentToolResolver(
-                agentMapper, mock(AppModelConfigService.class), toolRegistry);
+                appMapper, mock(AppModelConfigService.class), toolRegistry);
     }
 
     private static ToolRegistry emptyRegistry() {
@@ -119,15 +119,15 @@ class AgentToolResolverTest {
                 .build();
     }
 
-    private static AgentEntity delegate(String agentId, String tenantId, String name) {
-        AgentEntity agent = new AgentEntity();
+    private static AppEntity delegate(String agentId, String tenantId, String name) {
+        AppEntity agent = new AppEntity();
         agent.setId(agentId);
         agent.setTenantId(tenantId);
         agent.setName(name);
         return agent;
     }
 
-    private record NamedTool(String name) implements AgentTool {
+    private record NamedTool(String name) implements ToolDefinition {
 
         @Override
         public String description() {

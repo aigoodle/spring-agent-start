@@ -1,6 +1,6 @@
 package io.github.aigoodle.model.runtime;
 
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.model.enums.ModelType;
 import io.github.aigoodle.model.provider.ModelEndpoint;
 import org.springframework.ai.chat.client.ChatClient;
@@ -54,7 +54,7 @@ public class ModelInstance {
 
     public ChatModel getChatModel() {
         if (chatModel == null) {
-            throw new AgentException("not_a_chat_model",
+            throw new PlatformException("not_a_chat_model",
                     "Model '" + id + "' (" + endpoint.getModelType() + ") is not a chat model", null);
         }
         return chatModel;
@@ -63,7 +63,7 @@ public class ModelInstance {
     /** A fresh {@link ChatClient} bound to this model; callers add prompts/options. */
     public ChatClient getChatClient() {
         if (chatClient == null) {
-            throw new AgentException("not_a_chat_model",
+            throw new PlatformException("not_a_chat_model",
                     "Model '" + id + "' (" + endpoint.getModelType() + ") is not a chat model", null);
         }
         return chatClient;
@@ -71,7 +71,7 @@ public class ModelInstance {
 
     public EmbeddingModel getEmbeddingModel() {
         if (embeddingModel == null) {
-            throw new AgentException("not_an_embedding_model",
+            throw new PlatformException("not_an_embedding_model",
                     "Model '" + id + "' (" + endpoint.getModelType() + ") is not an embedding model", null);
         }
         return embeddingModel;

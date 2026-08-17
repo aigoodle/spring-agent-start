@@ -1,6 +1,6 @@
 package io.github.aigoodle.tool.execution;
 
-import io.github.aigoodle.tool.AgentTool;
+import io.github.aigoodle.tool.ToolDefinition;
 
 import java.time.Duration;
 import java.util.List;
@@ -32,7 +32,7 @@ public class DefaultToolExecutionGateway implements ToolExecutionGateway, AutoCl
     }
 
     @Override
-    public Object execute(AgentTool tool, Map<String, Object> arguments,
+    public Object execute(ToolDefinition tool, Map<String, Object> arguments,
                           ToolExecutionContext suppliedContext) {
         Objects.requireNonNull(tool, "tool");
         Map<String, Object> safeArguments = arguments == null ? Map.of() : Map.copyOf(arguments);
@@ -71,7 +71,7 @@ public class DefaultToolExecutionGateway implements ToolExecutionGateway, AutoCl
         }
     }
 
-    private Object invokeWithRetry(AgentTool tool, Map<String, Object> arguments,
+    private Object invokeWithRetry(ToolDefinition tool, Map<String, Object> arguments,
                                    ToolExecutionContext context, long started) {
         int maximumAttempts = tool.idempotent() ? Math.max(1, properties.getMaxRetries() + 1) : 1;
         Throwable lastFailure = null;
@@ -115,7 +115,7 @@ public class DefaultToolExecutionGateway implements ToolExecutionGateway, AutoCl
         return text.subSequence(0, limit) + "\n...[tool output truncated]";
     }
 
-    private static ToolExecutionRecord record(AgentTool tool, ToolExecutionContext context,
+    private static ToolExecutionRecord record(ToolDefinition tool, ToolExecutionContext context,
                                               ToolExecutionRecord.Status status, int attempts,
                                               long started, String error) {
         return new ToolExecutionRecord(context.executionId(), tool.name(), status, attempts,

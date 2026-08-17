@@ -1,6 +1,6 @@
 package io.github.aigoodle.knowledge.reader;
 
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import org.springframework.ai.document.Document;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
@@ -44,7 +44,7 @@ public class TikaDocumentReader implements DocumentReader {
                     new org.springframework.ai.reader.tika.TikaDocumentReader(resource);
             return reader.get().stream().map(Document::getText).collect(Collectors.joining("\n\n"));
         } catch (Exception e) {
-            throw new AgentException("extract_failed", "Failed to extract text from " + filename, e);
+            throw new PlatformException("extract_failed", "Failed to extract text from " + filename, e);
         }
     }
 
@@ -63,7 +63,7 @@ public class TikaDocumentReader implements DocumentReader {
             return ParsedDocument.builder().filename(filename).parser(NAME).mediaType(mediaType)
                     .title(title).blocks(blocks).metadata(Map.of("blockCount", blocks.size())).build();
         } catch (Exception e) {
-            throw new AgentException("extract_failed", "Failed to structurally parse " + filename, e);
+            throw new PlatformException("extract_failed", "Failed to structurally parse " + filename, e);
         }
     }
 

@@ -24,7 +24,7 @@ import java.util.Map;
  * </ul>
  *
  * <p>The request never carries the {@code appId} — it comes from the path so
- * the dispatch layer can look up the {@code AgentEntity} and decide whether to
+ * the dispatch layer can look up the {@code AppEntity} and decide whether to
  * route to the workflow engine or the agent runtime.</p>
  */
 @Data

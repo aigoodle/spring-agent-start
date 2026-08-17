@@ -1,6 +1,6 @@
 package io.github.aigoodle.web.common;
 
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -49,14 +49,14 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(code.getStatus()).body(body);
     }
 
-    @ExceptionHandler(AgentException.class)
-    public ResponseEntity<ApiResponse<?>> handleAgent(AgentException ex) {
+    @ExceptionHandler(PlatformException.class)
+    public ResponseEntity<ApiResponse<?>> handleAgent(PlatformException ex) {
         ApiErrorCode code = ApiErrorCode.fromSlug(ex.getCode());
         if (code == null) {
-            log.info("Untriaged AgentException slug '{}' — fallback bad_request", ex.getCode());
+            log.info("Untriaged PlatformException slug '{}' — fallback bad_request", ex.getCode());
             code = ApiErrorCode.BAD_REQUEST;
         }
-        log.info("AgentException [{}]: {}", ex.getCode(), ex.getMessage());
+        log.info("PlatformException [{}]: {}", ex.getCode(), ex.getMessage());
         return build(code, ex.getMessage(), null);
     }
 

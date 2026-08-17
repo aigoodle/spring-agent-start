@@ -1,6 +1,6 @@
 package io.github.aigoodle.model.service;
 
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.model.provider.ModelEndpoint;
 import io.github.aigoodle.model.provider.ModelProvider;
 import io.github.aigoodle.model.registry.ModelProviderRegistry;
@@ -49,7 +49,7 @@ class ProviderCatalogClientTest {
                 mock(CredentialCodec.class));
 
         assertThatThrownBy(() -> client.refresh("tenant-1", "openai"))
-                .isInstanceOf(AgentException.class)
+                .isInstanceOf(PlatformException.class)
                 .hasMessage("Save a provider credential before refreshing the catalog");
     }
 }

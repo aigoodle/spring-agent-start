@@ -9,7 +9,7 @@ import io.github.aigoodle.agent.entity.AgentRunEntity;
 import io.github.aigoodle.agent.entity.AgentRunEventEntity;
 import io.github.aigoodle.agent.mapper.AgentRunEventMapper;
 import io.github.aigoodle.agent.mapper.AgentRunMapper;
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.common.util.JsonUtils;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -59,7 +59,7 @@ public class JdbcAgentRunStore implements AgentRunStore {
         AgentRunEntity current = require(runId);
         AgentRunStatus source = AgentRunStatus.valueOf(current.getStatus());
         if (!source.canTransitionTo(target)) {
-            throw new AgentException("invalid_run_transition",
+            throw new PlatformException("invalid_run_transition",
                     "Agent run " + runId + " cannot transition from " + source + " to " + target, null);
         }
         long version = current.getVersion() == null ? 0L : current.getVersion();
@@ -85,7 +85,7 @@ public class JdbcAgentRunStore implements AgentRunStore {
             update.set(AgentRunEntity::getError, error);
         }
         if (runMapper.update(null, update) != 1) {
-            throw new AgentException("run_concurrent_update",
+            throw new PlatformException("run_concurrent_update",
                     "Agent run " + runId + " was modified concurrently", null);
         }
         AgentRunEntity updated = require(runId);
@@ -119,7 +119,7 @@ public class JdbcAgentRunStore implements AgentRunStore {
     private AgentRunEntity require(String runId) {
         AgentRunEntity run = runMapper.selectById(runId);
         if (run == null) {
-            throw new AgentException("agent_run_not_found", "Agent run not found: " + runId, null);
+            throw new PlatformException("agent_run_not_found", "Agent run not found: " + runId, null);
         }
         return run;
     }
@@ -145,7 +145,7 @@ public class JdbcAgentRunStore implements AgentRunStore {
                     .set(AgentRunEntity::getEventSequence, sequence + 1));
             if (updated == 1) return sequence + 1;
         }
-        throw new AgentException("run_event_concurrent_update",
+        throw new PlatformException("run_event_concurrent_update",
                 "Could not reserve event sequence for agent run " + runId, null);
     }
 

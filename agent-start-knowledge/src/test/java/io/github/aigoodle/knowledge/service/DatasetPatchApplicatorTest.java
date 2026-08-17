@@ -1,6 +1,6 @@
 package io.github.aigoodle.knowledge.service;
 
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.knowledge.entity.DatasetEntity;
 import io.github.aigoodle.knowledge.enums.IndexingTechnique;
 import org.junit.jupiter.api.Test;
@@ -31,7 +31,7 @@ class DatasetPatchApplicatorTest {
         patch.setIndexingTechnique(IndexingTechnique.HIGH_QUALITY);
 
         assertThatThrownBy(() -> DatasetPatchApplicator.apply(dataset, patch))
-                .isInstanceOf(AgentException.class)
+                .isInstanceOf(PlatformException.class)
                 .hasMessageContaining("embedding model id");
         assertThat(dataset.getIndexingTechnique()).isEqualTo(IndexingTechnique.ECONOMY);
     }

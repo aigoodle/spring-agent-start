@@ -3,12 +3,12 @@ package io.github.aigoodle.agent.service;
 import io.github.aigoodle.agent.api.AgentDefinition;
 import io.github.aigoodle.agent.api.AgentRequest;
 import io.github.aigoodle.agent.api.AgentResponse;
-import io.github.aigoodle.agent.entity.AgentEntity;
-import io.github.aigoodle.agent.entity.AppModelConfig;
-import io.github.aigoodle.agent.mapper.AgentMapper;
+import io.github.aigoodle.agent.entity.AppEntity;
+import io.github.aigoodle.agent.entity.AppModelConfigEntity;
+import io.github.aigoodle.agent.mapper.AppMapper;
 import io.github.aigoodle.agent.multiagent.AgentDelegationTool;
-import io.github.aigoodle.common.exception.AgentException;
-import io.github.aigoodle.tool.AgentTool;
+import io.github.aigoodle.common.exception.PlatformException;
+import io.github.aigoodle.tool.ToolDefinition;
 import io.github.aigoodle.tool.ToolRegistry;
 
 import java.util.ArrayList;
@@ -24,22 +24,22 @@ final class AgentToolResolver {
 
     private static final String DEFAULT_TENANT_ID = "default";
 
-    private final AgentMapper agentMapper;
+    private final AppMapper appMapper;
     private final AppModelConfigService modelConfigService;
     private final ToolRegistry toolRegistry;
 
-    AgentToolResolver(AgentMapper agentMapper, AppModelConfigService modelConfigService,
+    AgentToolResolver(AppMapper appMapper, AppModelConfigService modelConfigService,
                       ToolRegistry toolRegistry) {
-        this.agentMapper = agentMapper;
+        this.appMapper = appMapper;
         this.modelConfigService = modelConfigService;
         this.toolRegistry = toolRegistry;
     }
 
-    List<AgentTool> resolve(AgentDefinition definition,
+    List<ToolDefinition> resolve(AgentDefinition definition,
                             BiFunction<String, AgentRequest, AgentResponse> agentRunner) {
-        List<AgentTool> resolvedTools = resolveRegisteredTools(definition.getToolNames());
+        List<ToolDefinition> resolvedTools = resolveRegisteredTools(definition.getToolNames());
         for (String delegateAgentId : distinctIds(definition.getDelegateAgentIds())) {
-            AgentTool delegationTool = createDelegationTool(
+            ToolDefinition delegationTool = createDelegationTool(
                     definition, delegateAgentId, agentRunner);
             if (delegationTool != null) {
                 resolvedTools.add(delegationTool);
@@ -48,12 +48,12 @@ final class AgentToolResolver {
         return resolvedTools;
     }
 
-    private List<AgentTool> resolveRegisteredTools(List<String> allowedToolNames) {
+    private List<ToolDefinition> resolveRegisteredTools(List<String> allowedToolNames) {
         if (allowedToolNames == null || allowedToolNames.isEmpty()) {
             return new ArrayList<>(toolRegistry.all());
         }
 
-        List<AgentTool> resolvedTools = new ArrayList<>();
+        List<ToolDefinition> resolvedTools = new ArrayList<>();
         for (String toolName : distinctIds(allowedToolNames)) {
             if (toolRegistry.has(toolName)) {
                 resolvedTools.add(toolRegistry.get(toolName));
@@ -62,24 +62,24 @@ final class AgentToolResolver {
         return resolvedTools;
     }
 
-    private AgentTool createDelegationTool(
+    private ToolDefinition createDelegationTool(
             AgentDefinition owner,
             String delegateAgentId,
             BiFunction<String, AgentRequest, AgentResponse> agentRunner) {
         if (Objects.equals(owner.getId(), delegateAgentId)) {
-            throw new AgentException(
+            throw new PlatformException(
                     "invalid_agent_delegation",
                     "Agent cannot delegate to itself: " + delegateAgentId,
                     null);
         }
 
-        AgentEntity delegate = agentMapper.selectById(delegateAgentId);
+        AppEntity delegate = appMapper.selectById(delegateAgentId);
         if (delegate == null) {
             return null;
         }
         requireSameTenant(owner, delegate);
 
-        AppModelConfig delegateConfig = modelConfigService.findByAppId(delegateAgentId);
+        AppModelConfigEntity delegateConfig = modelConfigService.findByAppId(delegateAgentId);
         String displayName = firstText(delegate.getName(), delegateAgentId);
         String toolName = "delegate_to_" + toolNameSegment(displayName, delegateAgentId);
         String description = delegationDescription(displayName, delegateConfig);
@@ -87,18 +87,18 @@ final class AgentToolResolver {
                 toolName, description, delegateAgentId, agentRunner);
     }
 
-    private static void requireSameTenant(AgentDefinition owner, AgentEntity delegate) {
+    private static void requireSameTenant(AgentDefinition owner, AppEntity delegate) {
         if (!Objects.equals(
                 effectiveTenant(owner.getTenantId()),
                 effectiveTenant(delegate.getTenantId()))) {
-            throw new AgentException(
+            throw new PlatformException(
                     "delegate_cross_tenant",
                     "Delegate agent " + delegate.getId() + " belongs to a different tenant",
                     null);
         }
     }
 
-    private static String delegationDescription(String displayName, AppModelConfig modelConfig) {
+    private static String delegationDescription(String displayName, AppModelConfigEntity modelConfig) {
         String description = "Delegate a subtask to the '" + displayName + "' agent.";
         String instructions = modelConfig == null ? null : modelConfig.getPrePrompt();
         return hasText(instructions)

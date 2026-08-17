@@ -1,6 +1,6 @@
 package io.github.aigoodle.tool.builtin;
 
-import io.github.aigoodle.tool.AbstractAgentTool;
+import io.github.aigoodle.tool.AbstractToolDefinition;
 
 import java.util.Map;
 
@@ -8,7 +8,7 @@ import java.util.Map;
  * Evaluates an arithmetic expression ({@code + - * /}, parentheses, decimals, unary
  * minus) with a small recursive-descent parser — no scripting engine required.
  */
-public class CalculatorTool extends AbstractAgentTool {
+public class CalculatorTool extends AbstractToolDefinition {
 
     @Override
     public String name() {

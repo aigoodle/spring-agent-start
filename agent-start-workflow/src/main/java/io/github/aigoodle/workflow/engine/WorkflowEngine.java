@@ -1,7 +1,7 @@
 package io.github.aigoodle.workflow.engine;
 
 import io.github.aigoodle.common.context.UserContextHolder;
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.workflow.graph.EdgeDef;
 import io.github.aigoodle.workflow.graph.NodeDef;
 import io.github.aigoodle.workflow.graph.NodeType;
@@ -173,7 +173,7 @@ public class WorkflowEngine {
             }
             if (run.stepCount.incrementAndGet() > MAX_STEPS) {
                 run.failure.compareAndSet(null,
-                        new AgentException("max_steps",
+                        new PlatformException("max_steps",
                                 "Workflow exceeded " + MAX_STEPS + " steps", null).getMessage());
                 run.outcomes.put(node.getId(), NodeOutcome.skipped());
                 return;

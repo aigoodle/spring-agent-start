@@ -2,7 +2,7 @@ package io.github.aigoodle.agent.service;
 
 import io.github.aigoodle.agent.entity.AppAnnotationEntity;
 import io.github.aigoodle.agent.mapper.AppAnnotationMapper;
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -36,7 +36,7 @@ class AppAnnotationServiceTest {
 
         assertThatThrownBy(() -> annotationService.update(
                 "app-a", "annotation-from-app-b", new AppAnnotationEntity()))
-                .isInstanceOf(AgentException.class)
+                .isInstanceOf(PlatformException.class)
                 .hasMessageContaining("annotation-from-app-b");
 
         verify(annotationMapper, never()).updateById(any(AppAnnotationEntity.class));

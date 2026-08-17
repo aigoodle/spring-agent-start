@@ -1,7 +1,7 @@
 package io.github.aigoodle.model.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.common.util.JsonUtils;
 import io.github.aigoodle.model.entity.PromptTemplateEntity;
 import io.github.aigoodle.model.mapper.PromptTemplateMapper;
@@ -70,7 +70,7 @@ public class PromptTemplateService {
     public PromptTemplateEntity require(String id) {
         PromptTemplateEntity template = mapper.selectById(id);
         if (template == null) {
-            throw new AgentException("prompt_template_not_found", "Prompt template not found: " + id, null);
+            throw new PlatformException("prompt_template_not_found", "Prompt template not found: " + id, null);
         }
         return template;
     }

@@ -6,6 +6,8 @@ import io.github.aigoodle.trigger.api.TriggerType;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
+import java.time.LocalDateTime;
+
 /**
  * A persisted trigger: a source ({@link TriggerType}) that fires a target (a workflow,
  * by default) with a mapped payload.
@@ -31,4 +33,16 @@ public class TriggerEntity extends BaseEntity {
      * event {@code {eventName}}.
      */
     private String configJson;
+
+    /** Persisted scheduling cursor used by every application node. */
+    private LocalDateTime nextFireAt;
+
+    private LocalDateTime lastFireAt;
+
+    /** Short database lease that guarantees one cluster node owns a due firing. */
+    private LocalDateTime lockUntil;
+
+    private String lockOwner;
+
+    private Long fireCount;
 }

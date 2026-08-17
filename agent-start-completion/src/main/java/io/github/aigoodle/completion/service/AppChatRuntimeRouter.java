@@ -1,8 +1,9 @@
 package io.github.aigoodle.completion.service;
 
-import io.github.aigoodle.agent.entity.AgentEntity;
+import io.github.aigoodle.agent.entity.AppEntity;
+import io.github.aigoodle.agent.entity.AppMode;
 import io.github.aigoodle.memory.MemoryManager;
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.completion.common.SseBridge;
 import io.github.aigoodle.completion.dto.openai.OpenAIChatRequest;
 import io.github.aigoodle.completion.dto.openai.OpenAIChatResponse;
@@ -26,23 +27,32 @@ final class AppChatRuntimeRouter {
         this.memoryManagerProvider = memoryManagerProvider;
     }
 
-    OpenAIChatResponse generateBlocking(AgentEntity application, OpenAIChatRequest request) {
-        return isFlowApplication(application)
-                ? workflowGenerator().generateBlocking(application, request)
-                : agentGenerator.generateBlocking(application, request);
+    OpenAIChatResponse generateBlocking(AppEntity application, OpenAIChatRequest request) {
+        return switch (AppMode.from(application.getMode())) {
+            case AGENT -> agentGenerator.generateBlocking(application, request);
+            case WORKFLOW, CHATFLOW -> workflowGenerator().generateBlocking(application, request);
+            case CHAT, COMPLETION -> throw unsupportedDirectMode(application);
+        };
     }
 
-    void generateStream(AgentEntity application, OpenAIChatRequest request, SseBridge.Emit emitter) {
-        if (isFlowApplication(application)) {
-            workflowGenerator().generateStream(application, request, emitter);
-        } else {
-            agentGenerator.generateStream(application, request, emitter);
+    void generateStream(AppEntity application, OpenAIChatRequest request, SseBridge.Emit emitter) {
+        switch (AppMode.from(application.getMode())) {
+            case AGENT -> agentGenerator.generateStream(application, request, emitter);
+            case WORKFLOW, CHATFLOW -> workflowGenerator().generateStream(application, request, emitter);
+            case CHAT, COMPLETION -> throw unsupportedDirectMode(application);
         }
     }
 
-    static boolean isFlowApplication(AgentEntity application) {
-        String mode = application.getMode();
-        return "workflow".equals(mode) || "chatflow".equals(mode);
+    static boolean isFlowApplication(AppEntity application) {
+        return AppMode.from(application.getMode()).isFlow();
+    }
+
+    private static PlatformException unsupportedDirectMode(AppEntity application) {
+        return new PlatformException(
+                "app_mode_not_implemented",
+                "Application mode '" + AppMode.from(application.getMode()).value()
+                        + "' requires a direct LLM runtime and must not use the Agent runtime.",
+                null);
     }
 
     private WorkflowChatGenerator workflowGenerator() {
@@ -61,7 +71,7 @@ final class AppChatRuntimeRouter {
     private WorkflowChatGenerator createWorkflowGenerator() {
         WorkflowService workflowService = workflowServiceProvider.getIfAvailable();
         if (workflowService == null) {
-            throw new AgentException(
+            throw new PlatformException(
                     "workflow_unavailable",
                     "A flow-mode app requires agent-start-workflow on the classpath.",
                     null);

@@ -2,7 +2,7 @@ package io.github.aigoodle.agent.multiagent;
 
 import io.github.aigoodle.agent.api.AgentRequest;
 import io.github.aigoodle.agent.api.AgentResponse;
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -51,7 +51,7 @@ class AgentDelegationToolTest {
         AgentDelegationTool tool = tool(mock(BiFunction.class));
 
         assertThatThrownBy(() -> tool.execute(Map.of("input", " ")))
-                .isInstanceOfSatisfying(AgentException.class, exception ->
+                .isInstanceOfSatisfying(PlatformException.class, exception ->
                         assertThat(exception.getCode()).isEqualTo("delegation_input_required"));
     }
 
@@ -63,7 +63,7 @@ class AgentDelegationToolTest {
         AgentDelegationTool tool = tool(agentRunner);
 
         assertThatThrownBy(() -> tool.execute(Map.of("input", "Sensitive task")))
-                .isInstanceOfSatisfying(AgentException.class, exception ->
+                .isInstanceOfSatisfying(PlatformException.class, exception ->
                         assertThat(exception.getCode()).isEqualTo("delegation_awaiting_approval"));
     }
 
@@ -75,7 +75,7 @@ class AgentDelegationToolTest {
         AgentDelegationTool tool = tool(agentRunner);
 
         assertThatThrownBy(() -> tool.execute(Map.of("input", "Do work")))
-                .isInstanceOfSatisfying(AgentException.class, exception -> {
+                .isInstanceOfSatisfying(PlatformException.class, exception -> {
                     assertThat(exception.getCode()).isEqualTo("delegation_failed");
                     assertThat(exception).hasMessageContaining("Model unavailable");
                 });

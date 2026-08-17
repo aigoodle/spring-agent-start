@@ -10,6 +10,7 @@ import io.github.aigoodle.trigger.event.EventTriggerBus;
 import io.github.aigoodle.trigger.service.CreateTriggerRequest;
 import io.github.aigoodle.trigger.service.TriggerInvocationRequest;
 import io.github.aigoodle.trigger.service.TriggerService;
+import io.github.aigoodle.trigger.mapper.TriggerMapper;
 import io.github.aigoodle.workflow.entity.WorkflowEntity;
 import io.github.aigoodle.workflow.graph.EdgeDef;
 import io.github.aigoodle.workflow.graph.NodeDef;
@@ -23,6 +24,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
+import java.time.Duration;
+import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -37,6 +40,8 @@ class TriggerTest {
     private EventTriggerBus eventBus;
     @Autowired
     private CronTriggerScheduler cronScheduler;
+    @Autowired
+    private TriggerMapper triggerMapper;
 
     /** An echo workflow: Start -> Template("Echo: {{#sys.text#}}") -> End(answer). */
     private String echoWorkflow() {
@@ -130,6 +135,67 @@ class TriggerTest {
         assertNotNull(invocations, "cron trigger should fire within a few seconds");
         assertTrue(invocations.stream()
                 .anyMatch(invocation -> "cron".equals(invocation.getSource())));
+    }
+
+    @Test
+    void databaseLeaseLetsOnlyOneClusterNodeClaimAnOccurrence() {
+        TriggerEntity trigger = trigger(TriggerType.CRON, Map.of(
+                "scheduleType", "CRON", "expression", "0 0 8 * * *"));
+        trigger.setNextFireAt(LocalDateTime.now().minusSeconds(1));
+        triggerMapper.updateById(trigger);
+
+        List<TriggerEntity> nodeOne = triggerService.claimDueSchedules(
+                "node-one", Duration.ofMinutes(1), 10);
+        List<TriggerEntity> nodeTwo = triggerService.claimDueSchedules(
+                "node-two", Duration.ofMinutes(1), 10);
+
+        assertEquals(1, nodeOne.stream().filter(t -> t.getId().equals(trigger.getId())).count());
+        assertTrue(nodeTwo.stream().noneMatch(t -> t.getId().equals(trigger.getId())));
+    }
+
+    @Test
+    void oneTimeScheduleDisablesItselfWhenClaimed() {
+        TriggerEntity trigger = trigger(TriggerType.CRON, Map.of(
+                "scheduleType", "ONCE",
+                "runAt", java.time.OffsetDateTime.now().plusMinutes(5).toString()));
+        trigger.setNextFireAt(LocalDateTime.now().minusSeconds(1));
+        triggerMapper.updateById(trigger);
+
+        List<TriggerEntity> claimed = triggerService.claimDueSchedules(
+                "node-one", Duration.ofMinutes(1), 10);
+        TriggerEntity claimedTrigger = claimed.stream()
+                .filter(t -> t.getId().equals(trigger.getId())).findFirst().orElseThrow();
+
+        assertFalse(claimedTrigger.getEnabled());
+        assertNull(claimedTrigger.getNextFireAt());
+        assertEquals(1L, claimedTrigger.getFireCount());
+    }
+
+    @Test
+    void publishedStartNodeConfigurationBecomesDurableSchedule() {
+        WorkflowGraph graph = new WorkflowGraph();
+        graph.addNode(NodeDef.of("start", NodeType.START)
+                .with("triggersEnabled", true)
+                .with("triggers", Map.of(
+                        "type", "schedule",
+                        "name", "school-report",
+                        "scheduleType", "CRON",
+                        "expression", "0 0 8 * * *",
+                        "timeZone", "Asia/Shanghai",
+                        "payloadJson", "{\"schoolId\":\"001\"}")));
+        graph.addNode(NodeDef.of("end", NodeType.END));
+        graph.addEdge(EdgeDef.of("start", "end"));
+        WorkflowEntity workflow = workflowService.save(
+                "app-scheduled-" + java.util.UUID.randomUUID(),
+                "t", "school workflow", "workflow", graph);
+
+        TriggerEntity created = triggerService.syncPublishedWorkflowSchedule(
+                workflow, workflowService);
+
+        assertNotNull(created);
+        assertEquals(workflow.getId(), created.getTargetId());
+        assertNotNull(created.getNextFireAt());
+        assertEquals("001", ((Map<?, ?>) triggerService.config(created).get("payload")).get("schoolId"));
     }
 
     private <T> T await(Supplier<T> condition, long timeoutMs) {

@@ -1,6 +1,6 @@
 package io.github.aigoodle.web.support;
 
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 
 /** Resolves the application identity accepted by Dify-compatible endpoints. */
 public final class DifyAppIdResolver {
@@ -11,7 +11,7 @@ public final class DifyAppIdResolver {
     public static String resolve(String queryAppId, String headerAppId, String authorizationHeader) {
         String appId = firstNonBlank(queryAppId, headerAppId, bearerToken(authorizationHeader));
         if (appId == null) {
-            throw new AgentException(
+            throw new PlatformException(
                     "missing_app_id",
                     "Unable to identify the application; provide appId, X-App-Id, or Authorization",
                     null);

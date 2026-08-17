@@ -1,6 +1,6 @@
 package io.github.aigoodle.web.support;
 
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -12,12 +12,12 @@ public record UploadedDocument(String filename, byte[] content) {
 
     public static UploadedDocument from(MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new AgentException("file_required", "An uploaded file is required", null);
+            throw new PlatformException("file_required", "An uploaded file is required", null);
         }
         try {
             return new UploadedDocument(filenameOf(file), file.getBytes());
         } catch (IOException exception) {
-            throw new AgentException(
+            throw new PlatformException(
                     "upload_read_failed",
                     "Failed to read upload: " + exception.getMessage(),
                     exception);

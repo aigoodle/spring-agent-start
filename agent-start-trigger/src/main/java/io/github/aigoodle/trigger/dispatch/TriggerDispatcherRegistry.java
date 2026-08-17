@@ -1,6 +1,6 @@
 package io.github.aigoodle.trigger.dispatch;
 
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -31,7 +31,7 @@ public class TriggerDispatcherRegistry {
                 : targetType;
         TriggerDispatcher dispatcher = dispatchersByTargetType.get(normalize(resolvedTargetType));
         if (dispatcher == null) {
-            throw new AgentException("dispatcher_not_found",
+            throw new PlatformException("dispatcher_not_found",
                     "No trigger dispatcher for target type '" + resolvedTargetType
                             + "' (have: " + dispatchersByTargetType.keySet() + ")",
                     null);

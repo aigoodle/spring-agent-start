@@ -6,6 +6,7 @@ import io.github.aigoodle.trigger.entity.TriggerInvocationEntity;
 import io.github.aigoodle.trigger.service.CreateTriggerRequest;
 import io.github.aigoodle.trigger.service.TriggerInvocationRequest;
 import io.github.aigoodle.trigger.service.TriggerService;
+import io.github.aigoodle.common.util.JsonUtils;
 import io.github.aigoodle.web.common.ApiResponse;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -51,6 +52,14 @@ public class TriggerController {
 
     @PostMapping("/triggers")
     public ApiResponse<TriggerEntity> create(@RequestBody CreateTriggerRequest request) {
+        request.setTenantId(currentTenantId());
+        return ApiResponse.ok(triggerService.create(request));
+    }
+
+    /** LLM/tool-friendly endpoint: accepts the task definition as a JSON string. */
+    @PostMapping(value = "/triggers/from-json", consumes = "text/plain")
+    public ApiResponse<TriggerEntity> createFromJson(@RequestBody String json) {
+        CreateTriggerRequest request = JsonUtils.parse(json, CreateTriggerRequest.class);
         request.setTenantId(currentTenantId());
         return ApiResponse.ok(triggerService.create(request));
     }

@@ -4,7 +4,7 @@ import io.github.aigoodle.agent.api.AgentDefinition;
 import io.github.aigoodle.agent.api.AgentResponse;
 import io.github.aigoodle.agent.api.AgentStep;
 import io.github.aigoodle.agent.hitl.ApprovalGate;
-import io.github.aigoodle.tool.AgentTool;
+import io.github.aigoodle.tool.ToolDefinition;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.tool.ToolCallback;
 
@@ -20,7 +20,7 @@ class FunctionCallingToolCallbacksTest {
     @Test
     void deniedToolIsObservableButNeverExecuted() {
         AtomicBoolean executed = new AtomicBoolean();
-        AgentTool sensitiveTool = tool("delete_record", arguments -> {
+        ToolDefinition sensitiveTool = tool("delete_record", arguments -> {
             executed.set(true);
             return "deleted";
         });
@@ -39,7 +39,7 @@ class FunctionCallingToolCallbacksTest {
 
     @Test
     void toolFailureBecomesAnObservationInsteadOfEscapingTheModelLoop() {
-        AgentTool failingTool = tool("unstable", arguments -> {
+        ToolDefinition failingTool = tool("unstable", arguments -> {
             throw new IllegalStateException("service unavailable");
         });
         AgentRunContext context = context(failingTool, Set.of(), call -> ApprovalGate.Decision.APPROVE);
@@ -56,7 +56,7 @@ class FunctionCallingToolCallbacksTest {
     @Test
     void missingApprovalDecisionFailsClosed() {
         AtomicBoolean executed = new AtomicBoolean();
-        AgentTool sensitiveTool = tool("delete_record", arguments -> {
+        ToolDefinition sensitiveTool = tool("delete_record", arguments -> {
             executed.set(true);
             return "deleted";
         });
@@ -72,7 +72,7 @@ class FunctionCallingToolCallbacksTest {
                 .containsExactly(AgentStep.Kind.ACTION, AgentStep.Kind.OBSERVATION);
     }
 
-    private static AgentRunContext context(AgentTool tool,
+    private static AgentRunContext context(ToolDefinition tool,
                                            Set<String> approvalRequiredTools,
                                            ApprovalGate approvalGate) {
         return AgentRunContext.builder()
@@ -86,8 +86,8 @@ class FunctionCallingToolCallbacksTest {
                 .build();
     }
 
-    private static AgentTool tool(String name, ToolOperation operation) {
-        return new AgentTool() {
+    private static ToolDefinition tool(String name, ToolOperation operation) {
+        return new ToolDefinition() {
             @Override
             public String name() {
                 return name;

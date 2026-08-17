@@ -1,6 +1,6 @@
 package io.github.aigoodle.agent.service;
 
-import io.github.aigoodle.agent.entity.AppModelConfig;
+import io.github.aigoodle.agent.entity.AppModelConfigEntity;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -9,11 +9,11 @@ class AppModelConfigPatchTest {
 
     @Test
     void preservesOmittedFieldsAndAllowsExplicitClearing() {
-        AppModelConfig existing = new AppModelConfig();
+        AppModelConfigEntity existing = new AppModelConfigEntity();
         existing.setModelProvider("qwen");
         existing.setPrePrompt("Existing prompt");
         existing.setMemoryWindow(20);
-        AppModelConfig patch = new AppModelConfig();
+        AppModelConfigEntity patch = new AppModelConfigEntity();
         patch.setPrePrompt("");
         patch.setMemoryWindow(40);
 

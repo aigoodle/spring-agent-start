@@ -5,7 +5,7 @@ import io.github.aigoodle.agent.runtime.AgentRunSnapshot;
 import io.github.aigoodle.agent.runtime.AgentRuntime;
 import io.github.aigoodle.agent.runtime.AgentResumeCommand;
 import io.github.aigoodle.agent.api.AgentResponse;
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.web.common.ApiResponse;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -34,7 +34,7 @@ public class AgentRunController {
     @GetMapping("/{runId}")
     public ApiResponse<AgentRunSnapshot> get(@PathVariable String runId) {
         return ApiResponse.ok(agentRuntime.findRun(runId).orElseThrow(() ->
-                new AgentException("agent_run_not_found", "Agent run not found: " + runId, null)));
+                new PlatformException("agent_run_not_found", "Agent run not found: " + runId, null)));
     }
 
     @GetMapping("/{runId}/events")
@@ -43,7 +43,7 @@ public class AgentRunController {
             @RequestParam(defaultValue = "0") long afterSequence,
             @RequestParam(defaultValue = "200") int limit) {
         agentRuntime.findRun(runId).orElseThrow(() ->
-                new AgentException("agent_run_not_found", "Agent run not found: " + runId, null));
+                new PlatformException("agent_run_not_found", "Agent run not found: " + runId, null));
         return ApiResponse.ok(agentRuntime.runEvents(
                 runId, Math.max(0, afterSequence), Math.min(1000, Math.max(1, limit))));
     }

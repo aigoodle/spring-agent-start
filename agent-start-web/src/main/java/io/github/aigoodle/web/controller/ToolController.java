@@ -1,6 +1,6 @@
 package io.github.aigoodle.web.controller;
 
-import io.github.aigoodle.tool.AgentTool;
+import io.github.aigoodle.tool.ToolDefinition;
 import io.github.aigoodle.tool.ToolRegistry;
 import io.github.aigoodle.web.common.ApiResponse;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -48,7 +48,7 @@ public class ToolController {
         return ApiResponse.ok(toolRegistry.execute(name, args));
     }
 
-    private static Map<String, Object> asView(AgentTool tool) {
+    private static Map<String, Object> asView(ToolDefinition tool) {
         Map<String, Object> view = new LinkedHashMap<>();
         view.put("name", tool.name());
         view.put("description", tool.description());

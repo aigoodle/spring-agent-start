@@ -1,6 +1,6 @@
 package io.github.aigoodle.completion.service;
 
-import io.github.aigoodle.agent.entity.AgentEntity;
+import io.github.aigoodle.agent.entity.AppEntity;
 import io.github.aigoodle.completion.common.SseBridge;
 import io.github.aigoodle.completion.dto.openai.OpenAIChatRequest;
 import io.github.aigoodle.completion.dto.openai.OpenAIChatResponse;
@@ -15,7 +15,7 @@ import java.util.UUID;
 /** Owns identifiers and SSE event formatting for one streaming workflow run. */
 final class WorkflowStreamSession {
 
-    private final AgentEntity application;
+    private final AppEntity application;
     private final OpenAIChatRequest request;
     private final WorkflowChatContext context;
     private final SseBridge.Emit emitter;
@@ -24,7 +24,7 @@ final class WorkflowStreamSession {
     private final long startedAtMillis = System.currentTimeMillis();
     private final ChatStreamSink streamSink;
 
-    WorkflowStreamSession(AgentEntity application, OpenAIChatRequest request,
+    WorkflowStreamSession(AppEntity application, OpenAIChatRequest request,
                           WorkflowChatContext context, SseBridge.Emit emitter) {
         this.application = application;
         this.request = request;

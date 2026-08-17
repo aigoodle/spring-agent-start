@@ -12,6 +12,10 @@ import io.github.aigoodle.model.service.ModelService;
 import io.github.aigoodle.model.service.ProviderCredentialService;
 import io.github.aigoodle.model.service.ProviderDefinitionService;
 import io.github.aigoodle.model.service.ProviderModelSettingsService;
+import io.github.aigoodle.web.dto.model.CatalogModelView;
+import io.github.aigoodle.web.dto.model.GroupedModelView;
+import io.github.aigoodle.web.dto.model.GroupedProviderView;
+import io.github.aigoodle.web.dto.model.ModelParametersView;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -42,9 +46,9 @@ class ModelCatalogQueryServiceTest {
                 mock(ProviderDefinitionService.class),
                 mock(ProviderModelSettingsService.class));
 
-        Map<String, Object> parameterView = queryService.parameters("model-1");
+        ModelParametersView parameterView = queryService.parameters("model-1");
 
-        assertThat(parameterView.get("parameters"))
+        assertThat(parameterView.getParameters())
                 .isEqualTo(Map.of("temperature", 0.7));
     }
 
@@ -93,16 +97,14 @@ class ModelCatalogQueryServiceTest {
                 definitionService,
                 settingsService);
 
-        Map<String, List<Map<String, Object>>> grouped =
+        Map<String, List<GroupedProviderView>> grouped =
                 queryService.groupedModelsByType("t1");
 
-        List<Map<String, Object>> llmProviders = grouped.get("LLM");
+        List<GroupedProviderView> llmProviders = grouped.get("LLM");
         assertThat(llmProviders).hasSize(1);
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> modelList =
-                (List<Map<String, Object>>) llmProviders.get(0).get("modelList");
+        List<GroupedModelView> modelList = llmProviders.get(0).getModelList();
         assertThat(modelList)
-                .extracting(model -> model.get("modelName"))
+                .extracting(GroupedModelView::getModelName)
                 .containsExactly("gpt-4o", "my-custom-llm");
         // Types without candidates keep their empty buckets.
         assertThat(grouped.get("TEXT_EMBEDDING")).isEmpty();
@@ -128,7 +130,7 @@ class ModelCatalogQueryServiceTest {
                 definitionService,
                 settingsService);
 
-        Map<String, List<Map<String, Object>>> grouped =
+        Map<String, List<GroupedProviderView>> grouped =
                 queryService.groupedModelsByType("t1");
 
         assertThat(grouped.values()).allSatisfy(List::isEmpty);
@@ -164,14 +166,14 @@ class ModelCatalogQueryServiceTest {
                 definitionService,
                 settingsService);
 
-        List<Map<String, Object>> catalog = queryService.catalog("openai", "t1");
+        List<CatalogModelView> catalog = queryService.catalog("openai", "t1");
 
         assertThat(catalog)
-                .extracting(row -> row.get("model"))
+                .extracting(CatalogModelView::getModel)
                 .containsExactly("gpt-4o", "my-custom-llm");
-        assertThat(catalog.get(0).get("source")).isEqualTo("predefined");
-        assertThat(catalog.get(0).get("enabled")).isEqualTo(true);
-        assertThat(catalog.get(1).get("source")).isEqualTo("custom");
+        assertThat(catalog.get(0).getSource()).isEqualTo("predefined");
+        assertThat(catalog.get(0).getEnabled()).isTrue();
+        assertThat(catalog.get(1).getSource()).isEqualTo("custom");
     }
 
     private static PredefinedModelEntity predefined(String providerName, String model,

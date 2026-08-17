@@ -10,7 +10,7 @@ import org.springframework.amqp.rabbit.annotation.RabbitListener;
  * shared {@link DocumentIngestionRunner}. When the runner reports failure the
  * listener throws {@link AmqpRejectAndDontRequeueException} so the broker
  * routes the message to the DLQ (retries are broker-side via dead-letter TTL
- * — see {@code SpringAgentKnowledgeAutoConfiguration}). Successful runs are
+ * — see {@code GoodleKnowledgeAutoConfiguration}). Successful runs are
  * ack'd automatically.
  *
  * <p>Concurrency, prefetch and retry counts are all set on the

@@ -1,12 +1,12 @@
 package io.github.aigoodle.agent.service;
 
-import io.github.aigoodle.agent.entity.AppModelConfig;
+import io.github.aigoodle.agent.entity.AppModelConfigEntity;
 
 /** Identifies the app and tenant that own a model configuration sidecar. */
 public record AppModelConfigRegistration(
         String appId,
         String tenantId,
-        AppModelConfig configuration) {
+        AppModelConfigEntity configuration) {
 
     public AppModelConfigRegistration {
         if (appId == null || appId.isBlank()) {

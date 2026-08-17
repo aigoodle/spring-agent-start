@@ -9,7 +9,7 @@ import io.github.aigoodle.agent.api.AgentStrategyType;
 import io.github.aigoodle.agent.hitl.ApprovalGate;
 import io.github.aigoodle.agent.runtime.AgentResumeCommand;
 import io.github.aigoodle.common.util.JsonUtils;
-import io.github.aigoodle.tool.AgentTool;
+import io.github.aigoodle.tool.ToolDefinition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -77,8 +77,8 @@ public class ReActStrategy implements ResumableAgentStrategy {
         List<Message> messages = checkpoint.messages().stream()
                 .map(ReActStrategy::toSpringMessage)
                 .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
-        Map<String, AgentTool> toolsByName = indexTools(context.getTools());
-        AgentTool tool = toolsByName.get(checkpoint.toolName());
+        Map<String, ToolDefinition> toolsByName = indexTools(context.getTools());
+        ToolDefinition tool = toolsByName.get(checkpoint.toolName());
         String observation;
         if (command.decision() == AgentResumeCommand.Decision.DENY) {
             observation = "Tool '" + checkpoint.toolName() + "' was denied by the approver.";
@@ -100,7 +100,7 @@ public class ReActStrategy implements ResumableAgentStrategy {
                                   List<Message> messages, int firstIteration,
                                   boolean hideThought) {
         AgentDefinition definition = context.getDefinition();
-        Map<String, AgentTool> toolsByName = indexTools(context.getTools());
+        Map<String, ToolDefinition> toolsByName = indexTools(context.getTools());
         ChatOptions chatOptions = AgentChatOptionsFactory.build(definition);
 
         for (int iteration = firstIteration; iteration <= definition.getMaxIterations(); iteration++) {
@@ -141,9 +141,9 @@ public class ReActStrategy implements ResumableAgentStrategy {
         return response.stopAfterMaxIterations(definition.getMaxIterations());
     }
 
-    private static Map<String, AgentTool> indexTools(List<AgentTool> tools) {
-        Map<String, AgentTool> toolsByName = new LinkedHashMap<>();
-        for (AgentTool tool : tools) {
+    private static Map<String, ToolDefinition> indexTools(List<ToolDefinition> tools) {
+        Map<String, ToolDefinition> toolsByName = new LinkedHashMap<>();
+        for (ToolDefinition tool : tools) {
             toolsByName.put(tool.name(), tool);
         }
         return toolsByName;
@@ -190,12 +190,12 @@ public class ReActStrategy implements ResumableAgentStrategy {
         return response.complete(answer);
     }
 
-    private static ToolExecution executeTool(Map<String, AgentTool> toolsByName,
+    private static ToolExecution executeTool(Map<String, ToolDefinition> toolsByName,
                                              String toolName,
                                              String toolInput,
                                              AgentDefinition definition,
                                              AgentRunContext context) {
-        AgentTool tool = toolsByName.get(toolName);
+        ToolDefinition tool = toolsByName.get(toolName);
         if (tool == null) {
             return ToolExecution.completed("error: unknown tool '" + toolName
                     + "'. Available: " + toolsByName.keySet());
@@ -218,7 +218,7 @@ public class ReActStrategy implements ResumableAgentStrategy {
         };
     }
 
-    private static String invoke(AgentTool tool, String toolInput, AgentRunContext context) {
+    private static String invoke(ToolDefinition tool, String toolInput, AgentRunContext context) {
         try {
             Map<String, Object> arguments = JsonUtils.parseMap(toolInput);
             if (arguments == null || arguments.isEmpty()) {
@@ -274,7 +274,7 @@ public class ReActStrategy implements ResumableAgentStrategy {
     }
 
     private static String createSystemPrompt(AgentDefinition definition,
-                                             List<AgentTool> tools,
+                                             List<ToolDefinition> tools,
                                              boolean hideThought) {
         String instructions = definition.getInstructions() == null
                 ? "You are a helpful assistant." : definition.getInstructions();
@@ -287,7 +287,7 @@ public class ReActStrategy implements ResumableAgentStrategy {
 
         prompt.append("\n\nYou have access to these tools:\n");
         StringBuilder toolNames = new StringBuilder();
-        for (AgentTool tool : tools) {
+        for (ToolDefinition tool : tools) {
             prompt.append("- ").append(tool.name()).append(": ")
                     .append(tool.description()).append('\n');
             if (!toolNames.isEmpty()) {

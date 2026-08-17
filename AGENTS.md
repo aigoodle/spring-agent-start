@@ -40,7 +40,7 @@ mvn -pl agent-start-agent  -am -Dtest=AgentRuntimeTest#methodName test   # singl
 - `server` is the standalone production-shaped backend. It pulls `agent-start-web` **with
   `spring-boot-starter-web` excluded** — generic `@RestController` methods still route under the
   reactive dispatcher (`/agent-start` path prefix + CORS come from the `WebFluxConfigurer` mirror
-  in `SpringAgentWebAutoConfiguration.ReactiveSupport`); the servlet-only SSE controllers
+  in `GoodleWebAutoConfiguration.ReactiveSupport`); the servlet-only SSE controllers
   (`WorkflowStreamController` / `AgentChatStreamController`, `SseEmitter` signatures) are skipped
   there via `@ConditionalOnClass(SseEmitter)` and streaming comes from `agent-start-completion`
   instead; `MultipartFile` endpoints still fail at runtime. When adding endpoints used by both
@@ -60,7 +60,7 @@ common → { model, memory } → { knowledge, tools } → agent → workflow →
 
 | Module | Role |
 |--------|------|
-| `agent-start-common` | JSON utils, AES-GCM `TextEncryptor`, base entity, `AgentException` |
+| `agent-start-common` | JSON utils, AES-GCM `TextEncryptor`, base entity, `PlatformException` |
 | `agent-start-model` | `ModelProvider` SPI, `ChatModelDecorator` SPI, encrypted credentials, `ModelInstanceFactory`, `ModelService` (returns Spring AI `ChatClient`/`EmbeddingModel`). Built-in OpenAI-compatible presets (openai, deepseek, zhipu, moonshot, qwen, volcengine, siliconflow) + Ollama. |
 | `agent-start-provider/` | Aggregator for optional native-SDK `ModelProvider` starters; each child upgrades the matching built-in OpenAI-compat preset. |
 | ` └── …-zhipu` | Official spring-ai-zhipuai SDK (GLM-4V vision, native chat/embedding). |
@@ -130,7 +130,7 @@ are recorded for timing/observability.
 ## The web layer split (MVC vs WebFlux)
 
 - `web` controllers are all prefixed with **`/agent-start`** (`CONTROLLER_PATH_PREFIX` in
-  `SpringAgentWebAutoConfiguration`). Application-wide deployment prefixes belong in Spring Boot
+  `GoodleWebAutoConfiguration`). Application-wide deployment prefixes belong in Spring Boot
   or gateway configuration, not individual controller mappings.
 - `completion` endpoints (`/chat-messages`, `/chat/completions/{appId}`, `/conversations`,
   `/messages`) are reactive and live outside the `/agent-start` prefix.

@@ -4,8 +4,8 @@ import io.github.aigoodle.agent.api.AgentDefinition;
 import io.github.aigoodle.agent.api.AgentResponse;
 import io.github.aigoodle.agent.api.AgentStep;
 import io.github.aigoodle.agent.hitl.ApprovalGate;
-import io.github.aigoodle.tool.AgentTool;
-import io.github.aigoodle.tool.adapter.AgentToolCallback;
+import io.github.aigoodle.tool.ToolDefinition;
+import io.github.aigoodle.tool.adapter.ToolDefinitionCallback;
 import org.springframework.ai.tool.ToolCallback;
 
 import java.util.ArrayList;
@@ -18,26 +18,26 @@ final class FunctionCallingToolCallbacks {
     List<ToolCallback> create(AgentRunContext context, AgentResponse response) {
         AgentDefinition definition = context.getDefinition();
         List<ToolCallback> callbacks = new ArrayList<>();
-        for (AgentTool tool : context.getTools()) {
-            AgentTool executableTool = requiresApproval(definition, tool)
+        for (ToolDefinition tool : context.getTools()) {
+            ToolDefinition executableTool = requiresApproval(definition, tool)
                     ? new ApprovalGuardedTool(
                             tool, definition, context.getConversationId(), context.getApprovalGate())
                     : tool;
-            AgentTool observableTool = new StepRecordingTool(executableTool, response, context);
-            callbacks.add(new AgentToolCallback(observableTool));
+            ToolDefinition observableTool = new StepRecordingTool(executableTool, response, context);
+            callbacks.add(new ToolDefinitionCallback(observableTool));
         }
         return callbacks;
     }
 
-    private static boolean requiresApproval(AgentDefinition definition, AgentTool tool) {
+    private static boolean requiresApproval(AgentDefinition definition, ToolDefinition tool) {
         return definition.getApprovalRequiredTools() != null
                 && definition.getApprovalRequiredTools().contains(tool.name());
     }
 
     /** Publishes action and observation steps around an internally executed tool call. */
-    private record StepRecordingTool(AgentTool target,
+    private record StepRecordingTool(ToolDefinition target,
                                      AgentResponse response,
-                                     AgentRunContext context) implements AgentTool {
+                                     AgentRunContext context) implements ToolDefinition {
 
         @Override
         public String name() {
@@ -85,10 +85,10 @@ final class FunctionCallingToolCallbacks {
     }
 
     /** Consults the configured approval gate before invoking a sensitive tool. */
-    private record ApprovalGuardedTool(AgentTool target,
+    private record ApprovalGuardedTool(ToolDefinition target,
                                        AgentDefinition definition,
                                        String conversationId,
-                                       ApprovalGate approvalGate) implements AgentTool {
+                                       ApprovalGate approvalGate) implements ToolDefinition {
 
         @Override
         public String name() {

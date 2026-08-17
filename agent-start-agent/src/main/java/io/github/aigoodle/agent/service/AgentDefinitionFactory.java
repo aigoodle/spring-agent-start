@@ -2,9 +2,9 @@ package io.github.aigoodle.agent.service;
 
 import io.github.aigoodle.agent.api.AgentDefinition;
 import io.github.aigoodle.agent.api.AgentStrategyType;
-import io.github.aigoodle.agent.entity.AgentEntity;
-import io.github.aigoodle.agent.entity.AppModelConfig;
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.agent.entity.AppEntity;
+import io.github.aigoodle.agent.entity.AppModelConfigEntity;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.common.util.JsonUtils;
 
 import java.util.HashMap;
@@ -26,11 +26,11 @@ final class AgentDefinitionFactory {
         this.modelConfigService = modelConfigService;
     }
 
-    AgentEntity enrich(AgentEntity agent) {
+    AppEntity enrich(AppEntity agent) {
         if (agent == null || agent.getId() == null) {
             return agent;
         }
-        AppModelConfig modelConfig = modelConfigService.findByAppId(agent.getId());
+        AppModelConfigEntity modelConfig = modelConfigService.findByAppId(agent.getId());
         if (modelConfig == null) {
             return agent;
         }
@@ -53,41 +53,41 @@ final class AgentDefinitionFactory {
         return agent;
     }
 
-    AgentDefinition create(AgentEntity agent) {
-        AppModelConfig modelConfig = modelConfigService.findByAppId(agent.getId());
+    AgentDefinition create(AppEntity agent) {
+        AppModelConfigEntity modelConfig = modelConfigService.findByAppId(agent.getId());
         return AgentDefinition.builder()
                 .id(agent.getId())
                 .tenantId(agent.getTenantId())
                 .name(agent.getName())
-                .instructions(configuredValue(modelConfig, AppModelConfig::getPrePrompt))
+                .instructions(configuredValue(modelConfig, AppModelConfigEntity::getPrePrompt))
                 .modelName(firstText(
-                        configuredValue(modelConfig, AppModelConfig::getModelName),
+                        configuredValue(modelConfig, AppModelConfigEntity::getModelName),
                         agent.getModelName()))
                 .modelProvider(firstText(
-                        configuredValue(modelConfig, AppModelConfig::getModelProvider),
+                        configuredValue(modelConfig, AppModelConfigEntity::getModelProvider),
                         agent.getModelProvider()))
                 .strategy(resolveStrategy(modelConfig))
                 .toolNames(parseStringList(
-                        configuredValue(modelConfig, AppModelConfig::getToolNamesJson)))
+                        configuredValue(modelConfig, AppModelConfigEntity::getToolNamesJson)))
                 .approvalRequiredTools(new HashSet<>(parseStringList(
-                        configuredValue(modelConfig, AppModelConfig::getApprovalToolsJson))))
+                        configuredValue(modelConfig, AppModelConfigEntity::getApprovalToolsJson))))
                 .delegateAgentIds(parseStringList(
-                        configuredValue(modelConfig, AppModelConfig::getDelegateAgentIdsJson)))
+                        configuredValue(modelConfig, AppModelConfigEntity::getDelegateAgentIdsJson)))
                 .maxIterations(valueOrDefault(
-                        configuredValue(modelConfig, AppModelConfig::getMaxIterations),
+                        configuredValue(modelConfig, AppModelConfigEntity::getMaxIterations),
                         DEFAULT_MAX_ITERATIONS))
                 .memoryEnabled(!Boolean.FALSE.equals(
-                        configuredValue(modelConfig, AppModelConfig::getMemoryEnabled)))
+                        configuredValue(modelConfig, AppModelConfigEntity::getMemoryEnabled)))
                 .memoryWindow(valueOrDefault(
-                        configuredValue(modelConfig, AppModelConfig::getMemoryWindow),
+                        configuredValue(modelConfig, AppModelConfigEntity::getMemoryWindow),
                         DEFAULT_MEMORY_WINDOW))
                 .modelSettings(parseSettings(
-                        configuredValue(modelConfig, AppModelConfig::getConfigs)))
+                        configuredValue(modelConfig, AppModelConfigEntity::getConfigs)))
                 .build();
     }
 
-    private static AgentStrategyType resolveStrategy(AppModelConfig modelConfig) {
-        String configuredStrategy = configuredValue(modelConfig, AppModelConfig::getStrategy);
+    private static AgentStrategyType resolveStrategy(AppModelConfigEntity modelConfig) {
+        String configuredStrategy = configuredValue(modelConfig, AppModelConfigEntity::getStrategy);
         if (!hasText(configuredStrategy)) {
             return AgentStrategyType.REACT;
         }
@@ -98,7 +98,7 @@ final class AgentDefinitionFactory {
         try {
             return AgentStrategyType.valueOf(enumName);
         } catch (IllegalArgumentException exception) {
-            throw new AgentException(
+            throw new PlatformException(
                     "invalid_agent_strategy",
                     "Unsupported agent strategy: " + configuredStrategy,
                     exception);
@@ -129,8 +129,8 @@ final class AgentDefinitionFactory {
         return value == null ? defaultValue : value;
     }
 
-    private static <T> T configuredValue(AppModelConfig modelConfig,
-                                         Function<AppModelConfig, T> valueExtractor) {
+    private static <T> T configuredValue(AppModelConfigEntity modelConfig,
+                                         Function<AppModelConfigEntity, T> valueExtractor) {
         return modelConfig == null ? null : valueExtractor.apply(modelConfig);
     }
 }

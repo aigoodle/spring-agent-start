@@ -3,9 +3,9 @@ package io.github.aigoodle.example;
 import io.github.aigoodle.agent.api.AgentRequest;
 import io.github.aigoodle.agent.api.AgentResponse;
 import io.github.aigoodle.agent.api.AgentStrategyType;
-import io.github.aigoodle.agent.entity.AgentEntity;
+import io.github.aigoodle.agent.entity.AppEntity;
 import io.github.aigoodle.agent.service.AgentService;
-import io.github.aigoodle.agent.service.CreateAgentRequest;
+import io.github.aigoodle.agent.service.SaveAppRequest;
 import io.github.aigoodle.tool.ToolRegistry;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -47,7 +47,7 @@ public class AgentDemoController {
                               @RequestParam(required = false) String tools) {
         List<String> toolNames = (tools == null || tools.isBlank())
                 ? List.of() : Arrays.stream(tools.split(",")).map(String::trim).toList();
-        AgentEntity agent = agentService.create(CreateAgentRequest.builder()
+        AppEntity agent = agentService.create(SaveAppRequest.builder()
                 .name(name).modelProvider(modelProvider).modelName(modelName).strategy(strategy)
                 .instructions(instructions == null ? "You are a helpful assistant. Use tools when useful." : instructions)
                 .toolNames(toolNames).memoryEnabled(true).build());

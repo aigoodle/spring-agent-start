@@ -78,7 +78,7 @@
         </dependency>
 
         <!-- Reactive mirror of the MVC path-prefix/CORS configurers
-             (SpringAgentWebAutoConfiguration.ReactiveSupport), needed so this module
+             (GoodleWebAutoConfiguration.ReactiveSupport), needed so this module
              can serve generic controllers on WebFlux/Netty hosts that exclude
              spring-boot-starter-web (agent-start-server). Optional: activated only
              when spring-webflux is actually on the runtime classpath. Also supplies

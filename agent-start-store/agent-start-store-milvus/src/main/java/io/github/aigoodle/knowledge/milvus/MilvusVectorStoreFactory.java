@@ -1,6 +1,6 @@
 package io.github.aigoodle.knowledge.milvus;
 
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.knowledge.entity.DatasetEntity;
 import io.github.aigoodle.knowledge.index.VectorStoreFactory;
 import io.milvus.client.MilvusServiceClient;
@@ -40,7 +40,7 @@ public class MilvusVectorStoreFactory implements VectorStoreFactory {
         try {
             store.afterPropertiesSet();
         } catch (Exception e) {
-            throw new AgentException("milvus_init_failed",
+            throw new PlatformException("milvus_init_failed",
                     "Failed to initialize Milvus store for dataset " + dataset.getId(), e);
         }
         return store;

@@ -1,6 +1,6 @@
 package io.github.aigoodle.agent.service;
 
-import io.github.aigoodle.agent.entity.AppModelConfig;
+import io.github.aigoodle.agent.entity.AppModelConfigEntity;
 
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -11,7 +11,7 @@ final class AppModelConfigPatch {
     private AppModelConfigPatch() {
     }
 
-    static void apply(AppModelConfig target, AppModelConfig patch) {
+    static void apply(AppModelConfigEntity target, AppModelConfigEntity patch) {
         copyIfPresent(patch::getModelProvider, target::setModelProvider);
         copyIfPresent(patch::getModelName, target::setModelName);
         copyIfPresent(patch::getModelJson, target::setModelJson);

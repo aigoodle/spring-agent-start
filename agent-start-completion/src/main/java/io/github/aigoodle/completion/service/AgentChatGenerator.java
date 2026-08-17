@@ -2,7 +2,7 @@ package io.github.aigoodle.completion.service;
 
 import io.github.aigoodle.agent.api.AgentRequest;
 import io.github.aigoodle.agent.api.AgentResponse;
-import io.github.aigoodle.agent.entity.AgentEntity;
+import io.github.aigoodle.agent.entity.AppEntity;
 import io.github.aigoodle.agent.service.AgentService;
 import io.github.aigoodle.completion.common.SseBridge;
 import io.github.aigoodle.completion.dto.openai.OpenAIChatRequest;
@@ -31,13 +31,13 @@ public class AgentChatGenerator {
         this.agentService = agentService;
     }
 
-    public OpenAIChatResponse generateBlocking(AgentEntity application, OpenAIChatRequest request) {
+    public OpenAIChatResponse generateBlocking(AppEntity application, OpenAIChatRequest request) {
         AgentResponse response = agentService.runDefinition(
                 agentService.toDefinition(application), toAgentRequest(request));
         return OpenAIChatResponse.completion(request.getModel(), response.getText());
     }
 
-    public void generateStream(AgentEntity application, OpenAIChatRequest request, SseBridge.Emit emitter) {
+    public void generateStream(AppEntity application, OpenAIChatRequest request, SseBridge.Emit emitter) {
         String taskId = "task-" + UUID.randomUUID();
         String chunkId = "chatcmpl-" + UUID.randomUUID().toString().replace("-", "");
         long startedAtMillis = System.currentTimeMillis();
@@ -54,7 +54,7 @@ public class AgentChatGenerator {
         AgentResponse response;
         try {
             response = agentService.runDefinition(agentService.toDefinition(application), agentRequest,
-                    step -> emitter.event("step", AgentStreamEventPayloads.step(taskId, step)),
+                    step -> emitter.event("step", AppStreamEventPayloads.step(taskId, step)),
                     delta -> {
                         if (delta == null || delta.isEmpty()) {
                             return;
@@ -66,7 +66,7 @@ public class AgentChatGenerator {
         } catch (RuntimeException generationFailure) {
             logger.warn("Agent chat run failed for app {} ({}): {}",
                     application.getId(), application.getName(), generationFailure.getMessage());
-            emitter.event("error", AgentStreamEventPayloads.error(
+            emitter.event("error", AppStreamEventPayloads.error(
                     taskId, application, generationFailure));
             emitter.event("message_end", Map.of("task_id", taskId, "status", "failed"));
             return;
@@ -78,13 +78,13 @@ public class AgentChatGenerator {
         }
 
         emitter.event("message", OpenAIChatResponse.chunk(
-                chunkId, request.getModel(), null, null, AgentStreamEventPayloads.finishReason(response)));
+                chunkId, request.getModel(), null, null, AppStreamEventPayloads.finishReason(response)));
         if (response.getStatus() == AgentResponse.Status.AWAITING_APPROVAL) {
             emitter.event("agent_approval_required",
-                    AgentStreamEventPayloads.approvalRequired(taskId, response));
+                    AppStreamEventPayloads.approvalRequired(taskId, response));
         }
         emitter.event("chat_finished",
-                AgentStreamEventPayloads.finished(taskId, application, response, startedAtMillis));
+                AppStreamEventPayloads.finished(taskId, application, response, startedAtMillis));
         emitter.event("message_end", Map.of(
                 "task_id", taskId,
                 "status", response.getStatus() == null

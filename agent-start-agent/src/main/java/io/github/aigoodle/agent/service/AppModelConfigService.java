@@ -1,6 +1,6 @@
 package io.github.aigoodle.agent.service;
 
-import io.github.aigoodle.agent.entity.AppModelConfig;
+import io.github.aigoodle.agent.entity.AppModelConfigEntity;
 import io.github.aigoodle.agent.mapper.AppModelConfigMapper;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,7 +19,7 @@ public class AppModelConfigService {
     }
 
     /** Load a sidecar by application id, or return {@code null} when none exists. */
-    public AppModelConfig findByAppId(String appId) {
+    public AppModelConfigEntity findByAppId(String appId) {
         if (appId == null || appId.isBlank()) {
             return null;
         }
@@ -28,14 +28,14 @@ public class AppModelConfigService {
 
     /** Insert a new sidecar or apply the supplied non-null fields to the existing one. */
     @Transactional
-    public AppModelConfig upsert(AppModelConfigRegistration registration) {
-        AppModelConfig configuration = registration.configuration();
+    public AppModelConfigEntity upsert(AppModelConfigRegistration registration) {
+        AppModelConfigEntity configuration = registration.configuration();
         if (configuration == null) {
             return null;
         }
 
         String appId = registration.appId();
-        AppModelConfig existingConfiguration = configMapper.selectById(appId);
+        AppModelConfigEntity existingConfiguration = configMapper.selectById(appId);
         prepareIdentity(configuration, registration);
         if (existingConfiguration == null) {
             configMapper.insert(configuration);
@@ -49,7 +49,7 @@ public class AppModelConfigService {
 
     /** @deprecated Use {@link #upsert(AppModelConfigRegistration)}. */
     @Deprecated(forRemoval = false)
-    public AppModelConfig upsert(String appId, String tenantId, AppModelConfig configuration) {
+    public AppModelConfigEntity upsert(String appId, String tenantId, AppModelConfigEntity configuration) {
         return upsert(new AppModelConfigRegistration(appId, tenantId, configuration));
     }
 
@@ -63,12 +63,12 @@ public class AppModelConfigService {
     }
 
     /** Translate the flat agent-editor request into its persistence sidecar. */
-    public static AppModelConfig fromRequest(CreateAgentRequest request) {
+    public static AppModelConfigEntity fromRequest(SaveAppRequest request) {
         return AppModelConfigFactory.from(request);
     }
 
     private static void prepareIdentity(
-            AppModelConfig configuration, AppModelConfigRegistration registration) {
+            AppModelConfigEntity configuration, AppModelConfigRegistration registration) {
         configuration.setAppId(registration.appId());
         configuration.setId(registration.appId());
         if (registration.tenantId() != null && !registration.tenantId().isBlank()) {

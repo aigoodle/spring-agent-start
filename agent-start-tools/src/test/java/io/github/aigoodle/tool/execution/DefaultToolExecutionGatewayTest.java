@@ -1,6 +1,6 @@
 package io.github.aigoodle.tool.execution;
 
-import io.github.aigoodle.tool.AgentTool;
+import io.github.aigoodle.tool.ToolDefinition;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -46,7 +46,7 @@ class DefaultToolExecutionGatewayTest {
         properties.setMaxRetries(2);
         properties.setMaxOutputChars(5);
         gateway = new DefaultToolExecutionGateway(properties, List.of(), List.of());
-        AgentTool tool = new AgentTool() {
+        ToolDefinition tool = new ToolDefinition() {
             public String name() { return "safe"; }
             public String description() { return "safe"; }
             public boolean idempotent() { return true; }
@@ -68,7 +68,7 @@ class DefaultToolExecutionGatewayTest {
         List<ToolExecutionRecord> records = new ArrayList<>();
         gateway = new DefaultToolExecutionGateway(properties, List.of(), List.of(records::add));
 
-        assertThatThrownBy(() -> gateway.execute(new AgentTool() {
+        assertThatThrownBy(() -> gateway.execute(new ToolDefinition() {
             public String name() { return "slow"; }
             public String description() { return "slow"; }
             public Object execute(Map<String, Object> args) {
@@ -89,8 +89,8 @@ class DefaultToolExecutionGatewayTest {
         return properties;
     }
 
-    private static AgentTool tool(String name, boolean idempotent, AtomicInteger calls, Object result) {
-        return new AgentTool() {
+    private static ToolDefinition tool(String name, boolean idempotent, AtomicInteger calls, Object result) {
+        return new ToolDefinition() {
             public String name() { return name; }
             public String description() { return name; }
             public boolean idempotent() { return idempotent; }

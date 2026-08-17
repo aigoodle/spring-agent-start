@@ -1,6 +1,6 @@
 package io.github.aigoodle.agent.service;
 
-import io.github.aigoodle.agent.entity.AppModelConfig;
+import io.github.aigoodle.agent.entity.AppModelConfigEntity;
 import io.github.aigoodle.agent.mapper.AppModelConfigMapper;
 import org.junit.jupiter.api.Test;
 
@@ -15,9 +15,9 @@ class AppModelConfigServiceTest {
     void insertsAConfigurationUsingTheApplicationIdentity() {
         AppModelConfigMapper configMapper = mock(AppModelConfigMapper.class);
         AppModelConfigService service = new AppModelConfigService(configMapper);
-        AppModelConfig configuration = new AppModelConfig();
+        AppModelConfigEntity configuration = new AppModelConfigEntity();
 
-        AppModelConfig saved = service.upsert(new AppModelConfigRegistration(
+        AppModelConfigEntity saved = service.upsert(new AppModelConfigRegistration(
                 "app-1", "tenant-1", configuration));
 
         assertThat(saved).isSameAs(configuration);
@@ -31,14 +31,14 @@ class AppModelConfigServiceTest {
     void patchesTheExistingSidecarInsteadOfReplacingItsIdentity() {
         AppModelConfigMapper configMapper = mock(AppModelConfigMapper.class);
         AppModelConfigService service = new AppModelConfigService(configMapper);
-        AppModelConfig existing = new AppModelConfig();
+        AppModelConfigEntity existing = new AppModelConfigEntity();
         existing.setId("app-1");
         existing.setModelName("old-model");
-        AppModelConfig patch = new AppModelConfig();
+        AppModelConfigEntity patch = new AppModelConfigEntity();
         patch.setModelName("new-model");
         when(configMapper.selectById("app-1")).thenReturn(existing);
 
-        AppModelConfig saved = service.upsert(new AppModelConfigRegistration(
+        AppModelConfigEntity saved = service.upsert(new AppModelConfigRegistration(
                 "app-1", "tenant-1", patch));
 
         assertThat(saved).isSameAs(existing);

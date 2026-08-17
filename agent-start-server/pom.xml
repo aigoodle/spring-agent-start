@@ -95,7 +95,7 @@
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <version>${spring-boot.version}</version>
                 <configuration>
-                    <mainClass>io.github.aigoodle.server.SpringAgentServerApplication</mainClass>
+                    <mainClass>io.github.aigoodle.server.GoodleServerApplication</mainClass>
                 </configuration>
                 <executions>
                     <execution>

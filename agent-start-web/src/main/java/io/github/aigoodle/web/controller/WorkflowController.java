@@ -1,6 +1,6 @@
 package io.github.aigoodle.web.controller;
 
-import io.github.aigoodle.agent.service.AgentService;
+import io.github.aigoodle.agent.service.AppService;
 import io.github.aigoodle.web.common.ApiResponse;
 import io.github.aigoodle.web.dto.WorkflowRunRequest;
 import io.github.aigoodle.web.dto.WorkflowSaveRequest;
@@ -12,6 +12,7 @@ import io.github.aigoodle.workflow.entity.WorkflowEntity;
 import io.github.aigoodle.workflow.entity.WorkflowRunEntity;
 import io.github.aigoodle.workflow.service.WorkflowDraftDefinition;
 import io.github.aigoodle.workflow.service.WorkflowService;
+import io.github.aigoodle.trigger.service.TriggerService;
 import lombok.Data;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -42,13 +43,16 @@ public class WorkflowController {
     private final WorkflowService workflowService;
     private final WorkflowExampleService workflowExampleService;
     private final WorkflowDraftCoordinator draftCoordinator;
+    private final ObjectProvider<TriggerService> triggerServiceProvider;
 
     public WorkflowController(WorkflowService workflowService,
                               WorkflowExampleService workflowExampleService,
-                              ObjectProvider<AgentService> agentServiceProvider) {
+                              ObjectProvider<AppService> appServiceProvider,
+                              ObjectProvider<TriggerService> triggerServiceProvider) {
         this.workflowService = workflowService;
         this.workflowExampleService = workflowExampleService;
-        this.draftCoordinator = new WorkflowDraftCoordinator(workflowService, agentServiceProvider);
+        this.draftCoordinator = new WorkflowDraftCoordinator(workflowService, appServiceProvider);
+        this.triggerServiceProvider = triggerServiceProvider;
     }
 
     @GetMapping("/workflows")
@@ -108,7 +112,12 @@ public class WorkflowController {
                                                @RequestBody(required = false) PublishRequest request) {
         String markedName = request == null ? null : request.getMarkedName();
         String markedComment = request == null ? null : request.getMarkedComment();
-        return ApiResponse.ok(draftCoordinator.publish(appId, markedName, markedComment));
+        WorkflowEntity published = draftCoordinator.publish(appId, markedName, markedComment);
+        TriggerService triggerService = triggerServiceProvider.getIfAvailable();
+        if (triggerService != null) {
+            triggerService.syncPublishedWorkflowSchedule(published, workflowService);
+        }
+        return ApiResponse.ok(published);
     }
 
     @GetMapping("/apps/{appId}/workflows")

@@ -1,8 +1,8 @@
 package io.github.aigoodle.agent.service;
 
 import io.github.aigoodle.memory.*;
-import io.github.aigoodle.agent.entity.AgentEntity;
-import io.github.aigoodle.agent.mapper.AgentMapper;
+import io.github.aigoodle.agent.entity.AppEntity;
+import io.github.aigoodle.agent.mapper.AppMapper;
 
 import java.time.Instant;
 import java.util.HashSet;
@@ -13,15 +13,15 @@ import java.util.Set;
 public class AppMetricsService {
     private static final int METRICS_SCAN_LIMIT = 1000;
     private final MemoryManager memoryManager;
-    private final AgentMapper agentMapper;
+    private final AppMapper appMapper;
 
-    public AppMetricsService(MemoryManager memoryManager, AgentMapper agentMapper) {
+    public AppMetricsService(MemoryManager memoryManager, AppMapper appMapper) {
         this.memoryManager = memoryManager;
-        this.agentMapper = agentMapper;
+        this.appMapper = appMapper;
     }
 
     public AppMetricsView summarize(String appId) {
-        AgentEntity app = agentMapper.selectById(appId);
+        AppEntity app = appMapper.selectById(appId);
         String tenantId = app == null || app.getTenantId() == null ? "default" : app.getTenantId();
         List<MemoryItem> messages = memoryManager.recall(new MemoryQuery(
                 tenantId, appId, null, null, Set.of(MemoryTier.SHORT_TERM), METRICS_SCAN_LIMIT));

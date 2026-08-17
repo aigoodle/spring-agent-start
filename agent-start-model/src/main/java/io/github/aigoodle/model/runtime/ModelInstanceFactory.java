@@ -1,6 +1,6 @@
 package io.github.aigoodle.model.runtime;
 
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.model.enums.ModelType;
 import io.github.aigoodle.model.provider.ModelEndpoint;
 import io.github.aigoodle.model.provider.ModelProvider;
@@ -47,7 +47,7 @@ public class ModelInstanceFactory {
         ModelProvider provider = registry.get(endpoint.getProviderName());
         ModelType type = endpoint.getModelType();
         if (type == null) {
-            throw new AgentException("model_type_required",
+            throw new PlatformException("model_type_required",
                     "Model type is required to build an instance for " + endpoint.getModelName(), null);
         }
         log.debug("Building model instance: provider={}, model={}, type={}",
@@ -56,7 +56,7 @@ public class ModelInstanceFactory {
             case LLM -> ModelInstance.forChat(endpoint.getId(), endpoint, decorate(provider.createChatModel(endpoint), endpoint));
             case TEXT_EMBEDDING ->
                     ModelInstance.forEmbedding(endpoint.getId(), endpoint, provider.createEmbeddingModel(endpoint));
-            default -> throw new AgentException("unsupported_model_type",
+            default -> throw new PlatformException("unsupported_model_type",
                     "Model type " + type + " is not yet supported by the runtime", null);
         };
     }

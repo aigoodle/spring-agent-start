@@ -1,1 +1,1 @@
-io.github.aigoodle.knowledge.elasticsearch.SpringAgentElasticsearchStoreAutoConfiguration
+io.github.aigoodle.knowledge.elasticsearch.GoodleElasticsearchStoreAutoConfiguration

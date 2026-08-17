@@ -1,6 +1,6 @@
 package io.github.aigoodle.tool.builtin;
 
-import io.github.aigoodle.tool.AbstractAgentTool;
+import io.github.aigoodle.tool.AbstractToolDefinition;
 
 import java.time.DateTimeException;
 import java.time.ZoneId;
@@ -12,7 +12,7 @@ import java.util.Map;
  * Returns the current date-time, optionally in a given IANA timezone
  * (argument {@code zone}, e.g. {@code Asia/Shanghai}).
  */
-public class CurrentTimeTool extends AbstractAgentTool {
+public class CurrentTimeTool extends AbstractToolDefinition {
 
     @Override
     public String name() {

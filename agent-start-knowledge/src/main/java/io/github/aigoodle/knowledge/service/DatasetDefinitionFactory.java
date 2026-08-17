@@ -1,6 +1,6 @@
 package io.github.aigoodle.knowledge.service;
 
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.common.util.JsonUtils;
 import io.github.aigoodle.knowledge.config.ProcessRule;
 import io.github.aigoodle.knowledge.config.RetrievalConfig;
@@ -39,7 +39,7 @@ final class DatasetDefinitionFactory {
     static void requireEmbeddingModelFor(IndexingTechnique technique, String embeddingModelId) {
         if (technique == IndexingTechnique.HIGH_QUALITY
                 && (embeddingModelId == null || embeddingModelId.isBlank())) {
-            throw new AgentException(
+            throw new PlatformException(
                     "embedding_model_required",
                     "A high-quality dataset requires an embedding model id",
                     null);

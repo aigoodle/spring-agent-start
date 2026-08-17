@@ -176,7 +176,7 @@ mvn -pl agent-start-example -am spring-boot:run
 # → http://localhost:18090/api/v1/system/info   (probes which modules are loaded)
 ```
 
-Verified with the shipped H2 config: `Started SpringAgentExampleApplication in
+Verified with the shipped H2 config: `Started GoodleExampleApplication in
 1.81 seconds`. A workflow SSE run streams `run-start → step (per node) → result`
 in real time via `POST /api/v1/workflows/run-graph/stream`.
 
@@ -267,7 +267,7 @@ long-term recall. Replace its `MemoryStore` SPI to add a vector or remote memory
 
 **MCP client** is supported too: configure stdio or HTTP MCP servers under
 `spring-agent.tools.mcp.servers[*]` and their tools join the registry automatically
-(`McpToolProvider` → `AgentTool`), so agents call them like any built-in tool.
+(`McpToolProvider` → `ToolDefinition`), so agents call them like any built-in tool.
 
 Planned next:
 

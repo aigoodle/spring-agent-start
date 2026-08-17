@@ -13,7 +13,8 @@ import java.util.Map;
 public record TriggerInvocationRequest(
         String triggerId,
         Map<String, Object> payload,
-        String source) {
+        String source,
+        String conversationId) {
 
     public TriggerInvocationRequest {
         if (triggerId == null || triggerId.isBlank()) {
@@ -26,18 +27,23 @@ public record TriggerInvocationRequest(
     }
 
     public static TriggerInvocationRequest manual(String triggerId, Map<String, Object> payload) {
-        return new TriggerInvocationRequest(triggerId, payload, "manual");
+        return new TriggerInvocationRequest(triggerId, payload, "manual", null);
     }
 
     public static TriggerInvocationRequest webhook(String triggerId, Map<String, Object> payload) {
-        return new TriggerInvocationRequest(triggerId, payload, "webhook");
+        return new TriggerInvocationRequest(triggerId, payload, "webhook", null);
     }
 
     public static TriggerInvocationRequest event(String triggerId, Map<String, Object> payload) {
-        return new TriggerInvocationRequest(triggerId, payload, "event");
+        return new TriggerInvocationRequest(triggerId, payload, "event", null);
+    }
+
+    public static TriggerInvocationRequest scheduled(String triggerId, Map<String, Object> payload,
+                                                     String conversationId) {
+        return new TriggerInvocationRequest(triggerId, payload, "cron", conversationId);
     }
 
     public static TriggerInvocationRequest cron(String triggerId) {
-        return new TriggerInvocationRequest(triggerId, Map.of(), "cron");
+        return scheduled(triggerId, Map.of(), null);
     }
 }

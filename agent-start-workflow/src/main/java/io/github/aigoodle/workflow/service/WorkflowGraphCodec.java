@@ -2,7 +2,7 @@ package io.github.aigoodle.workflow.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.common.util.JsonUtils;
 import io.github.aigoodle.workflow.graph.WorkflowGraph;
 
@@ -13,14 +13,14 @@ final class WorkflowGraphCodec {
 
     WorkflowGraph read(JsonNode graphDefinition) {
         if (graphDefinition == null || graphDefinition.isNull()) {
-            throw new AgentException("graph_required", "Workflow graph is required", null);
+            throw new PlatformException("graph_required", "Workflow graph is required", null);
         }
         try {
             WorkflowGraph graph = JsonUtils.parse(graphDefinition.toString(), WorkflowGraph.class);
             graph.reindex();
             return graph;
         } catch (Exception exception) {
-            throw new AgentException(
+            throw new PlatformException(
                     "graph_parse_error",
                     "Could not parse graph: " + exception.getMessage(),
                     exception);

@@ -1,6 +1,6 @@
 package io.github.aigoodle.knowledge.reader;
 
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.knowledge.reader.model.BlockType;
 import io.github.aigoodle.knowledge.reader.model.DocumentBlock;
 import io.github.aigoodle.knowledge.reader.model.ParsedDocument;
@@ -48,7 +48,7 @@ public class PresentationDocumentReader implements DocumentReader {
                     .mediaType("application/vnd.openxmlformats-officedocument.presentationml.presentation")
                     .blocks(blocks).metadata(Map.of("slideCount", show.getSlides().size())).build();
         } catch (Exception e) {
-            throw new AgentException("extract_failed", "Failed to parse presentation " + filename, e);
+            throw new PlatformException("extract_failed", "Failed to parse presentation " + filename, e);
         }
     }
 }

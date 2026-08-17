@@ -1,6 +1,6 @@
 package io.github.aigoodle.knowledge.service;
 
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.common.util.JsonUtils;
 import io.github.aigoodle.knowledge.config.ProcessRule;
 import io.github.aigoodle.knowledge.config.RetrievalConfig;
@@ -21,7 +21,7 @@ class DatasetDefinitionFactoryTest {
                 .build();
 
         assertThatThrownBy(() -> DatasetDefinitionFactory.create(request))
-                .isInstanceOf(AgentException.class)
+                .isInstanceOf(PlatformException.class)
                 .hasMessageContaining("embedding model id");
     }
 

@@ -1,7 +1,7 @@
 package io.github.aigoodle.agent.strategy;
 
 import io.github.aigoodle.agent.api.AgentStrategyType;
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 
 import java.util.EnumMap;
 import java.util.List;
@@ -23,7 +23,7 @@ public class AgentStrategyRegistry {
     public AgentStrategy get(AgentStrategyType type) {
         AgentStrategy strategy = strategies.get(type);
         if (strategy == null) {
-            throw new AgentException("strategy_not_found",
+            throw new PlatformException("strategy_not_found",
                     "No agent strategy for " + type + " (have: " + strategies.keySet() + ")", null);
         }
         return strategy;

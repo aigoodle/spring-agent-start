@@ -3,11 +3,11 @@ package io.github.aigoodle.agent;
 import io.github.aigoodle.agent.api.AgentRequest;
 import io.github.aigoodle.agent.api.AgentResponse;
 import io.github.aigoodle.agent.api.AgentStrategyType;
-import io.github.aigoodle.agent.entity.AgentEntity;
+import io.github.aigoodle.agent.entity.AppEntity;
 import io.github.aigoodle.agent.runtime.AgentRunStatus;
 import io.github.aigoodle.memory.MemoryManager;
 import io.github.aigoodle.agent.service.AgentService;
-import io.github.aigoodle.agent.service.CreateAgentRequest;
+import io.github.aigoodle.agent.service.SaveAppRequest;
 import io.github.aigoodle.agent.support.ScriptedChatProvider;
 import io.github.aigoodle.model.entity.ModelEntity;
 import io.github.aigoodle.model.enums.ModelType;
@@ -62,7 +62,7 @@ class AgentRuntimeTest {
                 ? "Thought: done\nFinal Answer: " + last.replace("Observation:", "").strip()
                 : "Thought: I should compute\nAction: calculator\nAction Input: {\"expression\":\"6*7\"}");
 
-        AgentEntity agent = agentService.create(CreateAgentRequest.builder()
+        AppEntity agent = agentService.create(SaveAppRequest.builder()
                 .tenantId("ag").name("calc").instructions("You solve math using tools.")
                 .modelProvider("scripted").modelName(scriptedModel("react-calc"))
                 .strategy(AgentStrategyType.REACT)
@@ -90,7 +90,7 @@ class AgentRuntimeTest {
         ScriptedChatProvider.script("react-stream", last -> last.startsWith("Observation:")
                 ? "Thought: got it\nFinal Answer: " + last.replace("Observation:", "").strip()
                 : "Thought: I compute\nAction: calculator\nAction Input: {\"expression\":\"3+4\"}");
-        AgentEntity agent = agentService.create(CreateAgentRequest.builder()
+        AppEntity agent = agentService.create(SaveAppRequest.builder()
                 .tenantId("ag").name("stream-agent")
                 .modelProvider("scripted").modelName(scriptedModel("react-stream"))
                 .strategy(AgentStrategyType.REACT)
@@ -114,7 +114,7 @@ class AgentRuntimeTest {
     @Test
     void memoryPersistsAcrossRuns() {
         ScriptedChatProvider.script("mem-model", last -> "Thought: ok\nFinal Answer: ack");
-        AgentEntity agent = agentService.create(CreateAgentRequest.builder()
+        AppEntity agent = agentService.create(SaveAppRequest.builder()
                 .tenantId("ag").name("memo").instructions("Chat.")
                 .modelProvider("scripted").modelName(scriptedModel("mem-model"))
                 .strategy(AgentStrategyType.REACT)
@@ -147,7 +147,7 @@ class AgentRuntimeTest {
             return "unexpected";
         });
 
-        AgentEntity agent = agentService.create(CreateAgentRequest.builder()
+        AppEntity agent = agentService.create(SaveAppRequest.builder()
                 .tenantId("ag").name("planner").instructions("You plan and execute.")
                 .modelProvider("scripted").modelName(scriptedModel("plan-model"))
                 .strategy(AgentStrategyType.PLAN_EXECUTE)
@@ -169,13 +169,13 @@ class AgentRuntimeTest {
                 ? "Thought: done\nFinal Answer: " + last.replace("Observation:", "").strip()
                 : "Thought: delegate\nAction: delegate_to_worker\nAction Input: {\"input\":\"do the task\"}");
 
-        AgentEntity worker = agentService.create(CreateAgentRequest.builder()
+        AppEntity worker = agentService.create(SaveAppRequest.builder()
                 .tenantId("ag").name("worker").instructions("You are a specialist worker.")
                 .modelProvider("scripted").modelName(scriptedModel("worker-model"))
                 .strategy(AgentStrategyType.REACT)
                 .toolNames(List.of()).memoryEnabled(false).build());
 
-        AgentEntity orchestrator = agentService.create(CreateAgentRequest.builder()
+        AppEntity orchestrator = agentService.create(SaveAppRequest.builder()
                 .tenantId("ag").name("orch").instructions("You delegate to specialists.")
                 .modelProvider("scripted").modelName(scriptedModel("orchestrator-model"))
                 .strategy(AgentStrategyType.REACT)
@@ -193,7 +193,7 @@ class AgentRuntimeTest {
         ModelEntity llm = modelService.register(ModelRegistration.builder()
                 .tenantId("ag").providerName("ollama").modelName(ollamaModel)
                 .modelType(ModelType.LLM).credentials(Map.of("baseUrl", ollamaBaseUrl)).build());
-        AgentEntity agent = agentService.create(CreateAgentRequest.builder()
+        AppEntity agent = agentService.create(SaveAppRequest.builder()
                 .tenantId("ag").name("calc-live").instructions("Solve math. Use the calculator tool for arithmetic.")
                 .modelProvider(llm.getProviderName()).modelName(llm.getModelName())
                 .strategy(AgentStrategyType.REACT)

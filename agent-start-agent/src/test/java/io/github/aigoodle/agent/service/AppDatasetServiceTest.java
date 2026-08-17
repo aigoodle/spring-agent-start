@@ -1,9 +1,9 @@
 package io.github.aigoodle.agent.service;
 
-import io.github.aigoodle.agent.entity.AgentEntity;
-import io.github.aigoodle.agent.entity.AppModelConfig;
-import io.github.aigoodle.agent.mapper.AgentMapper;
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.agent.entity.AppEntity;
+import io.github.aigoodle.agent.entity.AppModelConfigEntity;
+import io.github.aigoodle.agent.mapper.AppMapper;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.knowledge.entity.DatasetEntity;
 import io.github.aigoodle.knowledge.service.DatasetService;
 import org.junit.jupiter.api.Test;
@@ -20,31 +20,31 @@ import static org.mockito.Mockito.when;
 
 class AppDatasetServiceTest {
 
-    private final AgentMapper agentMapper = mock(AgentMapper.class);
+    private final AppMapper appMapper = mock(AppMapper.class);
     private final AppModelConfigService modelConfigService = mock(AppModelConfigService.class);
     private final DatasetService datasetService = mock(DatasetService.class);
     private final AppDatasetService appDatasetService = new AppDatasetService(
-            agentMapper, modelConfigService, datasetService);
+            appMapper, modelConfigService, datasetService);
 
     @Test
     void rejectsCrossTenantDatasetsAlreadyPresentInStoredConfiguration() {
-        AgentEntity application = application("app-1", "tenant-a");
-        AppModelConfig configuration = configuration("[\"dataset-b\"]");
+        AppEntity application = application("app-1", "tenant-a");
+        AppModelConfigEntity configuration = configuration("[\"dataset-b\"]");
         DatasetEntity foreignDataset = dataset("dataset-b", "tenant-b");
-        when(agentMapper.selectById("app-1")).thenReturn(application);
+        when(appMapper.selectById("app-1")).thenReturn(application);
         when(modelConfigService.findByAppId("app-1")).thenReturn(configuration);
         when(datasetService.get("dataset-b")).thenReturn(foreignDataset);
 
         assertThatThrownBy(() -> appDatasetService.list("app-1"))
-                .isInstanceOf(AgentException.class)
+                .isInstanceOf(PlatformException.class)
                 .hasMessageContaining("different tenant");
     }
 
     @Test
     void appendsOnlyUniqueDatasetIdsWhilePreservingTheirOrder() {
-        AgentEntity application = application("app-1", "tenant-a");
-        AppModelConfig configuration = configuration("[\"dataset-1\"]");
-        when(agentMapper.selectById("app-1")).thenReturn(application);
+        AppEntity application = application("app-1", "tenant-a");
+        AppModelConfigEntity configuration = configuration("[\"dataset-1\"]");
+        when(appMapper.selectById("app-1")).thenReturn(application);
         when(modelConfigService.findByAppId("app-1")).thenReturn(configuration);
         when(datasetService.get("dataset-1"))
                 .thenReturn(dataset("dataset-1", "tenant-a"));
@@ -67,9 +67,9 @@ class AppDatasetServiceTest {
 
     @Test
     void treatsBlankTenantIdsAsTheDefaultTenant() {
-        AgentEntity application = application("app-1", null);
-        AppModelConfig configuration = configuration("[\"dataset-1\"]");
-        when(agentMapper.selectById("app-1")).thenReturn(application);
+        AppEntity application = application("app-1", null);
+        AppModelConfigEntity configuration = configuration("[\"dataset-1\"]");
+        when(appMapper.selectById("app-1")).thenReturn(application);
         when(modelConfigService.findByAppId("app-1")).thenReturn(configuration);
         when(datasetService.get("dataset-1"))
                 .thenReturn(dataset("dataset-1", "default"));
@@ -79,15 +79,15 @@ class AppDatasetServiceTest {
                 .containsExactly("dataset-1");
     }
 
-    private static AgentEntity application(String id, String tenantId) {
-        AgentEntity application = new AgentEntity();
+    private static AppEntity application(String id, String tenantId) {
+        AppEntity application = new AppEntity();
         application.setId(id);
         application.setTenantId(tenantId);
         return application;
     }
 
-    private static AppModelConfig configuration(String datasetIdsJson) {
-        AppModelConfig configuration = new AppModelConfig();
+    private static AppModelConfigEntity configuration(String datasetIdsJson) {
+        AppModelConfigEntity configuration = new AppModelConfigEntity();
         configuration.setDatasetIdsJson(datasetIdsJson);
         return configuration;
     }

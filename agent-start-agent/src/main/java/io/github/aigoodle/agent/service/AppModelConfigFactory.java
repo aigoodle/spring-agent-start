@@ -1,7 +1,7 @@
 package io.github.aigoodle.agent.service;
 
 import io.github.aigoodle.agent.api.AgentStrategyType;
-import io.github.aigoodle.agent.entity.AppModelConfig;
+import io.github.aigoodle.agent.entity.AppModelConfigEntity;
 import io.github.aigoodle.common.util.JsonUtils;
 
 /** Translates an agent-editor request into its model-configuration sidecar. */
@@ -10,12 +10,12 @@ final class AppModelConfigFactory {
     private AppModelConfigFactory() {
     }
 
-    static AppModelConfig from(CreateAgentRequest request) {
+    static AppModelConfigEntity from(SaveAppRequest request) {
         if (request == null) {
             return null;
         }
 
-        AppModelConfig sidecar = new AppModelConfig();
+        AppModelConfigEntity sidecar = new AppModelConfigEntity();
         applyModelConfiguration(request, sidecar);
         applyPromptConfiguration(request, sidecar);
         applyAgentConfiguration(request, sidecar);
@@ -23,15 +23,15 @@ final class AppModelConfigFactory {
         return sidecar;
     }
 
-    private static void applyModelConfiguration(CreateAgentRequest request,
-                                                AppModelConfig sidecar) {
+    private static void applyModelConfiguration(SaveAppRequest request,
+                                                AppModelConfigEntity sidecar) {
         sidecar.setModelProvider(request.getModelProvider());
         sidecar.setModelName(request.getModelName());
         sidecar.setConfigs(toJson(request.getModelSettings()));
     }
 
-    private static void applyPromptConfiguration(CreateAgentRequest request,
-                                                 AppModelConfig sidecar) {
+    private static void applyPromptConfiguration(SaveAppRequest request,
+                                                 AppModelConfigEntity sidecar) {
         sidecar.setPrePrompt(preferredSystemPrompt(request));
         sidecar.setPromptType(request.getPromptType());
         sidecar.setOpeningStatement(request.getOpeningStatement());
@@ -40,8 +40,8 @@ final class AppModelConfigFactory {
         sidecar.setFileUploadJson(toJson(request.getFileUpload()));
     }
 
-    private static void applyAgentConfiguration(CreateAgentRequest request,
-                                                AppModelConfig sidecar) {
+    private static void applyAgentConfiguration(SaveAppRequest request,
+                                                AppModelConfigEntity sidecar) {
         sidecar.setStrategy(strategyName(request.getStrategy()));
         sidecar.setToolNamesJson(toJson(request.getToolNames()));
         sidecar.setApprovalToolsJson(toJson(request.getApprovalRequiredTools()));
@@ -51,13 +51,13 @@ final class AppModelConfigFactory {
         sidecar.setMemoryWindow(positiveOrNull(request.getMemoryWindow()));
     }
 
-    private static void applyKnowledgeConfiguration(CreateAgentRequest request,
-                                                    AppModelConfig sidecar) {
+    private static void applyKnowledgeConfiguration(SaveAppRequest request,
+                                                    AppModelConfigEntity sidecar) {
         sidecar.setDatasetIdsJson(toJson(request.getDatasetIds()));
         sidecar.setDatasetConfigsJson(toJson(request.getRetrievalConfig()));
     }
 
-    private static String preferredSystemPrompt(CreateAgentRequest request) {
+    private static String preferredSystemPrompt(SaveAppRequest request) {
         return hasText(request.getPrePrompt())
                 ? request.getPrePrompt()
                 : request.getInstructions();

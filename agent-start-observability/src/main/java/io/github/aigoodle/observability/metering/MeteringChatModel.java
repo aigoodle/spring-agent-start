@@ -1,6 +1,6 @@
 package io.github.aigoodle.observability.metering;
 
-import io.github.aigoodle.common.exception.AgentException;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.observability.api.LlmCallMeasurement;
 import io.github.aigoodle.observability.api.ModelCallContext;
 import io.github.aigoodle.observability.api.TokenUsage;
@@ -50,14 +50,14 @@ public class MeteringChatModel implements ChatModel {
             return response;
         } catch (RuntimeException exception) {
             recordFailure(exception, startedAtNanos);
-            if (exception instanceof AgentException) {
+            if (exception instanceof PlatformException) {
                 throw exception;
             }
             String exceptionMessage = exception.getMessage();
             String detail = exceptionMessage == null || exceptionMessage.isBlank()
                     ? exception.getClass().getSimpleName()
                     : exceptionMessage.strip();
-            throw new AgentException("model_call_failed",
+            throw new PlatformException("model_call_failed",
                     "Model call failed (provider=" + callContext.provider()
                             + ", model=" + callContext.model() + "): " + detail,
                     exception);
