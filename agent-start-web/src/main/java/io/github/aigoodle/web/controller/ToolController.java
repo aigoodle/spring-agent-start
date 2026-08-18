@@ -3,10 +3,7 @@ package io.github.aigoodle.web.controller;
 import io.github.aigoodle.tool.ToolDefinition;
 import io.github.aigoodle.tool.ToolRegistry;
 import io.github.aigoodle.web.common.ApiResponse;
-import io.github.aigoodle.connector.ConnectorDefinition;
-import io.github.aigoodle.connector.ConnectorKey;
-import io.github.aigoodle.connector.registry.ConnectorRegistry;
-import org.springframework.beans.factory.ObjectProvider;
+import io.github.aigoodle.tool.ToolMetadata;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -28,11 +25,9 @@ import java.util.Map;
 public class ToolController {
 
     private final ToolRegistry toolRegistry;
-    private final ConnectorRegistry connectorRegistry;
 
-    public ToolController(ToolRegistry toolRegistry, ObjectProvider<ConnectorRegistry> connectorRegistry) {
+    public ToolController(ToolRegistry toolRegistry) {
         this.toolRegistry = toolRegistry;
-        this.connectorRegistry = connectorRegistry.getIfAvailable();
     }
 
     @GetMapping
@@ -59,26 +54,7 @@ public class ToolController {
         view.put("name", tool.name());
         view.put("description", tool.description());
         view.put("inputSchema", tool.inputSchema());
-        enrichConnector(view, tool.name());
+        if (tool instanceof ToolMetadata metadata) view.putAll(metadata.metadata());
         return view;
-    }
-
-    private void enrichConnector(Map<String, Object> view, String toolName) {
-        if (connectorRegistry == null || !toolName.startsWith("connector__")) return;
-        String[] parts = toolName.split("__", 4);
-        if (parts.length != 4) return;
-        try {
-            ConnectorDefinition connector = connectorRegistry.get(new ConnectorKey(parts[1], parts[2]));
-            var action = connector.action(parts[3]);
-            view.put("label", connector.name() + " / " + action.name());
-            view.put("category", "Connector");
-            view.put("icon", connector.icon());
-            view.put("provider", connector.key().provider());
-            view.put("connectorId", connector.key().connectorId());
-            view.put("actionId", action.id());
-            view.put("riskLevel", action.riskLevel().name());
-        } catch (RuntimeException ignored) {
-            view.put("category", "Connector");
-        }
     }
 }

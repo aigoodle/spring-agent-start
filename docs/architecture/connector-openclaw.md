@@ -37,6 +37,8 @@ OpenClaw Java Provider -- authenticated HTTP --> Agent Start Bridge
 - `POST /agent-start/connectors/refresh`
 - `POST /agent-start/connectors/{provider}/{connectorId}/actions/{actionId}/execute`
 - `GET|POST|DELETE /agent-start/connector-connections`
+- `POST /agent-start/connector-connections/{id}/test`（验证租户归属及加密配置可读性）
+- `GET /agent-start/connector-executions`（租户级执行审计，支持 provider/status 过滤）
 - `GET /agent-start/connector-installations`
 - `POST /agent-start/connector-installations/synchronize`
 - `POST /agent-start/connector-installations/{id}/enable|disable`

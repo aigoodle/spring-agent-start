@@ -7,13 +7,14 @@ import io.github.aigoodle.connector.execution.ConnectorExecutionGateway;
 import io.github.aigoodle.connector.execution.ConnectorExecutionRequest;
 import io.github.aigoodle.connector.execution.ConnectorResult;
 import io.github.aigoodle.tool.ContextualToolDefinition;
+import io.github.aigoodle.tool.ToolMetadata;
 import io.github.aigoodle.tool.execution.ToolExecutionContext;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 /** Exposes one provider-neutral connector action as a model-callable tool. */
-public final class ConnectorToolDefinition implements ContextualToolDefinition {
+public final class ConnectorToolDefinition implements ContextualToolDefinition, ToolMetadata {
     private final ConnectorDefinition connector;
     private final ConnectorActionDefinition action;
     private final ConnectorExecutionGateway gateway;
@@ -33,6 +34,17 @@ public final class ConnectorToolDefinition implements ContextualToolDefinition {
     @Override public String inputSchema() { return action.inputSchema(); }
     @Override public boolean idempotent() { return action.idempotent(); }
     @Override public Duration timeout() { return action.timeout(); }
+    @Override public Map<String, Object> metadata() {
+        Map<String, Object> values = new LinkedHashMap<>();
+        values.put("label", connector.name() + " / " + action.name());
+        values.put("category", "Connector");
+        if (connector.icon() != null) values.put("icon", connector.icon());
+        values.put("provider", connector.key().provider());
+        values.put("connectorId", connector.key().connectorId());
+        values.put("actionId", action.id());
+        values.put("riskLevel", action.riskLevel().name());
+        return Map.copyOf(values);
+    }
 
     @Override
     public Object execute(Map<String, Object> arguments, ToolExecutionContext toolContext) {

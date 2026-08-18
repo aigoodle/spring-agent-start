@@ -177,8 +177,11 @@ mvn -pl agent-start-example -am spring-boot:run
 ```
 
 Verified with the shipped H2 config: `Started GoodleExampleApplication in
-1.81 seconds`. A workflow SSE run streams `run-start → step (per node) → result`
-in real time via `POST /api/v1/workflows/run-graph/stream`.
+1.81 seconds`. A workflow SSE run streams
+`workflow_started → node_finished (per node) → workflow_finished` in real time
+via `POST /api/v1/workflows/run-graph/stream` — each node result is flushed as
+soon as it completes (servlet hosts use the MVC controller; WebFlux hosts get
+the reactive equivalent from `agent-start-completion`).
 
 **2. Start the frontend** — the admin app has a vite proxy that forwards `/api` to
 port 18090, so no CORS / URL surgery is needed.
