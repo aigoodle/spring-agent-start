@@ -21,6 +21,7 @@ public class ExecutionContext {
     private String runId;
     private String conversationId;
     private String tenantId;
+    private String userId;
 
     /** The inputs the workflow was started with (seeded by the START node). */
     private final Map<String, Object> inputs = new HashMap<>();

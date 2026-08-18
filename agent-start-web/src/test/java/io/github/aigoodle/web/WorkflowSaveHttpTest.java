@@ -52,6 +52,48 @@ class WorkflowSaveHttpTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Test
+    void workflowSelectorReturnsOnlyPublishedWorkflowApplications() {
+        String suffix = java.util.UUID.randomUUID().toString();
+        String publishedId = createSelectorApp("published-" + suffix, "workflow", true);
+        String draftId = createSelectorApp("draft-" + suffix, "workflow", false);
+        String chatId = createSelectorApp("chat-" + suffix, "chat", true);
+
+        JsonNode envelope = http.get()
+                .uri("/agent-start/apps/selectors/workflows")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(JsonNode.class)
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(envelope).isNotNull();
+        JsonNode options = envelope.path("data");
+        assertThat(options.isArray()).isTrue();
+        assertThat(options.findValuesAsText("appId"))
+                .contains(publishedId)
+                .doesNotContain(draftId, chatId);
+        JsonNode selected = null;
+        for (JsonNode option : options) {
+            if (publishedId.equals(option.path("appId").asText())) selected = option;
+        }
+        assertThat(selected).isNotNull();
+        assertThat(selected.path("workflowId").asText()).isEqualTo(publishedId);
+    }
+
+    private String createSelectorApp(String name, String mode, boolean published) {
+        JsonNode envelope = http.post()
+                .uri("/agent-start/apps")
+                .bodyValue(Map.of("name", name, "mode", mode, "published", published))
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(JsonNode.class)
+                .returnResult()
+                .getResponseBody();
+        assertThat(envelope).isNotNull();
+        return envelope.path("data").path("id").asText();
+    }
+
+    @Test
     void postWorkflowsWithoutAppIdIsRejected() throws Exception {
         // appId is required — a caller that omits it is broken. The controller
         // must return app_id_required, not silently mint an orphaned row.
@@ -305,6 +347,24 @@ class WorkflowSaveHttpTest {
         assertThat(snapshot.getPublished()).isTrue();
         assertThat(workflowService.findDraft(appId)).isNotNull();
         assertThat(agentService.require(appId).getWorkflowId()).isEqualTo(snapshot.getId());
+        assertThat(agentService.require(appId).getPublished()).isTrue();
+
+        http.put()
+                .uri("/agent-start/apps/{id}/workflow/draft", appId)
+                .bodyValue(Map.of("graph", Map.of("nodes", List.of(), "edges", List.of(),
+                        "viewport", Map.of("zoom", 2))))
+                .exchange()
+                .expectStatus().isOk();
+
+        WorkflowEntity restored = http.post()
+                .uri("/agent-start/apps/{id}/workflow/restore/{snapshotId}", appId, snapshot.getId())
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(EnvelopeOfWorkflow.class)
+                .returnResult()
+                .getResponseBody()
+                .getData();
+        assertThat(restored.getGraph()).isEqualTo(snapshot.getGraph());
     }
 
     /** Envelope shape for endpoints returning a raw map (e.g. AppEntity view). */

@@ -21,6 +21,10 @@ public class WorkflowRunRequest {
 
     private String workflowId;
     private JsonNode graph;
+    /** Canonical START-node input object used by UI, API and durable triggers. */
+    private Map<String, Object> data;
+    /** @deprecated use {@link #data}; retained for wire compatibility. */
+    @Deprecated
     private Map<String, Object> inputs;
     private String conversationId;
 }

@@ -96,6 +96,9 @@ public class WorkflowEngine {
         // lose the authenticated tenant and silently fall back to "default".
         context.setTenantId(tenantId == null || tenantId.isBlank()
                 ? UserContextHolder.currentTenantId() : tenantId);
+        context.setUserId(UserContextHolder.currentUserId());
+        context.getPool().setSystem("tenant_id", context.getTenantId());
+        context.getPool().setSystem("user_id", context.getUserId());
         WorkflowRunResult result = WorkflowRunResult.forRun(context.getRunId(), context.getSteps());
         RunState run = new RunState(context, stepListener);
 

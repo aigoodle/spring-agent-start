@@ -6,9 +6,11 @@ import io.github.aigoodle.agent.service.AppService;
 import io.github.aigoodle.agent.service.SaveAppRequest;
 import io.github.aigoodle.tool.ToolRegistry;
 import io.github.aigoodle.web.common.ApiResponse;
+import io.github.aigoodle.web.dto.WorkflowAppOption;
 import io.github.aigoodle.web.service.AppLifecycleCoordinator;
 import io.github.aigoodle.web.support.AppToolViewMapper;
 import io.github.aigoodle.workflow.service.WorkflowService;
+import io.github.aigoodle.common.util.JsonUtils;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -35,11 +37,13 @@ public class AppController {
     private final AppService appService;
     private final AppLifecycleCoordinator applicationCoordinator;
     private final AppToolViewMapper toolViewMapper;
+    private final ObjectProvider<WorkflowService> workflowServiceProvider;
 
     public AppController(AppService appService,
                            ObjectProvider<ToolRegistry> toolRegistryProvider,
                            ObjectProvider<WorkflowService> workflowServiceProvider) {
         this.appService = appService;
+        this.workflowServiceProvider = workflowServiceProvider;
         this.applicationCoordinator = new AppLifecycleCoordinator(
                 appService, workflowServiceProvider);
         this.toolViewMapper = new AppToolViewMapper(appService, toolRegistryProvider);
@@ -48,6 +52,32 @@ public class AppController {
     @GetMapping
     public ApiResponse<List<AppEntity>> list() {
         return ApiResponse.ok(applicationCoordinator.list(currentTenantId()));
+    }
+
+    /** Tenant-scoped options used by workflow target selectors. */
+    @GetMapping("/selectors/workflows")
+    public ApiResponse<List<WorkflowAppOption>> workflowOptions() {
+        List<WorkflowAppOption> options = appService
+                .listPublishedWorkflowApps(currentTenantId())
+                .stream()
+                .map(this::workflowOption)
+                .toList();
+        return ApiResponse.ok(options);
+    }
+
+    @SuppressWarnings("unchecked")
+    private WorkflowAppOption workflowOption(AppEntity app) {
+        WorkflowService workflowService = workflowServiceProvider.getIfAvailable();
+        if (workflowService == null || app.getWorkflowId() == null) return WorkflowAppOption.from(app);
+        try {
+            Map<String, Object> contract = JsonUtils.parseMap(
+                    workflowService.require(app.getWorkflowId()).getOutput());
+            Object inputs = contract.get("inputs");
+            return WorkflowAppOption.from(app, inputs instanceof List<?> list
+                    ? (List<Map<String, Object>>) (List<?>) list : List.of());
+        } catch (RuntimeException ignored) {
+            return WorkflowAppOption.from(app);
+        }
     }
 
     @GetMapping("/{id}")

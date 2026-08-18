@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS goodle_workflows (
     features                TEXT,
     environment_variables   TEXT,
     conversation_variables  TEXT,
+    -- Durable contract: START inputs, END outputs, and every node's declared outputs.
     output                  TEXT,
     marked_name             VARCHAR(255),
     marked_comment          VARCHAR(1024),

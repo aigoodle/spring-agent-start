@@ -194,24 +194,52 @@ public class WorkflowService {
                 .orderByDesc(WorkflowEntity::getCreatedAt));
     }
 
+    /** Replaces the mutable draft state with one immutable snapshot of the same app. */
+    @Transactional
+    public WorkflowEntity restorePublishedSnapshot(String appId, String snapshotId) {
+        WorkflowEntity snapshot = require(snapshotId);
+        if (!appId.equals(snapshot.getAppId()) || !Boolean.TRUE.equals(snapshot.getPublished())) {
+            throw new PlatformException(
+                    "workflow_snapshot_invalid",
+                    "Workflow " + snapshotId + " is not a published snapshot of app " + appId,
+                    null);
+        }
+        WorkflowEntity draft = findDraft(appId);
+        if (draft == null) {
+            throw new PlatformException(
+                    "draft_not_found", "No draft workflow for app " + appId, null);
+        }
+        WorkflowEntityFactory.updateDesignerState(draft, new WorkflowDraftChanges(
+                snapshot.getGraph(), snapshot.getFeatures(), snapshot.getEnvironmentVariables(),
+                snapshot.getConversationVariables()));
+        workflowMapper.updateById(draft);
+        return draft;
+    }
+
     public List<WorkflowRunEntity> runs(String workflowId, int limit) {
         return runStore.findRecent(workflowId, limit);
     }
 
     public WorkflowRunResult run(String workflowId, Map<String, Object> inputs,
                                  String conversationId) {
-        return executeStored(workflowId, inputs, conversationId, null, null);
+        return executeStored(workflowId, inputs, conversationId, null, null, null);
+    }
+
+    /** Executes only when the target belongs to the authenticated trigger tenant. */
+    public WorkflowRunResult runForTenant(String workflowId, Map<String, Object> data,
+                                          String conversationId, String tenantId) {
+        return executeStored(workflowId, data, conversationId, null, null, tenantId);
     }
 
     public WorkflowRunResult run(String workflowId, Map<String, Object> inputs,
                                  String conversationId, Consumer<StepRecord> stepListener) {
-        return executeStored(workflowId, inputs, conversationId, stepListener, null);
+        return executeStored(workflowId, inputs, conversationId, stepListener, null, null);
     }
 
     public WorkflowRunResult run(String workflowId, Map<String, Object> inputs,
                                  String conversationId, Consumer<StepRecord> stepListener,
                                  ChatStreamSink chatSink) {
-        return executeStored(workflowId, inputs, conversationId, stepListener, chatSink);
+        return executeStored(workflowId, inputs, conversationId, stepListener, chatSink, null);
     }
 
     public WorkflowRunResult runGraph(WorkflowGraph graph, Map<String, Object> inputs,
@@ -236,8 +264,12 @@ public class WorkflowService {
 
     private WorkflowRunResult executeStored(String workflowId, Map<String, Object> inputs,
                                             String conversationId, Consumer<StepRecord> stepListener,
-                                            ChatStreamSink chatSink) {
+                                            ChatStreamSink chatSink, String expectedTenantId) {
         WorkflowEntity workflow = require(workflowId);
+        if (hasText(expectedTenantId) && !expectedTenantId.equals(workflow.getTenantId())) {
+            throw new PlatformException("workflow_tenant_mismatch",
+                    "Target workflow does not belong to tenant " + expectedTenantId, null);
+        }
         WorkflowGraph graph = graphOf(workflow);
         Map<String, Object> scopedInputs = new java.util.HashMap<>();
         if (inputs != null) scopedInputs.putAll(inputs);

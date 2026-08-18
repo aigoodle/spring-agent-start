@@ -54,7 +54,10 @@ public final class WorkflowDraftCoordinator {
         findOrCreate(appId);
         WorkflowEntity snapshot = workflowService.publishDraft(
                 appId, new WorkflowPublication(markedName, markedComment));
-        bindWorkflowQuietly(appServiceProvider.getIfAvailable(), appId, snapshot.getId());
+        AppService appService = appServiceProvider.getIfAvailable();
+        if (appService != null) {
+            appService.bindPublishedWorkflow(appId, snapshot.getId());
+        }
         return snapshot;
     }
 

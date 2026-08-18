@@ -25,7 +25,7 @@ class IterationNodeExecutorTest {
     @Test
     void failsAtTheExactItemWhenSubRunFails() {
         WorkflowEngine engine = mock(WorkflowEngine.class);
-        when(engine.run(any(WorkflowGraph.class), anyMap(), isNull()))
+        when(engine.run(any(WorkflowGraph.class), anyMap(), isNull(), isNull(), isNull(), isNull()))
                 .thenReturn(success("first"))
                 .thenReturn(failure("broken item"));
         IterationNodeExecutor executor = new IterationNodeExecutor(() -> engine);
@@ -39,7 +39,7 @@ class IterationNodeExecutorTest {
     @Test
     void continueOnErrorKeepsOutputPositionsStable() {
         WorkflowEngine engine = mock(WorkflowEngine.class);
-        when(engine.run(any(WorkflowGraph.class), anyMap(), isNull()))
+        when(engine.run(any(WorkflowGraph.class), anyMap(), isNull(), isNull(), isNull(), isNull()))
                 .thenReturn(failure("first failed"))
                 .thenReturn(success("second"));
         IterationNodeExecutor executor = new IterationNodeExecutor(() -> engine);

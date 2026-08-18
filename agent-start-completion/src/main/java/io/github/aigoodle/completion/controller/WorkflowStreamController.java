@@ -1,18 +1,19 @@
-package io.github.aigoodle.web.controller;
+package io.github.aigoodle.completion.controller;
 
-import io.github.aigoodle.web.common.SseEmitterBridge;
+import io.github.aigoodle.completion.common.SseBridge;
 import io.github.aigoodle.web.dto.WorkflowRunRequest;
 import io.github.aigoodle.workflow.engine.WorkflowRunResult;
 import io.github.aigoodle.workflow.node.StepRecord;
 import io.github.aigoodle.workflow.service.WorkflowService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.http.MediaType;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import reactor.core.publisher.Flux;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -20,22 +21,20 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * SSE streaming run endpoints for workflows (servlet/MVC hosts).
+ * Reactive (WebFlux/Netty) counterpart of the servlet
+ * {@code io.github.aigoodle.web.controller.WorkflowStreamController}. The MVC
+ * version is skipped on reactive hosts via {@code @ConditionalOnClass(SseEmitter)},
+ * so this module owns the streaming workflow-run surface there — matching the
+ * way {@link ChatController} owns chat streaming.
  * <p>
- * The event protocol mirrors the Dify workflow stream so the console debug panel
- * can observe a run node-by-node: {@code workflow_started} → one
- * {@code node_finished} per executed node → {@code workflow_finished}. On
- * reactive hosts (WebFlux/Netty, e.g. {@code agent-start-server}) this
- * controller is skipped via {@code @ConditionalOnClass(SseEmitter)} and the
- * equivalent endpoints are served by the {@code agent-start-completion} module.
- * <p>
- * MVC-only by design: the handler signatures reference {@link SseEmitter}, a
- * spring-webmvc type. Keeping these methods out of {@link WorkflowController}
- * matters — WebFlux's handler mapping introspects every registered controller's
- * method signatures at startup and would fail on the missing servlet class.
+ * Event protocol (Dify-style, identical to the MVC controller and the chat
+ * stream's {@code WorkflowStreamSession}): {@code workflow_started} → one
+ * {@code node_finished} per executed node → {@code workflow_finished}. Each
+ * node result is flushed to the stream as soon as the node completes, giving
+ * the console debug panel live per-node observability.
  */
 @RestController
-@ConditionalOnClass(SseEmitter.class)
+@RequestMapping("${spring-agent.web.base-path:/agent-start}")
 @ConditionalOnBean(WorkflowService.class)
 public class WorkflowStreamController {
 
@@ -46,8 +45,8 @@ public class WorkflowStreamController {
     }
 
     @PostMapping(value = "/workflows/run-graph/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter runGraphStream(@RequestBody WorkflowRunRequest request) {
-        return SseEmitterBridge.stream(emitter -> {
+    public Flux<ServerSentEvent<Object>> runGraphStream(@RequestBody WorkflowRunRequest request) {
+        return SseBridge.stream(emitter -> {
             String runId = newRunId();
             emitter.event("workflow_started", startedPayload(runId, request.getConversationId()));
             WorkflowRunResult result = request.getGraph() != null
@@ -62,8 +61,9 @@ public class WorkflowStreamController {
     }
 
     @PostMapping(value = "/workflows/{id}/run/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter runStream(@PathVariable String id, @RequestBody WorkflowRunRequest request) {
-        return SseEmitterBridge.stream(emitter -> {
+    public Flux<ServerSentEvent<Object>> runStream(@PathVariable String id,
+                                                   @RequestBody WorkflowRunRequest request) {
+        return SseBridge.stream(emitter -> {
             String runId = newRunId();
             emitter.event("workflow_started", startedPayload(runId, request.getConversationId()));
             WorkflowRunResult result = workflowService.run(
@@ -87,8 +87,8 @@ public class WorkflowStreamController {
 
     /**
      * Snake_case node payload matching the Dify {@code node_finished} shape used
-     * by the chat stream ({@code WorkflowStreamSession}) so both surfaces stay
-     * observable with one client parser.
+     * by {@code WorkflowStreamSession} so chat and debug streams share one
+     * client-side parser.
      */
     private static Map<String, Object> nodePayload(String runId, StepRecord step) {
         Map<String, Object> payload = new LinkedHashMap<>();

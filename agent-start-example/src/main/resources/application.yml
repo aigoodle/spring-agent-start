@@ -35,6 +35,7 @@ spring:
         - classpath:db/memory-schema.sql
         - classpath:db/trigger-schema.sql
         - classpath:db/observability-schema.sql
+        - classpath:db/connector-schema.sql
   # RabbitMQ — only used when spring-agent.knowledge.async.enabled=true AND
   # starter-amqp is on the classpath (optional transitive from the knowledge
   # module). Boot's auto-config stands up a RabbitTemplate from these creds,
@@ -55,6 +56,14 @@ spring:
         default-requeue-rejected: false
 
 spring-agent:
+  connector:
+    encryption-secret: ${CONNECTOR_SECRET:${AGENT_SECRET:demo-secret-change-me}}
+    openclaw:
+      enabled: ${OPENCLAW_ENABLED:false}
+      base-url: ${OPENCLAW_BASE_URL:http://127.0.0.1:18789}
+      service-token: ${OPENCLAW_SERVICE_TOKEN:}
+      agent-id: ${OPENCLAW_AGENT_ID:main}
+      timeout: ${OPENCLAW_TIMEOUT:60s}
   web:
     # CORS wide open by default so the local vite dev server can hit it.
     allowed-origins: ["*"]

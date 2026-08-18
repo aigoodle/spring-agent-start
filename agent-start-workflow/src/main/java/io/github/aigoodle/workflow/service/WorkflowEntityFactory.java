@@ -24,6 +24,7 @@ final class WorkflowEntityFactory {
         draft.setName(definition.name());
         draft.setMode(defaultIfBlank(definition.mode(), DEFAULT_MODE));
         draft.setGraph(definition.graph());
+        draft.setOutput(WorkflowContractExtractor.extract(definition.graph()));
         draft.setVersion(DRAFT_VERSION);
         draft.setPublished(Boolean.FALSE);
         return draft;
@@ -39,12 +40,14 @@ final class WorkflowEntityFactory {
         }
         if (graphDefinition != null) {
             workflow.setGraph(graphDefinition);
+            workflow.setOutput(WorkflowContractExtractor.extract(graphDefinition));
         }
     }
 
     static void updateDesignerState(WorkflowEntity draft, WorkflowDraftChanges changes) {
         if (changes.graph() != null) {
             draft.setGraph(changes.graph());
+            draft.setOutput(WorkflowContractExtractor.extract(changes.graph()));
         }
         if (changes.features() != null) {
             draft.setFeatures(changes.features());

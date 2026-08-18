@@ -16,6 +16,7 @@ import io.github.aigoodle.trigger.service.TriggerService;
 import lombok.Data;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -108,6 +109,7 @@ public class WorkflowController {
     }
 
     @PostMapping("/apps/{appId}/workflow/publish")
+    @Transactional
     public ApiResponse<WorkflowEntity> publish(@PathVariable String appId,
                                                @RequestBody(required = false) PublishRequest request) {
         String markedName = request == null ? null : request.getMarkedName();
@@ -125,6 +127,12 @@ public class WorkflowController {
         return ApiResponse.ok(workflowService.listByApp(appId));
     }
 
+    @PostMapping("/apps/{appId}/workflow/restore/{snapshotId}")
+    public ApiResponse<WorkflowEntity> restore(@PathVariable String appId,
+                                               @PathVariable String snapshotId) {
+        return ApiResponse.ok(workflowService.restorePublishedSnapshot(appId, snapshotId));
+    }
+
     @GetMapping("/workflows/{id}/runs")
     public ApiResponse<List<WorkflowRunEntity>> runs(@PathVariable String id,
                                                       @RequestParam(defaultValue = "20") int limit) {
@@ -134,8 +142,8 @@ public class WorkflowController {
     @PostMapping("/workflows/{id}/run")
     public ApiResponse<WorkflowRunResult> run(@PathVariable String id,
                                               @RequestBody WorkflowRunRequest request) {
-        return ApiResponse.ok(workflowService.run(
-                id, inputsOf(request), request.getConversationId()));
+        return ApiResponse.ok(workflowService.runForTenant(
+                id, inputsOf(request), request.getConversationId(), currentTenantId()));
     }
 
     @PostMapping("/workflows/run-graph")
@@ -158,6 +166,7 @@ public class WorkflowController {
     }
 
     private static Map<String, Object> inputsOf(WorkflowRunRequest request) {
+        if (request.getData() != null) return request.getData();
         return request.getInputs() == null ? new HashMap<>() : request.getInputs();
     }
 

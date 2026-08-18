@@ -24,7 +24,8 @@ public final class WorkflowNodeCatalog {
         return switch (nodeType) {
             case START, END, ANSWER, IF_ELSE, ITERATION -> "flow";
             case TEMPLATE_TRANSFORM, VARIABLE_ASSIGNER, VARIABLE_AGGREGATOR, LIST_OPERATOR, CODE -> "data";
-            case HTTP_REQUEST, SERVICE_API, SCHEDULE_TRIGGER, DOCUMENT_EXTRACTOR, KNOWLEDGE_RETRIEVAL, TOOL -> "io";
+            case HTTP_REQUEST, SERVICE_API, SCHEDULE_TRIGGER, DOCUMENT_EXTRACTOR,
+                    KNOWLEDGE_RETRIEVAL, CONNECTOR, TOOL -> "io";
             case LLM, AGENT, QUESTION_CLASSIFIER, PARAMETER_EXTRACTOR -> "llm";
         };
     }
