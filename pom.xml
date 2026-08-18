@@ -43,6 +43,9 @@
         <module>agent-start-knowledge</module>
         <module>agent-start-store</module>
         <module>agent-start-tools</module>
+        <module>agent-start-connector</module>
+        <module>agent-start-connector-tools</module>
+        <module>agent-start-connector-openclaw</module>
         <module>agent-start-memory</module>
         <module>agent-start-agent</module>
         <module>agent-start-workflow</module>
@@ -160,6 +163,21 @@
             <dependency>
                 <groupId>io.github.aigoodle</groupId>
                 <artifactId>agent-start-tools</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.aigoodle</groupId>
+                <artifactId>agent-start-connector</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.aigoodle</groupId>
+                <artifactId>agent-start-connector-tools</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.aigoodle</groupId>
+                <artifactId>agent-start-connector-openclaw</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

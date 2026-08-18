@@ -1,0 +1,86 @@
+package io.github.aigoodle.connector.connection;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import io.github.aigoodle.connector.ConnectorException;
+import io.github.aigoodle.connector.persistence.ConnectorConnectionEntity;
+import io.github.aigoodle.connector.persistence.ConnectorConnectionMapper;
+import java.util.List;
+import java.util.Map;
+import java.time.LocalDateTime;
+
+/** Tenant-scoped encrypted connection storage shared by every provider. */
+public class ConnectorConnectionService {
+    public record SaveConnectionRequest(String id, String tenantId, String installationId,
+                                        String name, Map<String, Object> credentials,
+                                        Map<String, Object> config) {}
+    public record ConnectionView(String id, String tenantId, String installationId,
+                                 String name, String status, boolean credentialsConfigured) {}
+
+    private final ConnectorConnectionMapper mapper;
+    private final ConnectorSecretCodec codec;
+    public ConnectorConnectionService(ConnectorConnectionMapper mapper, ConnectorSecretCodec codec) {
+        this.mapper = mapper; this.codec = codec;
+    }
+
+    public ConnectionView save(SaveConnectionRequest request) {
+        ConnectorConnectionEntity entity = request.id() == null ? new ConnectorConnectionEntity()
+                : requireOwned(request.id(), tenant(request.tenantId()));
+        entity.setTenantId(tenant(request.tenantId()));
+        entity.setInstallationId(required(request.installationId(), "installationId"));
+        entity.setName(required(request.name(), "name"));
+        if (request.credentials() != null) entity.setEncryptedCredentials(codec.encode(request.credentials()));
+        if (request.config() != null) entity.setEncryptedConfig(codec.encode(request.config()));
+        if (entity.getStatus() == null) entity.setStatus("CONFIGURED");
+        if (entity.getId() == null) mapper.insert(entity); else mapper.updateById(entity);
+        return view(entity);
+    }
+
+    public List<ConnectionView> list(String tenantId) {
+        return mapper.selectList(new LambdaQueryWrapper<ConnectorConnectionEntity>()
+                        .eq(ConnectorConnectionEntity::getTenantId, tenant(tenantId)))
+                .stream().map(ConnectorConnectionService::view).toList();
+    }
+
+    public Map<String, Object> credentials(String id, String tenantId) {
+        return codec.decode(requireOwned(id, tenant(tenantId)).getEncryptedCredentials());
+    }
+
+    /** Validates ownership and decryptability without leaking any secret value. */
+    public ConnectionTestResult test(String id, String tenantId) {
+        ConnectorConnectionEntity entity = requireOwned(id, tenant(tenantId));
+        try {
+            codec.decode(entity.getEncryptedCredentials());
+            codec.decode(entity.getEncryptedConfig());
+            entity.setStatus("CONFIGURED");
+            entity.setLastTestedAt(LocalDateTime.now());
+            mapper.updateById(entity);
+            return new ConnectionTestResult(true, "configuration_valid", "连接配置可读取；外部连通性由具体 Action 测试确认");
+        } catch (RuntimeException ex) {
+            entity.setStatus("INVALID");
+            entity.setLastTestedAt(LocalDateTime.now());
+            mapper.updateById(entity);
+            return new ConnectionTestResult(false, "configuration_invalid", "连接凭证无法解密");
+        }
+    }
+
+    public record ConnectionTestResult(boolean success, String code, String message) {}
+
+    public void delete(String id, String tenantId) { mapper.deleteById(requireOwned(id, tenant(tenantId))); }
+
+    private ConnectorConnectionEntity requireOwned(String id, String tenantId) {
+        ConnectorConnectionEntity entity = mapper.selectById(id);
+        if (entity == null || !tenantId.equals(entity.getTenantId())) {
+            throw new ConnectorException("connector_connection_not_found", "Connector connection not found");
+        }
+        return entity;
+    }
+    private static ConnectionView view(ConnectorConnectionEntity entity) {
+        return new ConnectionView(entity.getId(), entity.getTenantId(), entity.getInstallationId(),
+                entity.getName(), entity.getStatus(), entity.getEncryptedCredentials() != null);
+    }
+    private static String tenant(String value) { return value == null || value.isBlank() ? "default" : value; }
+    private static String required(String value, String field) {
+        if (value == null || value.isBlank()) throw new IllegalArgumentException(field + " is required");
+        return value.trim();
+    }
+}

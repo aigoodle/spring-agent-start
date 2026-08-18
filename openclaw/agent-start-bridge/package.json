@@ -1,0 +1,26 @@
+{
+  "name": "@aigoodle/openclaw-agent-start-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "files": ["dist", "openclaw.plugin.json", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit"
+  },
+  "peerDependencies": {
+    "openclaw": "2026.7.1-2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "openclaw": "2026.7.1-2",
+    "typescript": "^5.8.3"
+  },
+  "openclaw": {
+    "extensions": ["./dist/index.js"],
+    "compat": {
+      "pluginApi": ">=2026.7.1-2"
+    }
+  }
+}

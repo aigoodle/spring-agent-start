@@ -46,6 +46,16 @@
         </dependency>
         <dependency>
             <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-connector</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-connector-openclaw</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
             <artifactId>agent-start-observability</artifactId>
             <optional>true</optional>
         </dependency>

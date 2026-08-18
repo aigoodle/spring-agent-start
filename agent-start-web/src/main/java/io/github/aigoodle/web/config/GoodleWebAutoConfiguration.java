@@ -42,6 +42,8 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @AutoConfiguration(afterName = {
         "io.github.aigoodle.model.config.GoodleModelAutoConfiguration",
         "io.github.aigoodle.tool.config.GoodleToolsAutoConfiguration",
+        "io.github.aigoodle.connector.config.GoodleConnectorAutoConfiguration",
+        "io.github.aigoodle.connector.openclaw.config.GoodleOpenClawConnectorAutoConfiguration",
         "io.github.aigoodle.agent.config.AgentRuntimeAutoConfiguration",
         "io.github.aigoodle.knowledge.config.GoodleKnowledgeAutoConfiguration",
         "io.github.aigoodle.workflow.config.GoodleWorkflowAutoConfiguration",

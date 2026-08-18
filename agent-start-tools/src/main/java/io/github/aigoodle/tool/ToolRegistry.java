@@ -17,9 +17,18 @@ import java.util.Objects;
  */
 public class ToolRegistry {
 
-    private final Map<String, ToolDefinition> toolsByName;
+    private final List<ToolDefinition> declaredTools;
+    private final List<ToolProvider> toolProviders;
+    private volatile Map<String, ToolDefinition> toolsByName;
 
     public ToolRegistry(List<ToolDefinition> declaredTools, List<ToolProvider> toolProviders) {
+        this.declaredTools = declaredTools == null ? List.of() : List.copyOf(declaredTools);
+        this.toolProviders = toolProviders == null ? List.of() : List.copyOf(toolProviders);
+        refresh();
+    }
+
+    /** Rebuilds an immutable tool snapshot after a dynamic provider changes. */
+    public synchronized void refresh() {
         Map<String, ToolDefinition> registeredTools = new LinkedHashMap<>();
         registerAll(registeredTools, declaredTools);
         registerProvidedTools(registeredTools, toolProviders);

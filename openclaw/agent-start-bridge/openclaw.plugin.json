@@ -1,0 +1,40 @@
+{
+  "id": "agent-start-bridge",
+  "name": "Spring Agent Start Bridge",
+  "description": "Authenticated HTTP bridge exposing OpenClaw tools to spring-agent-start.",
+  "version": "0.1.0",
+  "activation": { "onStartup": true },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "serviceToken": {
+        "type": "string",
+        "description": "Shared internal service token used by spring-agent-start."
+      },
+      "gatewayUrl": {
+        "type": "string",
+        "description": "Gateway WebSocket URL used by the public OpenClaw CLI RPC client."
+      },
+      "gatewayToken": {
+        "type": "string",
+        "description": "Gateway operator token used for tools.catalog and tools.invoke."
+      },
+      "allowInstall": {
+        "type": "boolean",
+        "default": false,
+        "description": "Allow trusted package installation through the bridge."
+      },
+      "allowedPackagePrefixes": {
+        "type": "array",
+        "items": { "type": "string" },
+        "default": ["@openclaw/", "@aigoodle/", "clawhub:"]
+      }
+    }
+  },
+  "uiHints": {
+    "serviceToken": { "label": "Service Token", "sensitive": true },
+    "gatewayToken": { "label": "Gateway Token", "sensitive": true },
+    "allowInstall": { "label": "Allow remote plugin installation" }
+  }
+}

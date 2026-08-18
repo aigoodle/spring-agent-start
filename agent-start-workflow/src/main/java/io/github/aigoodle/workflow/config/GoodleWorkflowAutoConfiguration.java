@@ -1,5 +1,6 @@
 package io.github.aigoodle.workflow.config;
 
+import io.github.aigoodle.common.trigger.ScheduledTaskGateway;
 import io.github.aigoodle.knowledge.reader.DocumentExtractor;
 import io.github.aigoodle.knowledge.service.KnowledgeService;
 import io.github.aigoodle.model.config.GoodleModelAutoConfiguration;
@@ -25,6 +26,7 @@ import io.github.aigoodle.workflow.node.builtin.LlmNodeExecutor;
 import io.github.aigoodle.workflow.node.builtin.ParameterExtractorNodeExecutor;
 import io.github.aigoodle.workflow.node.builtin.QuestionClassifierNodeExecutor;
 import io.github.aigoodle.workflow.node.builtin.ServiceApiNodeExecutor;
+import io.github.aigoodle.workflow.node.builtin.ScheduleTriggerNodeExecutor;
 import io.github.aigoodle.workflow.node.builtin.StartNodeExecutor;
 import io.github.aigoodle.workflow.node.builtin.TemplateTransformNodeExecutor;
 import io.github.aigoodle.workflow.node.builtin.VariableAggregatorNodeExecutor;
@@ -138,6 +140,13 @@ public class GoodleWorkflowAutoConfiguration {
     }
 
     @Bean
+    public ScheduleTriggerNodeExecutor scheduleTriggerNodeExecutor(
+            ObjectProvider<ScheduledTaskGateway> scheduledTaskGateway,
+            ObjectProvider<ModelService> modelService) {
+        return new ScheduleTriggerNodeExecutor(scheduledTaskGateway, modelService);
+    }
+
+    @Bean
     public AgentNodeExecutor agentNodeExecutor(io.github.aigoodle.agent.runtime.AgentRuntime agentRuntime) {
         return new AgentNodeExecutor(agentRuntime);
     }
@@ -172,6 +181,19 @@ public class GoodleWorkflowAutoConfiguration {
                 io.github.aigoodle.tool.execution.ToolExecutionGateway executionGateway) {
             return new io.github.aigoodle.workflow.node.builtin.ToolNodeExecutor(
                     toolRegistry, executionGateway);
+        }
+    }
+
+    // ---- optional: provider-neutral connector node ----
+
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(name = "io.github.aigoodle.connector.execution.ConnectorExecutionGateway")
+    static class ConnectorNodeConfiguration {
+        @Bean
+        @ConditionalOnBean(type = "io.github.aigoodle.connector.execution.ConnectorExecutionGateway")
+        public io.github.aigoodle.workflow.node.builtin.ConnectorNodeExecutor connectorNodeExecutor(
+                io.github.aigoodle.connector.execution.ConnectorExecutionGateway gateway) {
+            return new io.github.aigoodle.workflow.node.builtin.ConnectorNodeExecutor(gateway);
         }
     }
 

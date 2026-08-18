@@ -76,7 +76,7 @@ public class DefaultToolExecutionGateway implements ToolExecutionGateway, AutoCl
         int maximumAttempts = tool.idempotent() ? Math.max(1, properties.getMaxRetries() + 1) : 1;
         Throwable lastFailure = null;
         for (int attempt = 1; attempt <= maximumAttempts; attempt++) {
-            Future<Object> future = executor.submit(() -> tool.execute(arguments));
+            Future<Object> future = executor.submit(() -> ToolExecutionGateway.invoke(tool, arguments, context));
             try {
                 Duration timeout = tool.timeout() == null ? properties.getTimeout() : tool.timeout();
                 Object result = future.get(Math.max(1, timeout.toMillis()), TimeUnit.MILLISECONDS);

@@ -39,6 +39,11 @@
             <artifactId>agent-start-tools</artifactId>
             <optional>true</optional>
         </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-connector</artifactId>
+            <optional>true</optional>
+        </dependency>
 
         <!-- Optional: powers the CODE node. Applications pull it in explicitly to enable
              embedded JEXL expressions/scripts; without it the CODE executor is not registered. -->

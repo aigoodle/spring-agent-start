@@ -37,6 +37,7 @@ public enum NodeType {
     AGENT,
     ITERATION,
     CODE,
+    CONNECTOR,
     TOOL;
 
     /**

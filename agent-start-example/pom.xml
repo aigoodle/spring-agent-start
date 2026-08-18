@@ -15,6 +15,18 @@
     <description>Runnable demo wiring all modules together; also hosts cross-module integration tests.</description>
 
     <dependencies>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-connector</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-connector-tools</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-connector-openclaw</artifactId>
+        </dependency>
         <!-- the full stack: workflow + knowledge + agent + tools + triggers + observability.
              spring-boot-starter-webflux comes in transitively via agent-start-web. -->
         <dependency>

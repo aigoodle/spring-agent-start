@@ -43,6 +43,7 @@ node_modules/
 .turbo/
 .cache/
 *.log
+openclaw/agent-start-bridge/dist/
 .env.local
 .env.*.local
 .m2/
