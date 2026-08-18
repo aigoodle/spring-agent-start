@@ -19,6 +19,7 @@ import java.util.Map;
 public class CreateTriggerRequest {
 
     private String tenantId;
+    private String userId;
     private String name;
     private TriggerType type;
 

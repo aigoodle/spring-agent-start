@@ -1,5 +1,6 @@
 package io.github.aigoodle.trigger.service;
 
+import io.github.aigoodle.common.context.UserContextHolder;
 import io.github.aigoodle.trigger.api.InvocationStatus;
 import io.github.aigoodle.trigger.dispatch.DispatchResult;
 import io.github.aigoodle.trigger.dispatch.TriggerDispatcher;
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -18,6 +20,32 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 class TriggerInvocationRunnerTest {
+
+    @Test
+    void restoresPersistedUserAndTenantAroundBackgroundDispatch() {
+        AtomicReference<String> userId = new AtomicReference<>();
+        AtomicReference<String> tenantId = new AtomicReference<>();
+        TriggerDispatcher dispatcher = new TriggerDispatcher() {
+            @Override public String targetType() { return "agent"; }
+            @Override public DispatchResult dispatch(String targetId, Map<String, Object> inputs,
+                                                       String conversationId) {
+                userId.set(UserContextHolder.currentUserId());
+                tenantId.set(UserContextHolder.currentTenantId());
+                return DispatchResult.ok("run-1", Map.of());
+            }
+        };
+        TriggerInvocationRunner runner = new TriggerInvocationRunner(mock(TriggerInvocationMapper.class),
+                new TriggerDispatcherRegistry(List.of(dispatcher)));
+        TriggerEntity trigger = trigger("trigger-1", "agent");
+        trigger.setUserId("user-7");
+        trigger.setTenantId("tenant-7");
+
+        runner.execute(trigger, invocation("invocation-1"), Map.of());
+
+        assertThat(userId.get()).isEqualTo("user-7");
+        assertThat(tenantId.get()).isEqualTo("tenant-7");
+        assertThat(UserContextHolder.get()).isNull();
+    }
 
     @Test
     void recordsDispatcherFailureDetails() {

@@ -157,6 +157,20 @@ public class AgentService implements AgentRuntime {
                 .orderByDesc(AppEntity::getId));
     }
 
+    /** Published workflow-mode applications available to tenant-scoped selectors. */
+    public List<AppEntity> listPublishedWorkflowApps(String tenantId) {
+        String effectiveTenant = valueOrDefault(tenantId, DEFAULT_TENANT_ID);
+        return appMapper.selectList(new LambdaQueryWrapper<AppEntity>()
+                .eq(AppEntity::getTenantId, effectiveTenant)
+                .eq(AppEntity::getMode, "workflow")
+                .eq(AppEntity::getPublished, true)
+                .isNotNull(AppEntity::getWorkflowId)
+                .ne(AppEntity::getWorkflowId, "")
+                .orderByAsc(AppEntity::getName)
+                .orderByDesc(AppEntity::getUpdatedAt)
+                .orderByDesc(AppEntity::getId));
+    }
+
     /** Resolve an internal app by stable code, preferring a tenant-owned override. */
     public AppEntity requireVisibleByCode(String appCode, String executionTenantId,
                                             String rootTenantId) {
@@ -219,6 +233,15 @@ public class AgentService implements AgentRuntime {
     public AppEntity bindWorkflowId(String appId, String workflowId) {
         AppEntity agent = require(appId);
         agent.setWorkflowId(workflowId);
+        appMapper.updateById(agent);
+        return agent;
+    }
+
+    @Transactional
+    public AppEntity bindPublishedWorkflow(String appId, String workflowId) {
+        AppEntity agent = require(appId);
+        agent.setWorkflowId(workflowId);
+        agent.setPublished(true);
         appMapper.updateById(agent);
         return agent;
     }

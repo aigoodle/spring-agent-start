@@ -22,9 +22,24 @@ class TriggerScheduleTest {
     @Test
     void oneTimeScheduleHasNoSecondOccurrence() {
         TriggerSchedule schedule = TriggerSchedule.from(Map.of(
-                "scheduleType", "ONCE", "runAt", "2026-08-18T08:00:00+08:00"));
+                "scheduleType", "ONCE", "runAt", "2026-08-18 20:00:00"));
         assertThat(schedule.oneTime()).isTrue();
         assertThat(schedule.nextAfter(LocalDateTime.now())).isNull();
+    }
+
+    @Test
+    void acceptsDisplayDateTimeWithoutExplicitTimeZone() {
+        TriggerSchedule schedule = TriggerSchedule.from(Map.of(
+                "scheduleType", "ONCE", "runAt", "2026-08-18 20:00:00"));
+        assertThat(schedule.firstFireAt(LocalDateTime.of(2026, 8, 18, 19, 59, 59)))
+                .isEqualTo(LocalDateTime.of(2026, 8, 18, 20, 0));
+    }
+
+    @Test
+    void acceptsOneAliasProducedByScheduleExtractionPrompt() {
+        TriggerSchedule schedule = TriggerSchedule.from(Map.of(
+                "scheduleType", "ONE", "runAt", "2099-08-18 20:00:00"));
+        assertThat(schedule.oneTime()).isTrue();
     }
 
     @Test

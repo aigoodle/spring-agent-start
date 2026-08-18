@@ -2,6 +2,7 @@ package io.github.aigoodle.completion.service;
 
 import io.github.aigoodle.agent.entity.AppEntity;
 import io.github.aigoodle.agent.service.AppConversationService;
+import io.github.aigoodle.common.context.UserContextHolder;
 import io.github.aigoodle.completion.dto.openai.OpenAIChatRequest;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -44,6 +45,23 @@ class AppGenerateSupportTest {
                 .initialize(new AppEntity(), request);
 
         assertThat(request.getConversationId()).isEqualTo("existing-conversation");
+    }
+
+    @Test
+    void bindsResolvedChatUserDuringExecutionAndClearsItAfterwards() {
+        AppEntity application = new AppEntity();
+        application.setId("app-1");
+        application.setTenantId("demo-tenant");
+
+        String resolved = AppGenerateService.callWithUser(application, "demo-user", () -> {
+            assertThat(UserContextHolder.currentUserId()).isEqualTo("demo-user");
+            assertThat(UserContextHolder.currentTenantId()).isEqualTo("demo-tenant");
+            assertThat(UserContextHolder.currentAppId()).isEqualTo("app-1");
+            return UserContextHolder.currentUserId();
+        });
+
+        assertThat(resolved).isEqualTo("demo-user");
+        assertThat(UserContextHolder.get()).isNull();
     }
 
     private static AppEntity applicationWithMode(String mode) {

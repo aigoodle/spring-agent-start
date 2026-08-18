@@ -37,6 +37,10 @@ public class AppService {
         return agentRuntime.list(tenantId);
     }
 
+    public List<AppEntity> listPublishedWorkflowApps(String tenantId) {
+        return agentRuntime.listPublishedWorkflowApps(tenantId);
+    }
+
     public AppEntity enrich(AppEntity application) {
         return agentRuntime.enrich(application);
     }
@@ -51,5 +55,10 @@ public class AppService {
 
     public AppEntity bindWorkflowId(String appId, String workflowId) {
         return agentRuntime.bindWorkflowId(appId, workflowId);
+    }
+
+    /** Binds the immutable workflow snapshot and exposes the app after publication. */
+    public AppEntity bindPublishedWorkflow(String appId, String workflowId) {
+        return agentRuntime.bindPublishedWorkflow(appId, workflowId);
     }
 }

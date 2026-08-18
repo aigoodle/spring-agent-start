@@ -1,5 +1,6 @@
 package io.github.aigoodle.trigger;
 
+import io.github.aigoodle.common.trigger.ScheduledTaskGateway;
 import io.github.aigoodle.trigger.api.InvocationStatus;
 import io.github.aigoodle.trigger.api.TriggerType;
 import io.github.aigoodle.trigger.cron.CronTriggerScheduler;
@@ -42,6 +43,8 @@ class TriggerTest {
     private CronTriggerScheduler cronScheduler;
     @Autowired
     private TriggerMapper triggerMapper;
+    @Autowired
+    private ScheduledTaskGateway scheduledTaskGateway;
 
     /** An echo workflow: Start -> Template("Echo: {{#sys.text#}}") -> End(answer). */
     private String echoWorkflow() {
@@ -195,7 +198,45 @@ class TriggerTest {
         assertNotNull(created);
         assertEquals(workflow.getId(), created.getTargetId());
         assertNotNull(created.getNextFireAt());
-        assertEquals("001", ((Map<?, ?>) triggerService.config(created).get("payload")).get("schoolId"));
+        assertEquals("001", ((Map<?, ?>) triggerService.config(created).get("data")).get("schoolId"));
+    }
+
+    @Test
+    void userCanListAndDeleteOnlyOwnedWorkflowSchedules() {
+        ScheduledTaskGateway.ScheduledTaskResult owned = scheduledTaskGateway.createTask(
+                new ScheduledTaskGateway.CreateScheduledTaskCommand(
+                        "tenant-owned", "user-a", "A 的日报", echoWorkflow(),
+                        Map.of("scheduleType", "CRON", "expression", "0 0 8 * * *")));
+        ScheduledTaskGateway.ScheduledTaskResult otherUser = scheduledTaskGateway.createTask(
+                new ScheduledTaskGateway.CreateScheduledTaskCommand(
+                        "tenant-owned", "user-b", "B 的日报", echoWorkflow(),
+                        Map.of("scheduleType", "CRON", "expression", "0 0 9 * * *")));
+
+        assertEquals(List.of(owned.id()), scheduledTaskGateway
+                .listUserTasks("tenant-owned", "user-a").stream()
+                .map(ScheduledTaskGateway.ScheduledTaskCandidate::id).toList());
+        ScheduledTaskGateway.ScheduledTaskResult updated = scheduledTaskGateway.updateOwnedTask(
+                new ScheduledTaskGateway.UpdateScheduledTaskCommand(
+                        "tenant-owned", "user-a", owned.id(), "A 的九点日报",
+                        owned.targetWorkflowId(),
+                        Map.of("scheduleType", "CRON", "expression", "0 0 9 * * *")));
+        assertEquals("A 的九点日报", updated.name());
+        assertEquals("0 0 9 * * *", triggerService.config(triggerService.require(owned.id()))
+                .get("expression"));
+        assertThrows(io.github.aigoodle.common.exception.PlatformException.class,
+                () -> scheduledTaskGateway.updateOwnedTask(
+                        new ScheduledTaskGateway.UpdateScheduledTaskCommand(
+                                "tenant-owned", "user-a", otherUser.id(), "越权修改",
+                                otherUser.targetWorkflowId(),
+                                Map.of("scheduleType", "CRON", "expression", "0 0 10 * * *"))));
+        List<ScheduledTaskGateway.DeletedScheduledTask> deleted = scheduledTaskGateway.deleteOwnedTasks(
+                "tenant-owned", "user-a", List.of(owned.id(), otherUser.id()));
+
+        assertEquals(List.of(owned.id()), deleted.stream()
+                .map(ScheduledTaskGateway.DeletedScheduledTask::id).toList());
+        assertNotNull(triggerService.require(otherUser.id()));
+        assertThrows(io.github.aigoodle.common.exception.PlatformException.class,
+                () -> triggerService.require(owned.id()));
     }
 
     private <T> T await(Supplier<T> condition, long timeoutMs) {

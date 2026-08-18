@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeParseException;
+import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.Map;
 
@@ -16,6 +17,8 @@ public final class TriggerSchedule {
 
     public static final String ONCE = "ONCE";
     public static final String CRON = "CRON";
+    private static final DateTimeFormatter DISPLAY_DATE_TIME =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final String kind;
     private final String expression;
@@ -34,6 +37,7 @@ public final class TriggerSchedule {
         String kind = text(safe.get("scheduleType"));
         if (kind == null) kind = safe.containsKey("runAt") ? ONCE : CRON;
         kind = kind.toUpperCase(Locale.ROOT);
+        if ("ONE".equals(kind)) kind = ONCE;
         ZoneId zone = parseZone(text(safe.get("timeZone")));
         if (ONCE.equals(kind)) {
             String runAt = text(safe.get("runAt"));
@@ -74,16 +78,21 @@ public final class TriggerSchedule {
 
     private static LocalDateTime parseDateTime(String value, ZoneId zone) {
         try {
-            return Instant.parse(value).atZone(ZoneId.systemDefault()).toLocalDateTime();
+            return LocalDateTime.parse(value, DISPLAY_DATE_TIME).atZone(zone)
+                    .withZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
         } catch (DateTimeParseException ignored) {
             try {
-                return ZonedDateTime.parse(value).withZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
+                return Instant.parse(value).atZone(ZoneId.systemDefault()).toLocalDateTime();
             } catch (DateTimeParseException ignoredAgain) {
                 try {
-                    return LocalDateTime.parse(value).atZone(zone)
-                            .withZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
-                } catch (DateTimeParseException exception) {
-                    throw invalid("runAt must be ISO-8601, for example 2026-08-18T08:00:00+08:00");
+                    return ZonedDateTime.parse(value).withZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
+                } catch (DateTimeParseException ignoredThird) {
+                    try {
+                        return LocalDateTime.parse(value).atZone(zone)
+                                .withZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
+                    } catch (DateTimeParseException exception) {
+                        throw invalid("runAt must use yyyy-MM-dd HH:mm:ss, for example 2026-08-18 20:00:00");
+                    }
                 }
             }
         }

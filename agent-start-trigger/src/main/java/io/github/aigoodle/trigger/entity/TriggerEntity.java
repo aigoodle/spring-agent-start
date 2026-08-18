@@ -19,6 +19,9 @@ public class TriggerEntity extends BaseEntity {
 
     private String name;
 
+    /** User that created this durable trigger; restored for scheduled execution. */
+    private String userId;
+
     private TriggerType type;
 
     private Boolean enabled;

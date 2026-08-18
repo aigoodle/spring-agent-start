@@ -265,11 +265,11 @@ public class ChatController {
     private ResponseEntity<?> generateOpenAI(ChatAccessContext access, OpenAIChatRequest request) {
         if (request.streaming()) {
             return eventStream(appGenerateService.generateStream(
-                    access.appId(), access.tenantId(), request));
+                    access.appId(), access.tenantId(), access.userId(), request));
         }
         Mono<OpenAIChatResponse> response = Mono.fromCallable(() ->
                         appGenerateService.generateBlocking(
-                                access.appId(), access.tenantId(), request))
+                                access.appId(), access.tenantId(), access.userId(), request))
                 .subscribeOn(BLOCKING_SCHEDULER);
         return json(response);
     }

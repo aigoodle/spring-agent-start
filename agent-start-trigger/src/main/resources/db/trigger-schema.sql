@@ -6,6 +6,7 @@
 CREATE TABLE IF NOT EXISTS goodle_app_triggers (
     id          VARCHAR(64)  NOT NULL,
     tenant_id   VARCHAR(64)  NOT NULL DEFAULT 'default',
+    user_id     VARCHAR(64),
     name        VARCHAR(255),
     type        VARCHAR(32),
     enabled     BOOLEAN DEFAULT TRUE,
@@ -21,6 +22,8 @@ CREATE TABLE IF NOT EXISTS goodle_app_triggers (
     updated_at  TIMESTAMP,
     PRIMARY KEY (id)
 );
+
+ALTER TABLE goodle_app_triggers ADD COLUMN IF NOT EXISTS user_id VARCHAR(64);
 
 CREATE TABLE IF NOT EXISTS goodle_trigger_invocations (
     id           VARCHAR(64) NOT NULL,

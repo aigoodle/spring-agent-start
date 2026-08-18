@@ -2,6 +2,7 @@ package io.github.aigoodle.trigger.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.github.aigoodle.common.exception.PlatformException;
+import io.github.aigoodle.common.context.UserContextHolder;
 import io.github.aigoodle.common.util.JsonUtils;
 import io.github.aigoodle.trigger.api.TriggerType;
 import io.github.aigoodle.trigger.cron.TriggerSchedule;
@@ -118,8 +119,136 @@ public class TriggerService {
     /** Fire synchronously and return the dispatch result. */
     public DispatchResult fireSynchronously(TriggerInvocationRequest request) {
         TriggerEntity trigger = requireEnabled(request.triggerId());
-        TriggerInvocationEntity invocation = invocationRunner.open(InvocationDraft.initial(request));
+        TriggerInvocationEntity invocation = invocationRunner.open(
+                InvocationDraft.initial(request), trigger.getTenantId());
         return invocationRunner.execute(trigger, invocation, request.payload());
+    }
+
+    /** All workflow schedules owned by one authenticated user, used as LLM deletion candidates. */
+    public List<TriggerEntity> listUserSchedules(String tenantId, String userId) {
+        if (userId == null || userId.isBlank()) return List.of();
+        return triggerMapper.selectList(new LambdaQueryWrapper<TriggerEntity>()
+                .eq(TriggerEntity::getTenantId, tenantId == null ? "default" : tenantId)
+                .eq(TriggerEntity::getUserId, userId)
+                .eq(TriggerEntity::getType, TriggerType.CRON)
+                .eq(TriggerEntity::getTargetType, "workflow")
+                .orderByDesc(TriggerEntity::getCreatedAt));
+    }
+
+    /** Deletes only ids that are still owned by the supplied tenant/user. */
+    @Transactional
+    public List<TriggerEntity> deleteOwnedSchedules(String tenantId, String userId,
+                                                    List<String> triggerIds) {
+        if (userId == null || userId.isBlank() || triggerIds == null || triggerIds.isEmpty()) {
+            return List.of();
+        }
+        List<String> distinctIds = triggerIds.stream()
+                .filter(id -> id != null && !id.isBlank()).distinct().toList();
+        if (distinctIds.isEmpty()) return List.of();
+        List<TriggerEntity> owned = triggerMapper.selectList(new LambdaQueryWrapper<TriggerEntity>()
+                .in(TriggerEntity::getId, distinctIds)
+                .eq(TriggerEntity::getTenantId, tenantId == null ? "default" : tenantId)
+                .eq(TriggerEntity::getUserId, userId)
+                .eq(TriggerEntity::getType, TriggerType.CRON)
+                .eq(TriggerEntity::getTargetType, "workflow"));
+        List<TriggerEntity> deleted = new ArrayList<>();
+        owned.forEach(trigger -> {
+            if (triggerMapper.deleteById(trigger.getId()) == 1) {
+                deleted.add(trigger);
+                changeListeners.forEach(listener -> listener.onRemoved(trigger.getId()));
+            }
+        });
+        return List.copyOf(deleted);
+    }
+
+    /** Enables or pauses only workflow schedules owned by the supplied tenant/user. */
+    @Transactional
+    public List<TriggerEntity> setOwnedSchedulesEnabled(String tenantId, String userId,
+                                                        List<String> triggerIds, boolean enabled) {
+        List<TriggerEntity> owned = ownedSchedules(tenantId, userId, triggerIds);
+        owned.forEach(trigger -> {
+            trigger.setEnabled(enabled);
+            trigger.setNextFireAt(enabled
+                    ? TriggerSchedule.from(config(trigger)).firstFireAt(LocalDateTime.now()) : null);
+            trigger.setLockOwner(null);
+            trigger.setLockUntil(null);
+            triggerMapper.updateById(trigger);
+            if (enabled) notifySaved(trigger);
+            else changeListeners.forEach(listener -> listener.onRemoved(trigger.getId()));
+        });
+        return List.copyOf(owned);
+    }
+
+    /** Starts an immediate asynchronous invocation for owned, enabled workflow schedules. */
+    public Map<TriggerEntity, String> runOwnedSchedulesNow(String tenantId, String userId,
+                                                           List<String> triggerIds) {
+        Map<TriggerEntity, String> started = new java.util.LinkedHashMap<>();
+        ownedSchedules(tenantId, userId, triggerIds).stream()
+                .filter(trigger -> Boolean.TRUE.equals(trigger.getEnabled()))
+                .forEach(trigger -> {
+                    Map<String, Object> triggerConfig = config(trigger);
+                    Object rawData = triggerConfig.get("data");
+                    Map<String, Object> data = rawData instanceof Map<?, ?> map
+                            ? map.entrySet().stream().collect(java.util.stream.Collectors.toMap(
+                            entry -> String.valueOf(entry.getKey()), Map.Entry::getValue)) : Map.of();
+                    String conversationId = text(triggerConfig.get("conversationId"));
+                    String invocationId = fireAsynchronously(TriggerInvocationRequest.scheduled(
+                            trigger.getId(), data, conversationId));
+                    started.put(trigger, invocationId);
+                });
+        return Map.copyOf(started);
+    }
+
+    private List<TriggerEntity> ownedSchedules(String tenantId, String userId,
+                                                List<String> triggerIds) {
+        if (userId == null || userId.isBlank() || triggerIds == null || triggerIds.isEmpty()) {
+            return List.of();
+        }
+        List<String> distinctIds = triggerIds.stream()
+                .filter(id -> id != null && !id.isBlank()).distinct().toList();
+        if (distinctIds.isEmpty()) return List.of();
+        return triggerMapper.selectList(new LambdaQueryWrapper<TriggerEntity>()
+                .in(TriggerEntity::getId, distinctIds)
+                .eq(TriggerEntity::getTenantId, tenantId == null ? "default" : tenantId)
+                .eq(TriggerEntity::getUserId, userId)
+                .eq(TriggerEntity::getType, TriggerType.CRON)
+                .eq(TriggerEntity::getTargetType, "workflow"));
+    }
+
+    /** Updates one workflow schedule only when it is still owned by the supplied tenant/user. */
+    @Transactional
+    public TriggerEntity updateOwnedSchedule(String tenantId, String userId, String triggerId,
+                                             String name, String targetWorkflowId,
+                                             Map<String, Object> scheduleConfig) {
+        if (userId == null || userId.isBlank() || triggerId == null || triggerId.isBlank()) {
+            throw new PlatformException("schedule_update_forbidden",
+                    "Scheduled task is not available for update", null);
+        }
+        TriggerEntity trigger = triggerMapper.selectOne(new LambdaQueryWrapper<TriggerEntity>()
+                .eq(TriggerEntity::getId, triggerId)
+                .eq(TriggerEntity::getTenantId, tenantId == null ? "default" : tenantId)
+                .eq(TriggerEntity::getUserId, userId)
+                .eq(TriggerEntity::getType, TriggerType.CRON)
+                .eq(TriggerEntity::getTargetType, "workflow")
+                .last("LIMIT 1"));
+        if (trigger == null) {
+            throw new PlatformException("schedule_update_forbidden",
+                    "Scheduled task is not available for update", null);
+        }
+        Map<String, Object> normalizedConfig = scheduleConfig == null
+                ? Map.of() : new java.util.LinkedHashMap<>(scheduleConfig);
+        trigger.setName(name == null || name.isBlank() ? trigger.getName() : name.trim());
+        if (targetWorkflowId != null && !targetWorkflowId.isBlank()) {
+            trigger.setTargetId(targetWorkflowId);
+        }
+        trigger.setConfigJson(JsonUtils.toJson(normalizedConfig));
+        trigger.setEnabled(true);
+        trigger.setNextFireAt(TriggerSchedule.from(normalizedConfig).firstFireAt(LocalDateTime.now()));
+        trigger.setLockOwner(null);
+        trigger.setLockUntil(null);
+        triggerMapper.updateById(trigger);
+        notifySaved(trigger);
+        return trigger;
     }
 
     /** Reconciles the published workflow's START-node schedule into one durable trigger. */
@@ -130,9 +259,15 @@ public class TriggerService {
         list(workflow.getTenantId()).stream()
                 .filter(existing -> sourceKey.equals(config(existing).get("sourceWorkflowKey")))
                 .forEach(existing -> delete(existing.getId()));
-        NodeDef start = workflowService.graphOf(workflow).getNodes().stream()
-                .filter(node -> node.getType() == io.github.aigoodle.workflow.graph.NodeType.START)
-                .findFirst().orElse(null);
+        NodeDef start;
+        try {
+            start = workflowService.graphOf(workflow).getNodes().stream()
+                    .filter(node -> node.getType() == io.github.aigoodle.workflow.graph.NodeType.START)
+                    .findFirst().orElse(null);
+        } catch (PlatformException invalidGraph) {
+            // Publishing an empty/legacy draft must not fail merely because it has no schedule.
+            return null;
+        }
         if (start == null) return null;
         Map<String, Object> data = start.getData() == null ? Map.of() : start.getData();
         Object rawTrigger = data.get("triggers");
@@ -148,10 +283,11 @@ public class TriggerService {
         copy(designer, config, "scheduleType", "expression", "runAt", "timeZone", "conversationId");
         config.put("sourceWorkflowKey", sourceKey);
         Object payloadJson = designer.get("payloadJson");
-        config.put("payload", payloadJson == null ? Map.of() : JsonUtils.parseMap(String.valueOf(payloadJson)));
+        config.put("data", payloadJson == null ? Map.of() : JsonUtils.parseMap(String.valueOf(payloadJson)));
         String selectedTarget = text(designer.get("targetWorkflowId"));
         return create(CreateTriggerRequest.builder()
                 .tenantId(workflow.getTenantId())
+                .userId(UserContextHolder.currentUserId())
                 .name(text(designer.get("name")) == null ? workflow.getName() + " schedule" : text(designer.get("name")))
                 .type(TriggerType.CRON)
                 .targetType("workflow")
@@ -194,7 +330,8 @@ public class TriggerService {
     /** Fire asynchronously; returns the invocation id immediately. */
     public String fireAsynchronously(TriggerInvocationRequest request) {
         TriggerEntity trigger = requireEnabled(request.triggerId());
-        TriggerInvocationEntity invocation = invocationRunner.open(InvocationDraft.initial(request));
+        TriggerInvocationEntity invocation = invocationRunner.open(
+                InvocationDraft.initial(request), trigger.getTenantId());
         executor.execute(() -> {
             try {
                 invocationRunner.execute(trigger, invocation, request.payload());
@@ -210,7 +347,8 @@ public class TriggerService {
     /** Dispatches a row already claimed by the database scheduler (including disabled one-shot rows). */
     public String fireClaimedAsynchronously(TriggerEntity trigger) {
         Map<String, Object> config = config(trigger);
-        Map<String, Object> payload = config.get("payload") instanceof Map<?, ?> configured
+        Object configuredData = config.get("data") == null ? config.get("payload") : config.get("data");
+        Map<String, Object> payload = configuredData instanceof Map<?, ?> configured
                 ? configured.entrySet().stream().collect(java.util.stream.Collectors.toMap(
                         entry -> String.valueOf(entry.getKey()), Map.Entry::getValue))
                 : Map.of();
@@ -218,7 +356,8 @@ public class TriggerService {
                 ? null : String.valueOf(config.get("conversationId"));
         TriggerInvocationRequest request = TriggerInvocationRequest.scheduled(
                 trigger.getId(), payload, conversationId);
-        TriggerInvocationEntity invocation = invocationRunner.open(InvocationDraft.initial(request));
+        TriggerInvocationEntity invocation = invocationRunner.open(
+                InvocationDraft.initial(request), trigger.getTenantId());
         executor.execute(() -> invocationRunner.execute(trigger, invocation, payload));
         return invocation.getId();
     }
@@ -243,7 +382,8 @@ public class TriggerService {
         }
         TriggerEntity trigger = require(original.getTriggerId());
         Map<String, Object> payload = JsonUtils.parseMap(original.getPayloadJson());
-        TriggerInvocationEntity replay = invocationRunner.open(InvocationDraft.replay(original, payload));
+        TriggerInvocationEntity replay = invocationRunner.open(
+                InvocationDraft.replay(original, payload), trigger.getTenantId());
         invocationRunner.execute(trigger, replay, payload);
         return invocationRunner.find(replay.getId());
     }
@@ -273,6 +413,8 @@ public class TriggerService {
     private TriggerEntity newTrigger(CreateTriggerRequest request) {
         TriggerEntity trigger = new TriggerEntity();
         trigger.setTenantId(request.getTenantId());
+        trigger.setUserId(request.getUserId() == null
+                ? UserContextHolder.currentUserId() : request.getUserId());
         trigger.setName(request.getName());
         trigger.setType(request.getType());
         trigger.setEnabled(request.isEnabled());

@@ -2,6 +2,8 @@ package io.github.aigoodle.trigger.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.github.aigoodle.common.util.JsonUtils;
+import io.github.aigoodle.common.context.CurrentUser;
+import io.github.aigoodle.common.context.UserContextHolder;
 import io.github.aigoodle.trigger.api.InvocationStatus;
 import io.github.aigoodle.trigger.dispatch.DispatchResult;
 import io.github.aigoodle.trigger.dispatch.TriggerDispatcherRegistry;
@@ -28,8 +30,9 @@ public final class TriggerInvocationRunner {
         this.dispatcherRegistry = dispatcherRegistry;
     }
 
-    TriggerInvocationEntity open(InvocationDraft invocationDraft) {
+    TriggerInvocationEntity open(InvocationDraft invocationDraft, String tenantId) {
         TriggerInvocationEntity invocation = new TriggerInvocationEntity();
+        invocation.setTenantId(tenantId);
         invocation.setTriggerId(invocationDraft.triggerId());
         invocation.setSource(invocationDraft.source());
         invocation.setConversationId(invocationDraft.conversationId());
@@ -46,10 +49,15 @@ public final class TriggerInvocationRunner {
         invocation.markRunning();
         save(invocation);
         try {
-            DispatchResult dispatchResult = dispatcherRegistry.get(trigger.getTargetType())
-                    .dispatch(trigger.getTargetId(), payload,
-                            invocation.getConversationId() == null
-                                    ? invocation.getId() : invocation.getConversationId());
+            CurrentUser scheduledUser = CurrentUser.builder()
+                    .userId(trigger.getUserId())
+                    .tenantId(trigger.getTenantId())
+                    .build();
+            DispatchResult dispatchResult = UserContextHolder.callAs(scheduledUser,
+                    () -> dispatcherRegistry.get(trigger.getTargetType())
+                            .dispatch(trigger.getTargetId(), payload,
+                                    invocation.getConversationId() == null
+                                            ? invocation.getId() : invocation.getConversationId()));
             recordResult(invocation, dispatchResult);
             return dispatchResult;
         } catch (RuntimeException dispatchFailure) {

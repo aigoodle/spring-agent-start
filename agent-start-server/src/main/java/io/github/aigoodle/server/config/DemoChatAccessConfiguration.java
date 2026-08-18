@@ -23,6 +23,7 @@ public class DemoChatAccessConfiguration {
             AppService appService,
             ObjectProvider<WorkflowService> workflowServices,
             @Value("${spring-agent.demo.tenant-id:default}") String tenantId,
+            @Value("${spring-agent.demo.user-id:demo-user}") String userId,
             @Value("${spring-agent.demo.allow-debug:true}") boolean allowDebug) {
         ChatAccessService resources = new ChatAccessService(appService, workflowServices);
         return new ChatAccessPolicy() {
@@ -48,7 +49,7 @@ public class DemoChatAccessConfiguration {
             }
 
             private ChatAccessContext context(String appId, ChatAccessMode mode) {
-                return new ChatAccessContext(appId, tenantId, "demo-user", mode);
+                return new ChatAccessContext(appId, tenantId, userId, mode);
             }
         };
     }

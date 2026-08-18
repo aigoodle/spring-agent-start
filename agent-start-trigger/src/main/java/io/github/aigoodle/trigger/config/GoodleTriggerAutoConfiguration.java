@@ -1,5 +1,7 @@
 package io.github.aigoodle.trigger.config;
 
+import io.github.aigoodle.common.trigger.ScheduledTaskGateway;
+import io.github.aigoodle.trigger.adapter.TriggerScheduledTaskGateway;
 import io.github.aigoodle.trigger.cron.CronTriggerScheduler;
 import io.github.aigoodle.trigger.dispatch.TriggerDispatcher;
 import io.github.aigoodle.trigger.dispatch.TriggerDispatcherRegistry;
@@ -13,7 +15,6 @@ import io.github.aigoodle.trigger.service.TriggerService;
 import io.github.aigoodle.trigger.web.TriggerWebhookController;
 import io.github.aigoodle.workflow.config.GoodleWorkflowAutoConfiguration;
 import io.github.aigoodle.workflow.service.WorkflowService;
-import io.github.aigoodle.trigger.workflow.ScheduleTriggerNodeExecutor;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -94,18 +95,17 @@ public class GoodleTriggerAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public ScheduleTriggerNodeExecutor scheduleTriggerNodeExecutor(
-            ObjectProvider<TriggerService> triggerService) {
-        return new ScheduleTriggerNodeExecutor(triggerService);
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
     public TriggerService triggerService(TriggerMapper triggerMapper,
                                          TriggerInvocationRunner invocationRunner,
                                          ExecutorService triggerExecutor,
                                          List<TriggerChangeListener> changeListeners) {
         return new TriggerService(triggerMapper, invocationRunner, triggerExecutor, changeListeners);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(ScheduledTaskGateway.class)
+    public ScheduledTaskGateway scheduledTaskGateway(TriggerService triggerService) {
+        return new TriggerScheduledTaskGateway(triggerService);
     }
 
     /** Webhook endpoint, only in a servlet web application. */

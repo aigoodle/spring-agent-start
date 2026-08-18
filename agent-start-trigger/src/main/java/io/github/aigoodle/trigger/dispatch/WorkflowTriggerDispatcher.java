@@ -1,5 +1,6 @@
 package io.github.aigoodle.trigger.dispatch;
 
+import io.github.aigoodle.common.context.UserContextHolder;
 import io.github.aigoodle.workflow.engine.WorkflowRunResult;
 import io.github.aigoodle.workflow.service.WorkflowService;
 
@@ -25,7 +26,8 @@ public class WorkflowTriggerDispatcher implements TriggerDispatcher {
 
     @Override
     public DispatchResult dispatch(String targetId, Map<String, Object> inputs, String conversationId) {
-        WorkflowRunResult result = workflowService.run(targetId, inputs, conversationId);
+        WorkflowRunResult result = workflowService.runForTenant(
+                targetId, inputs, conversationId, UserContextHolder.currentTenantId());
         if (result.isSuccess()) {
             return DispatchResult.ok(result.getRunId(), result.getOutputs());
         }

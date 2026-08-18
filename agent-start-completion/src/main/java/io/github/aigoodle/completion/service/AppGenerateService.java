@@ -1,6 +1,8 @@
 package io.github.aigoodle.completion.service;
 
 import io.github.aigoodle.agent.entity.AppEntity;
+import io.github.aigoodle.common.context.CurrentUser;
+import io.github.aigoodle.common.context.UserContextHolder;
 import io.github.aigoodle.memory.MemoryManager;
 import io.github.aigoodle.agent.service.AgentService;
 import io.github.aigoodle.agent.service.AppService;
@@ -18,6 +20,7 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
 import java.util.UUID;
+import java.util.function.Supplier;
 
 /** Entry point that prepares a chat request and delegates it to the application runtime. */
 @Service
@@ -49,8 +52,14 @@ public class AppGenerateService {
 
     public OpenAIChatResponse generateBlocking(String appId, String executionTenantId,
                                                OpenAIChatRequest request) {
+        return generateBlocking(appId, executionTenantId, null, request);
+    }
+
+    public OpenAIChatResponse generateBlocking(String appId, String executionTenantId,
+                                               String executionUserId, OpenAIChatRequest request) {
         AppEntity application = prepareRequest(appId, executionTenantId, request);
-        return runtimeRouter.generateBlocking(application, request);
+        return callWithUser(application, executionUserId,
+                () -> runtimeRouter.generateBlocking(application, request));
     }
 
     public Flux<ServerSentEvent<Object>> generateStream(String appId, OpenAIChatRequest request) {
@@ -59,9 +68,17 @@ public class AppGenerateService {
 
     public Flux<ServerSentEvent<Object>> generateStream(String appId, String executionTenantId,
                                                         OpenAIChatRequest request) {
+        return generateStream(appId, executionTenantId, null, request);
+    }
+
+    public Flux<ServerSentEvent<Object>> generateStream(String appId, String executionTenantId,
+                                                        String executionUserId,
+                                                        OpenAIChatRequest request) {
         AppEntity application = prepareRequest(appId, executionTenantId, request);
-        return SseBridge.stream(emitter ->
-                runtimeRouter.generateStream(application, request, emitter));
+        return SseBridge.stream(emitter -> callWithUser(application, executionUserId, () -> {
+            runtimeRouter.generateStream(application, request, emitter);
+            return null;
+        }));
     }
 
     public Flux<ServerSentEvent<Object>> generateDifyStream(String appId, OpenAIChatRequest request) {
@@ -81,5 +98,19 @@ public class AppGenerateService {
         }
         requestInitializer.initialize(application, request);
         return application;
+    }
+
+    static <T> T callWithUser(AppEntity application, String executionUserId,
+                              Supplier<T> action) {
+        if (executionUserId == null || executionUserId.isBlank()) {
+            return action.get();
+        }
+        CurrentUser user = CurrentUser.builder()
+                .userId(executionUserId)
+                .username(executionUserId)
+                .tenantId(application.getTenantId())
+                .appId(application.getId())
+                .build();
+        return UserContextHolder.callAs(user, action);
     }
 }
