@@ -12,6 +12,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
+import static io.github.aigoodle.common.context.UserContextHolder.currentTenantId;
+import static io.github.aigoodle.common.context.UserContextHolder.currentUserId;
 
 /** Provider-neutral catalog and direct test-execution API. */
 @RestController
@@ -41,11 +43,10 @@ public class ConnectorController {
     public ApiResponse<ConnectorResult> execute(@PathVariable String provider,
                                                 @PathVariable String connectorId,
                                                 @PathVariable String actionId,
-                                                @RequestParam(defaultValue = "default") String tenantId,
                                                 @RequestBody(required = false) Map<String, Object> arguments) {
         ConnectorExecutionRequest request = new ConnectorExecutionRequest(
                 new ConnectorKey(provider, connectorId), actionId, null, null, arguments,
-                new ConnectorExecutionContext(null, tenantId, null, null, null, null, null,
+                new ConnectorExecutionContext(null, currentTenantId(), currentUserId(), null, null, null, null,
                         Map.of("surface", "management-api")));
         return ApiResponse.ok(gateway.execute(request));
     }

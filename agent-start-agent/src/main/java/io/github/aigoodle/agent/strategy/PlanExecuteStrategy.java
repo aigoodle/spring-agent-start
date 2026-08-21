@@ -43,7 +43,7 @@ public class PlanExecuteStrategy implements AgentStrategy {
         SystemMessage systemMessage = PlanExecutePrompts.system(context, tools.values());
         AgentResponse response = AgentResponse.forConversation(context.getConversationId());
 
-        String planOutput = call(chatClient, systemMessage, context.getHistory(),
+        String planOutput = call(context, chatClient, systemMessage, context.getHistory(),
                 PlanExecutePrompts.planning(context.getQuery()), chatOptions);
         context.checkActive();
         List<String> plannedSteps = planParser.parse(planOutput, context.getQuery());
@@ -53,14 +53,14 @@ public class PlanExecuteStrategy implements AgentStrategy {
         for (int index = 0; index < plannedSteps.size(); index++) {
             context.checkActive();
             String plannedStep = plannedSteps.get(index);
-            String stepOutput = call(chatClient, systemMessage, List.of(),
+            String stepOutput = call(context, chatClient, systemMessage, List.of(),
                     PlanExecutePrompts.executeStep(plannedStep), chatOptions);
             String stepResult = stepExecutor.execute(stepOutput, tools, response, context);
             scratchpad.append("Step ").append(index + 1).append(": ").append(plannedStep)
                     .append(" => ").append(stepResult).append('\n');
         }
 
-        String finalAnswer = call(chatClient, systemMessage, List.of(),
+        String finalAnswer = call(context, chatClient, systemMessage, List.of(),
                 PlanExecutePrompts.synthesize(context.getQuery(), scratchpad), chatOptions);
         context.checkActive();
         AgentStep finalStep = AgentStep.of(AgentStep.Kind.FINAL, finalAnswer);
@@ -78,8 +78,10 @@ public class PlanExecuteStrategy implements AgentStrategy {
         context.publishStep(planStep);
     }
 
-    private static String call(ChatClient client, SystemMessage system, List<AgentMessage> history,
+    private static String call(AgentRunContext context, ChatClient client, SystemMessage system,
+                               List<AgentMessage> history,
                                String userText, org.springframework.ai.chat.prompt.ChatOptions perApp) {
+        context.claimModelCall();
         List<Message> messages = new ArrayList<>();
         messages.add(system);
         for (AgentMessage h : history) {

@@ -2,6 +2,7 @@ package io.github.aigoodle.workflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.github.aigoodle.common.util.JsonUtils;
+import io.github.aigoodle.common.context.UserContextHolder;
 import io.github.aigoodle.workflow.engine.WorkflowRunResult;
 import io.github.aigoodle.workflow.entity.WorkflowRunEntity;
 import io.github.aigoodle.workflow.mapper.WorkflowRunMapper;
@@ -26,20 +27,26 @@ final class WorkflowRunStore {
     }
 
     List<WorkflowRunEntity> findRecent(String workflowId, int requestedLimit) {
+        return findRecent(UserContextHolder.currentTenantId(), workflowId, requestedLimit);
+    }
+
+    List<WorkflowRunEntity> findRecent(String tenantId, String workflowId, int requestedLimit) {
         int historySize = Math.max(1, Math.min(MAX_HISTORY_SIZE, requestedLimit));
         return workflowRunMapper.selectList(new LambdaQueryWrapper<WorkflowRunEntity>()
+                .eq(WorkflowRunEntity::getTenantId, tenantId)
                 .eq(WorkflowRunEntity::getWorkflowId, workflowId)
                 .orderByDesc(WorkflowRunEntity::getCreatedAt)
                 .last("limit " + historySize));
     }
 
-    void recordStoredRun(String workflowId, String conversationId, Map<String, Object> inputs,
+    void recordStoredRun(String tenantId, String workflowId, String conversationId, Map<String, Object> inputs,
                          WorkflowRunResult result) {
-        record(new RunRecord(workflowId, conversationId, inputs, result));
+        record(new RunRecord(tenantId, workflowId, conversationId, inputs, result));
     }
 
-    void recordAdHocRun(String conversationId, Map<String, Object> inputs, WorkflowRunResult result) {
-        record(new RunRecord(null, conversationId, inputs, result));
+    void recordAdHocRun(String tenantId, String conversationId, Map<String, Object> inputs,
+                        WorkflowRunResult result) {
+        record(new RunRecord(tenantId, null, conversationId, inputs, result));
     }
 
     private void record(RunRecord record) {
@@ -56,6 +63,7 @@ final class WorkflowRunStore {
         WorkflowRunResult result = record.result();
         WorkflowRunEntity entity = new WorkflowRunEntity();
         entity.setId(result.getRunId());
+        entity.setTenantId(record.tenantId());
         entity.setWorkflowId(record.workflowId());
         entity.setConversationId(record.conversationId());
         entity.setStatus(result.isSuccess() ? STATUS_SUCCESS : STATUS_FAILED);
@@ -67,6 +75,7 @@ final class WorkflowRunStore {
     }
 
     private record RunRecord(
+            String tenantId,
             String workflowId,
             String conversationId,
             Map<String, Object> inputs,

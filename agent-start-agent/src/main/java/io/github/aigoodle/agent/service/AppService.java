@@ -25,12 +25,24 @@ public class AppService {
         return agentRuntime.update(appId, request);
     }
 
+    public AppEntity update(String tenantId, String appId, SaveAppRequest request) {
+        return agentRuntime.update(tenantId, appId, request);
+    }
+
     public void delete(String appId) {
         agentRuntime.delete(appId);
     }
 
+    public void delete(String tenantId, String appId) {
+        agentRuntime.delete(tenantId, appId);
+    }
+
     public AppEntity require(String appId) {
         return agentRuntime.require(appId);
+    }
+
+    public AppEntity require(String tenantId, String appId) {
+        return agentRuntime.require(tenantId, appId);
     }
 
     public List<AppEntity> list(String tenantId) {
@@ -53,12 +65,24 @@ public class AppService {
         return agentRuntime.getModelConfig(appId);
     }
 
+    public AppModelConfigEntity getModelConfig(String tenantId, String appId) {
+        return agentRuntime.getModelConfig(tenantId, appId);
+    }
+
     public AppEntity bindWorkflowId(String appId, String workflowId) {
         return agentRuntime.bindWorkflowId(appId, workflowId);
+    }
+
+    public AppEntity bindWorkflowId(String tenantId, String appId, String workflowId) {
+        return agentRuntime.bindWorkflowId(tenantId, appId, workflowId);
     }
 
     /** Binds the immutable workflow snapshot and exposes the app after publication. */
     public AppEntity bindPublishedWorkflow(String appId, String workflowId) {
         return agentRuntime.bindPublishedWorkflow(appId, workflowId);
+    }
+
+    public AppEntity bindPublishedWorkflow(String tenantId, String appId, String workflowId) {
+        return agentRuntime.bindPublishedWorkflow(tenantId, appId, workflowId);
     }
 }

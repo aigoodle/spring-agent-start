@@ -36,7 +36,7 @@ public class SyncDocumentIngestionQueue implements DocumentIngestionQueue {
         if (task == null || task.getDocumentId() == null) return;
         executor.submit(() -> {
             try {
-                runner.run(task.getDocumentId());
+                runner.run(task.getTenantId(), task.getDocumentId());
             } catch (Throwable t) {
                 // The runner already logs + persists FAILED status; this is
                 // last-ditch defence against runaway RuntimeExceptions that

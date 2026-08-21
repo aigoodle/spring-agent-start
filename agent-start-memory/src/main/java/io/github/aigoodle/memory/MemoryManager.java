@@ -24,5 +24,14 @@ public interface MemoryManager {
 
     void forgetConversation(String tenantId, String ownerId, String conversationId);
 
+    /** Tenant-scoped working-memory eviction for embedded multi-tenant hosts. */
+    default void clearWorkingMemory(String tenantId, String ownerId, String conversationId) {
+        clearWorkingMemory(conversationId);
+    }
+
+    /**
+     * Compatibility-wide eviction by conversation id. New multi-tenant callers should use the
+     * tenant-scoped overload to avoid clearing another tenant's same-named conversation.
+     */
     void clearWorkingMemory(String conversationId);
 }

@@ -2,6 +2,8 @@ package io.github.aigoodle.tool.adapter;
 
 import io.github.aigoodle.common.util.JsonUtils;
 import io.github.aigoodle.tool.ToolDefinition;
+import io.github.aigoodle.tool.execution.ToolExecutionContextProvider;
+import io.github.aigoodle.tool.execution.ToolExecutionGateway;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.DefaultToolDefinition;
 
@@ -15,9 +17,21 @@ import java.util.Map;
 public class ToolDefinitionCallback implements ToolCallback {
 
     private final ToolDefinition tool;
+    private final ToolExecutionGateway executionGateway;
+    private final ToolExecutionContextProvider contextProvider;
 
+    /** Compatibility constructor for an already-governed definition. */
     public ToolDefinitionCallback(ToolDefinition tool) {
+        this(tool, ToolExecutionGateway.direct(), ToolExecutionContextProvider.anonymous());
+    }
+
+    public ToolDefinitionCallback(ToolDefinition tool,
+                                  ToolExecutionGateway executionGateway,
+                                  ToolExecutionContextProvider contextProvider) {
         this.tool = tool;
+        this.executionGateway = executionGateway == null ? ToolExecutionGateway.direct() : executionGateway;
+        this.contextProvider = contextProvider == null
+                ? ToolExecutionContextProvider.anonymous() : contextProvider;
     }
 
     @Override
@@ -33,7 +47,7 @@ public class ToolDefinitionCallback implements ToolCallback {
     public String call(String toolInput) {
         Map<String, Object> parsedArguments = JsonUtils.parseMap(toolInput);
         Map<String, Object> arguments = parsedArguments == null ? Map.of() : parsedArguments;
-        Object toolResult = tool.execute(arguments);
+        Object toolResult = executionGateway.execute(tool, arguments, contextProvider.currentContext());
         if (toolResult == null) {
             return "";
         }

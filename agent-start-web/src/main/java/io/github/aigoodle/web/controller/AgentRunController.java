@@ -2,11 +2,14 @@ package io.github.aigoodle.web.controller;
 
 import io.github.aigoodle.agent.runtime.AgentRunEvent;
 import io.github.aigoodle.agent.runtime.AgentRunSnapshot;
-import io.github.aigoodle.agent.runtime.AgentRuntime;
+import io.github.aigoodle.agent.runtime.AgentRuntimeRegistry;
 import io.github.aigoodle.agent.runtime.AgentResumeCommand;
 import io.github.aigoodle.agent.api.AgentResponse;
+import io.github.aigoodle.connector.channel.ChannelAuditService;
 import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.web.common.ApiResponse;
+import io.github.aigoodle.web.support.ChannelAdministrationPolicy;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -17,24 +20,32 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
+
+import static io.github.aigoodle.common.context.UserContextHolder.currentTenantId;
 
 /** Read-only execution inspection API shared by consoles and embedded UI components. */
 @RestController
-@ConditionalOnBean(AgentRuntime.class)
+@ConditionalOnBean(AgentRuntimeRegistry.class)
 @RequestMapping("/agent-runs")
 public class AgentRunController {
     private static final int DEFAULT_EVENT_LIMIT = 200;
 
-    private final AgentRuntime agentRuntime;
+    private final AgentRuntimeRegistry agentRuntime;
+    private final ChannelAdministrationPolicy administration;
+    private final ChannelAuditService audits;
 
-    public AgentRunController(AgentRuntime agentRuntime) {
+    public AgentRunController(AgentRuntimeRegistry agentRuntime,
+                              ChannelAdministrationPolicy administration,
+                              ChannelAuditService audits) {
         this.agentRuntime = agentRuntime;
+        this.administration = administration;
+        this.audits = audits;
     }
 
     @GetMapping("/{runId}")
     public ApiResponse<AgentRunSnapshot> get(@PathVariable String runId) {
-        return ApiResponse.ok(agentRuntime.findRun(runId).orElseThrow(() ->
-                new PlatformException("agent_run_not_found", "Agent run not found: " + runId, null)));
+        return ApiResponse.ok(requireOwned(runId));
     }
 
     @GetMapping("/{runId}/events")
@@ -42,20 +53,39 @@ public class AgentRunController {
             @PathVariable String runId,
             @RequestParam(defaultValue = "0") long afterSequence,
             @RequestParam(defaultValue = "200") int limit) {
-        agentRuntime.findRun(runId).orElseThrow(() ->
-                new PlatformException("agent_run_not_found", "Agent run not found: " + runId, null));
-        return ApiResponse.ok(agentRuntime.runEvents(
+        return ApiResponse.ok(agentRuntime.runEventsForTenant(currentTenantId(),
                 runId, Math.max(0, afterSequence), Math.min(1000, Math.max(1, limit))));
     }
 
     @PostMapping("/{runId}/resume")
+    @Transactional
     public ApiResponse<AgentResponse> resume(@PathVariable String runId,
                                              @RequestBody AgentResumeCommand command) {
-        return ApiResponse.ok(agentRuntime.resume(runId, command));
+        administration.requireAdministrator();
+        AgentResponse response = agentRuntime.resumeForTenant(currentTenantId(), runId, command);
+        long approved = command.allDecisions().values().stream()
+                .filter(value -> value == AgentResumeCommand.Decision.APPROVE).count();
+        audits.success("AGENT_RUN_RESUME", "AGENT_RUN", runId, Map.of(
+                "decisionCount", command.allDecisions().size(),
+                "approvedCount", approved,
+                "rejectedCount", command.allDecisions().size() - approved,
+                "resultStatus", response.getStatus().name()));
+        return ApiResponse.ok(response);
     }
 
     @PostMapping("/{runId}/cancel")
+    @Transactional
     public ApiResponse<AgentRunSnapshot> cancel(@PathVariable String runId) {
-        return ApiResponse.ok(agentRuntime.cancel(runId));
+        administration.requireAdministrator();
+        AgentRunSnapshot cancelled = agentRuntime.cancelForTenant(currentTenantId(), runId);
+        audits.success("AGENT_RUN_CANCEL", "AGENT_RUN", runId,
+                Map.of("resultStatus", cancelled.status().name()));
+        return ApiResponse.ok(cancelled);
+    }
+
+    private AgentRunSnapshot requireOwned(String runId) {
+        return agentRuntime.findRun(currentTenantId(), runId)
+                .orElseThrow(() -> new PlatformException(
+                        "agent_run_not_found", "Agent run not found: " + runId, null));
     }
 }

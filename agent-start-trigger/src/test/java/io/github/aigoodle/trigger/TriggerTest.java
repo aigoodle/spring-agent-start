@@ -1,5 +1,8 @@
 package io.github.aigoodle.trigger;
 
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import io.github.aigoodle.common.context.CurrentUser;
+import io.github.aigoodle.common.context.UserContextHolder;
 import io.github.aigoodle.common.trigger.ScheduledTaskGateway;
 import io.github.aigoodle.trigger.api.InvocationStatus;
 import io.github.aigoodle.trigger.api.TriggerType;
@@ -12,6 +15,7 @@ import io.github.aigoodle.trigger.service.CreateTriggerRequest;
 import io.github.aigoodle.trigger.service.TriggerInvocationRequest;
 import io.github.aigoodle.trigger.service.TriggerService;
 import io.github.aigoodle.trigger.mapper.TriggerMapper;
+import io.github.aigoodle.trigger.mapper.TriggerInvocationMapper;
 import io.github.aigoodle.workflow.entity.WorkflowEntity;
 import io.github.aigoodle.workflow.graph.EdgeDef;
 import io.github.aigoodle.workflow.graph.NodeDef;
@@ -19,6 +23,8 @@ import io.github.aigoodle.workflow.graph.NodeType;
 import io.github.aigoodle.workflow.graph.WorkflowGraph;
 import io.github.aigoodle.workflow.service.WorkflowService;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
@@ -33,6 +39,16 @@ import static org.junit.jupiter.api.Assertions.*;
 @SpringBootTest(classes = TriggerTestApplication.class)
 class TriggerTest {
 
+    @BeforeEach
+    void authenticateTenant() {
+        UserContextHolder.set(CurrentUser.builder().tenantId("t").userId("trigger-test").build());
+    }
+
+    @AfterEach
+    void clearIdentity() {
+        UserContextHolder.clear();
+    }
+
     @Autowired
     private WorkflowService workflowService;
     @Autowired
@@ -43,6 +59,8 @@ class TriggerTest {
     private CronTriggerScheduler cronScheduler;
     @Autowired
     private TriggerMapper triggerMapper;
+    @Autowired
+    private TriggerInvocationMapper triggerInvocationMapper;
     @Autowired
     private ScheduledTaskGateway scheduledTaskGateway;
 
@@ -58,13 +76,13 @@ class TriggerTest {
         graph.addEdge(EdgeDef.of("tpl", "end"));
         WorkflowEntity workflow = workflowService.save(
                 "app-trigger-" + java.util.UUID.randomUUID(),
-                "t", "echo", "workflow", graph);
+                UserContextHolder.currentTenantId(), "echo", "workflow", graph);
         return workflow.getId();
     }
 
     private TriggerEntity trigger(TriggerType type, Map<String, Object> config) {
         return triggerService.create(CreateTriggerRequest.builder()
-                .tenantId("t").name(type + "-trigger").type(type)
+                .tenantId(UserContextHolder.currentTenantId()).name(type + "-trigger").type(type)
                 .targetType("workflow").targetId(echoWorkflow())
                 .config(config).enabled(true).build());
     }
@@ -84,6 +102,20 @@ class TriggerTest {
         assertEquals(1, invocations.size());
         assertEquals(InvocationStatus.COMPLETED, invocations.get(0).getStatus());
         assertNotNull(invocations.get(0).getRunId());
+    }
+
+    @Test
+    void tenantScopedApiHidesForeignTrigger() {
+        TriggerEntity trigger = trigger(TriggerType.MANUAL, Map.of());
+
+        assertTenantMismatch(() -> triggerService.require("other-tenant", trigger.getId()));
+        assertTenantMismatch(() -> triggerService.setEnabled("other-tenant", trigger.getId(), false));
+        triggerService.fireSynchronously("t",
+                TriggerInvocationRequest.manual(trigger.getId(), Map.of("text", "guard")));
+        String invocationId = triggerService.invocations("t", trigger.getId()).get(0).getId();
+        assertTenantMismatch(() -> triggerService.invocation("other-tenant", invocationId));
+        assertTenantMismatch(() -> triggerInvocationMapper.selectById(invocationId));
+        assertTrue(triggerService.require("t", trigger.getId()).getEnabled());
     }
 
     @Test
@@ -145,7 +177,7 @@ class TriggerTest {
         TriggerEntity trigger = trigger(TriggerType.CRON, Map.of(
                 "scheduleType", "CRON", "expression", "0 0 8 * * *"));
         trigger.setNextFireAt(LocalDateTime.now().minusSeconds(1));
-        triggerMapper.updateById(trigger);
+        updateOwned(trigger);
 
         List<TriggerEntity> nodeOne = triggerService.claimDueSchedules(
                 "node-one", Duration.ofMinutes(1), 10);
@@ -162,7 +194,7 @@ class TriggerTest {
                 "scheduleType", "ONCE",
                 "runAt", java.time.OffsetDateTime.now().plusMinutes(5).toString()));
         trigger.setNextFireAt(LocalDateTime.now().minusSeconds(1));
-        triggerMapper.updateById(trigger);
+        updateOwned(trigger);
 
         List<TriggerEntity> claimed = triggerService.claimDueSchedules(
                 "node-one", Duration.ofMinutes(1), 10);
@@ -203,6 +235,7 @@ class TriggerTest {
 
     @Test
     void userCanListAndDeleteOnlyOwnedWorkflowSchedules() {
+        UserContextHolder.set(CurrentUser.builder().tenantId("tenant-owned").userId("user-a").build());
         ScheduledTaskGateway.ScheduledTaskResult owned = scheduledTaskGateway.createTask(
                 new ScheduledTaskGateway.CreateScheduledTaskCommand(
                         "tenant-owned", "user-a", "A 的日报", echoWorkflow(),
@@ -254,5 +287,18 @@ class TriggerTest {
             }
         }
         return null;
+    }
+
+    private void updateOwned(TriggerEntity trigger) {
+        triggerMapper.update(trigger, new LambdaUpdateWrapper<TriggerEntity>()
+                .eq(TriggerEntity::getTenantId, trigger.getTenantId())
+                .eq(TriggerEntity::getId, trigger.getId()));
+    }
+
+    private static void assertTenantMismatch(org.junit.jupiter.api.function.Executable action) {
+        Throwable failure = assertThrows(RuntimeException.class, action);
+        Throwable root = failure;
+        while (root.getCause() != null) root = root.getCause();
+        assertInstanceOf(SecurityException.class, root);
     }
 }

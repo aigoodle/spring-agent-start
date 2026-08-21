@@ -1,6 +1,7 @@
 package io.github.aigoodle.connector.installation;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import io.github.aigoodle.common.util.JsonUtils;
 import io.github.aigoodle.connector.ConnectorDefinition;
 import io.github.aigoodle.connector.persistence.ConnectorInstallationEntity;
@@ -37,7 +38,7 @@ public class ConnectorInstallationService {
     public InstallationView setEnabled(String id, String tenantId, boolean enabled) {
         ConnectorInstallationEntity entity = requireOwned(id, tenant(tenantId));
         entity.setEnabled(enabled);
-        mapper.updateById(entity);
+        updateOwned(entity);
         return view(entity);
     }
 
@@ -60,15 +61,23 @@ public class ConnectorInstallationService {
         entity.setTrustLevel(definition.trustLevel().name());
         entity.setManifestJson(JsonUtils.toJson(definition));
         entity.setConfigSchemaJson(definition.configurationSchema());
-        if (insert) mapper.insert(entity); else mapper.updateById(entity);
+        if (insert) mapper.insert(entity); else updateOwned(entity);
     }
 
     private ConnectorInstallationEntity requireOwned(String id, String tenant) {
-        ConnectorInstallationEntity entity = mapper.selectById(id);
-        if (entity == null || !tenant.equals(entity.getTenantId())) {
+        ConnectorInstallationEntity entity = mapper.selectOne(new LambdaQueryWrapper<ConnectorInstallationEntity>()
+                .eq(ConnectorInstallationEntity::getTenantId, tenant)
+                .eq(ConnectorInstallationEntity::getId, id).last("LIMIT 1"));
+        if (entity == null) {
             throw new IllegalArgumentException("connector installation not found");
         }
         return entity;
+    }
+
+    private void updateOwned(ConnectorInstallationEntity entity) {
+        mapper.update(entity, new LambdaUpdateWrapper<ConnectorInstallationEntity>()
+                .eq(ConnectorInstallationEntity::getTenantId, entity.getTenantId())
+                .eq(ConnectorInstallationEntity::getId, entity.getId()));
     }
 
     private static InstallationView view(ConnectorInstallationEntity entity) {

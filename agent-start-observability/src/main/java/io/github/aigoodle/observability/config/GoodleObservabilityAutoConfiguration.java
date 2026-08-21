@@ -10,6 +10,10 @@ import io.github.aigoodle.tool.execution.ToolExecutionListener;
 import io.github.aigoodle.observability.agentops.MicrometerAgentRunObserver;
 import io.github.aigoodle.observability.agentops.MicrometerToolExecutionListener;
 import io.github.aigoodle.observability.agentops.ObservationAgentRunObserver;
+import io.github.aigoodle.connector.channel.ChannelMessageObserver;
+import io.github.aigoodle.observability.channel.MicrometerChannelMessageObserver;
+import io.github.aigoodle.connector.channel.ChannelOperationalSnapshotProvider;
+import io.github.aigoodle.observability.channel.ChannelOperationalMetrics;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.observation.ObservationRegistry;
 import org.mybatis.spring.annotation.MapperScan;
@@ -62,6 +66,25 @@ public class GoodleObservabilityAutoConfiguration {
             havingValue = "true", matchIfMissing = true)
     public ToolExecutionListener micrometerToolExecutionListener(MeterRegistry registry) {
         return new MicrometerToolExecutionListener(registry);
+    }
+
+    @Bean
+    @ConditionalOnClass(MeterRegistry.class)
+    @ConditionalOnBean(MeterRegistry.class)
+    @ConditionalOnProperty(prefix = "spring-agent.observability", name = "enabled",
+            havingValue = "true", matchIfMissing = true)
+    public ChannelMessageObserver micrometerChannelMessageObserver(MeterRegistry registry) {
+        return new MicrometerChannelMessageObserver(registry);
+    }
+
+    @Bean
+    @ConditionalOnClass(MeterRegistry.class)
+    @ConditionalOnBean({MeterRegistry.class, ChannelOperationalSnapshotProvider.class})
+    @ConditionalOnProperty(prefix = "spring-agent.observability", name = "enabled",
+            havingValue = "true", matchIfMissing = true)
+    public ChannelOperationalMetrics channelOperationalMetrics(MeterRegistry registry,
+                                                               ChannelOperationalSnapshotProvider provider) {
+        return new ChannelOperationalMetrics(registry, provider);
     }
 
     @Bean

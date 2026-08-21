@@ -24,6 +24,14 @@ spring:
     password: ${DB_PASSWORD:ai123456}
     driver-class-name: org.postgresql.Driver
 
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DB:0}
+      timeout: ${REDIS_TIMEOUT:2s}
+
   sql:
     init:
       # Runs each module's classpath DDL on startup. Continue-on-error so a re-boot
@@ -48,11 +56,19 @@ spring:
     max-in-memory-size: 100MB
 
 spring-agent:
+  server:
+    # Automatically enforced for `prod`/`production` profiles. CI/CD can also
+    # enable it explicitly without changing profiles.
+    production-guard:
+      enabled: ${AGENT_PRODUCTION_GUARD:false}
   demo:
     # Standalone server is a sandbox, so no full login system is required.
     # Set AGENT_DEMO_ENABLED=false in production hosts and provide ChatAccessPolicy.
     enabled: ${AGENT_DEMO_ENABLED:true}
+    user-id: ${AGENT_DEMO_USER_ID:demo-user}
+    username: ${AGENT_DEMO_USERNAME:Demo Administrator}
     tenant-id: ${AGENT_DEMO_TENANT:default}
+    roles: ${AGENT_DEMO_ROLES:TENANT_ADMIN,CONNECTOR_ADMIN}
     allow-debug: ${AGENT_DEMO_ALLOW_DEBUG:true}
   web:
     base-path: "/agent-start"
@@ -64,12 +80,34 @@ spring-agent:
   connector:
     # Connector connection credentials are encrypted separately from model credentials.
     encryption-secret: ${CONNECTOR_SECRET:${AGENT_SECRET:demo-secret-change-me}}
+    channel-catalog-cache-ttl: ${CHANNEL_CATALOG_CACHE_TTL:10m}
+    channel-rate-limit:
+      backend: ${CHANNEL_RATE_LIMIT_BACKEND:redis}
+      key-prefix: ${CHANNEL_RATE_LIMIT_KEY_PREFIX:agent-start:channel-rate}
+    channel:
+      # Explicit server migration switch. Embedded SDK consumers that do not
+      # install the connector schema must not fail application startup.
+      backfill-enabled: true
     openclaw:
-      enabled: ${OPENCLAW_ENABLED:false}
+      # The standalone server exposes the complete Connector Hub API by default.
+      # Keep the starter itself opt-in for embedded applications, but always
+      # register the OpenClaw facade here so /agent-start/openclaw/** does not
+      # disappear with a misleading 404 when the Bridge is temporarily offline.
+      enabled: ${OPENCLAW_ENABLED:true}
       base-url: ${OPENCLAW_BASE_URL:http://127.0.0.1:18789}
-      service-token: ${OPENCLAW_SERVICE_TOKEN:}
+      # Matches docker/docker-compose.openclaw.yml for a zero-config local demo.
+      # Production deployments must override this shared demo credential.
+      service-token: ${OPENCLAW_SERVICE_TOKEN:demo-openclaw-bridge-token-change-me}
       agent-id: ${OPENCLAW_AGENT_ID:main}
       timeout: ${OPENCLAW_TIMEOUT:60s}
+    hermes:
+      # Standalone Server includes the Hermes runtime; embedded starters remain opt-in.
+      enabled: ${HERMES_ENABLED:true}
+      base-url: ${HERMES_BASE_URL:http://127.0.0.1:9119}
+      api-token: ${HERMES_API_TOKEN:}
+      bridge-base-url: ${HERMES_BRIDGE_BASE_URL:http://127.0.0.1:9121}
+      bridge-token: ${HERMES_BRIDGE_TOKEN:demo-hermes-bridge-token-change-me}
+      timeout: ${HERMES_TIMEOUT:15s}
   knowledge:
     # Persist embeddings via the built-in JDBC vector store (same DB). Swap to
     # pgvector / elasticsearch / milvus by adding the matching starter jar and

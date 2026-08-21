@@ -57,6 +57,25 @@ CREATE INDEX IF NOT EXISTS idx_apps_tenant_mode ON goodle_apps (tenant_id, mode)
 CREATE INDEX IF NOT EXISTS idx_apps_published ON goodle_apps (published);
 CREATE UNIQUE INDEX IF NOT EXISTS uk_apps_tenant_code ON goodle_apps (tenant_id, app_code);
 
+CREATE TABLE IF NOT EXISTS goodle_agent_versions (
+    id                       VARCHAR(64) NOT NULL,
+    tenant_id                VARCHAR(64) NOT NULL,
+    app_id                   VARCHAR(64) NOT NULL,
+    version_number           INT NOT NULL,
+    status                   VARCHAR(32) NOT NULL DEFAULT 'ACTIVE',
+    definition_json          TEXT NOT NULL,
+    change_summary           VARCHAR(1024),
+    published_by             VARCHAR(64),
+    published_at             TIMESTAMP NOT NULL,
+    rollback_from_version_id VARCHAR(64),
+    created_at               TIMESTAMP,
+    updated_at               TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE (tenant_id, app_id, version_number)
+);
+CREATE INDEX IF NOT EXISTS idx_agent_versions_current
+    ON goodle_agent_versions (tenant_id, app_id, status, version_number);
+
 -- ============================================================================
 -- goodle_app_model_configs — 1:1 sidecar with goodle_apps.id (id == app_id). Carries the
 -- entire "编排" drawer payload: system prompt, model overrides, agent
@@ -72,6 +91,8 @@ CREATE TABLE IF NOT EXISTS goodle_app_model_configs (
     -- Selected model
     model_provider                    VARCHAR(64),
     model_name                        VARCHAR(128),
+    runtime_type                     VARCHAR(64) NOT NULL DEFAULT 'NATIVE',
+    runtime_ref                      VARCHAR(255),
     model_json                        TEXT,
     configs                           TEXT,
     -- Prompt
@@ -92,6 +113,8 @@ CREATE TABLE IF NOT EXISTS goodle_app_model_configs (
     approval_tools_json               TEXT,
     delegate_agent_ids_json           TEXT,
     max_iterations                    INT,
+    max_model_calls                   INT,
+    max_tool_calls                    INT,
     memory_enabled                    BOOLEAN DEFAULT TRUE,
     memory_window                     INT,
     -- Knowledge / RAG
@@ -109,6 +132,10 @@ CREATE TABLE IF NOT EXISTS goodle_app_model_configs (
     updated_at                        TIMESTAMP,
     PRIMARY KEY (id)
 );
+ALTER TABLE goodle_app_model_configs ADD COLUMN IF NOT EXISTS runtime_type VARCHAR(64) NOT NULL DEFAULT 'NATIVE';
+ALTER TABLE goodle_app_model_configs ADD COLUMN IF NOT EXISTS runtime_ref VARCHAR(255);
+ALTER TABLE goodle_app_model_configs ADD COLUMN IF NOT EXISTS max_model_calls INT;
+ALTER TABLE goodle_app_model_configs ADD COLUMN IF NOT EXISTS max_tool_calls INT;
 
 CREATE INDEX IF NOT EXISTS idx_app_model_config_app ON goodle_app_model_configs (app_id);
 

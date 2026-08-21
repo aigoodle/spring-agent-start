@@ -1,6 +1,7 @@
 package io.github.aigoodle.model.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.model.entity.ProviderModelSettingEntity;
 import io.github.aigoodle.model.entity.TenantDefaultModelEntity;
@@ -104,11 +105,15 @@ public class ProviderModelSettingsService {
         // Setting exists — flip flag, or drop the row when turning OFF a plain row
         // (load-balancing rows are kept so their config isn't lost).
         if (!enabled && Boolean.FALSE.equals(existing.getLoadBalancingEnabled())) {
-            settingMapper.deleteById(existing.getId());
+            settingMapper.delete(new LambdaQueryWrapper<ProviderModelSettingEntity>()
+                    .eq(ProviderModelSettingEntity::getTenantId, normalizeTenantId(tenantId))
+                    .eq(ProviderModelSettingEntity::getId, existing.getId()));
             return null;
         }
         existing.setEnabled(enabled);
-        settingMapper.updateById(existing);
+        settingMapper.update(existing, new LambdaUpdateWrapper<ProviderModelSettingEntity>()
+                .eq(ProviderModelSettingEntity::getTenantId, normalizeTenantId(tenantId))
+                .eq(ProviderModelSettingEntity::getId, existing.getId()));
         return existing;
     }
 

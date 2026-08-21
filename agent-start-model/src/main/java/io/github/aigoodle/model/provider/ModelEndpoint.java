@@ -18,6 +18,10 @@ import java.util.Map;
 @Builder
 public class ModelEndpoint {
 
+    /** Trusted host tenant scope; participates in every reusable runtime cache key. */
+    @Builder.Default
+    private String tenantId = "default";
+
     /** Stable identifier of the backing persisted model row (used as cache key). */
     private String id;
 

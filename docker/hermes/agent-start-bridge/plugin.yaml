@@ -1,0 +1,15 @@
+name: agent-start-bridge
+label: Agent Start Bridge
+kind: platform
+version: 0.3.0
+description: Routes Hermes QQBot transport events through the Agent Start enterprise message pipeline.
+author: Agent Start
+requires_env:
+  - name: AGENT_START_BRIDGE_URL
+    description: Agent Start Hermes callback URL
+    prompt: Callback URL
+    password: false
+  - name: AGENT_START_BRIDGE_TOKEN
+    description: Shared data-plane authentication token
+    prompt: Bridge token
+    password: true

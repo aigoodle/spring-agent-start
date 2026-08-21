@@ -7,6 +7,9 @@ import io.github.aigoodle.agent.context.AgentContextCompactor;
 import io.github.aigoodle.agent.context.ExtractiveAgentContextCompactor;
 import io.github.aigoodle.agent.hitl.AutoApproveGate;
 import io.github.aigoodle.agent.mapper.AppMapper;
+import io.github.aigoodle.agent.mapper.AgentVersionMapper;
+import io.github.aigoodle.agent.service.AgentVersionService;
+import io.github.aigoodle.agent.service.AgentExecutionService;
 import io.github.aigoodle.agent.mapper.AgentRunEventMapper;
 import io.github.aigoodle.agent.mapper.AgentRunMapper;
 import io.github.aigoodle.agent.mapper.AppApiTokenMapper;
@@ -32,6 +35,9 @@ import io.github.aigoodle.agent.runtime.AgentRunStore;
 import io.github.aigoodle.agent.runtime.JdbcAgentRunStore;
 import io.github.aigoodle.agent.runtime.AgentRunToolExecutionListener;
 import io.github.aigoodle.agent.runtime.AgentRunObserver;
+import io.github.aigoodle.agent.runtime.AgentRuntimeExtension;
+import io.github.aigoodle.agent.runtime.AgentRuntimeRegistry;
+import io.github.aigoodle.agent.runtime.AgentRuntimeInterceptor;
 import io.github.aigoodle.agent.strategy.AgentStrategy;
 import io.github.aigoodle.agent.strategy.AgentStrategyRegistry;
 import io.github.aigoodle.agent.strategy.FunctionCallingStrategy;
@@ -56,6 +62,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 
 import java.util.List;
 
@@ -142,9 +149,33 @@ public class AgentRuntimeAutoConfiguration {
     }
 
     @Bean
+    @Primary
+    @ConditionalOnMissingBean
+    public AgentRuntimeRegistry agentRuntimeRegistry(AgentService nativeRuntime,
+                                                     List<AgentRuntimeExtension> extensions,
+                                                     List<AgentRuntimeInterceptor> interceptors) {
+        return new AgentRuntimeRegistry(nativeRuntime, extensions, interceptors);
+    }
+
+    @Bean
     @ConditionalOnMissingBean
     public AppService appService(AgentService agentService) {
         return new AppService(agentService);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public AgentVersionService agentVersionService(AgentVersionMapper versions, AppMapper apps,
+                                                   AppModelConfigService modelConfigs,
+                                                   AgentRuntimeRegistry runtimes) {
+        return new AgentVersionService(versions, apps, modelConfigs, runtimes);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public AgentExecutionService agentExecutionService(AgentService drafts, AgentVersionService versions,
+                                                       AgentRuntimeRegistry runtimes) {
+        return new AgentExecutionService(drafts, versions, runtimes);
     }
 
     @Bean
@@ -186,8 +217,10 @@ public class AgentRuntimeAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public TagService tagService(TagMapper tagMapper, TagBindingMapper bindingMapper) {
-        return new TagService(tagMapper, bindingMapper);
+    public TagService tagService(TagMapper tagMapper, TagBindingMapper bindingMapper,
+                                 AppMapper appMapper,
+                                 org.springframework.beans.factory.ObjectProvider<io.github.aigoodle.agent.service.DatasetOwnershipResolver> datasets) {
+        return new TagService(tagMapper, bindingMapper, appMapper, datasets.getIfAvailable());
     }
 
     /**
@@ -197,6 +230,13 @@ public class AgentRuntimeAutoConfiguration {
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnClass(DatasetService.class)
     static class AppDatasetConfiguration {
+
+        @Bean
+        @ConditionalOnMissingBean(io.github.aigoodle.agent.service.DatasetOwnershipResolver.class)
+        io.github.aigoodle.agent.service.DatasetOwnershipResolver datasetOwnershipResolver(
+                DatasetService datasets) {
+            return datasets::require;
+        }
         @Bean
         @ConditionalOnMissingBean
         @ConditionalOnBean(DatasetService.class)

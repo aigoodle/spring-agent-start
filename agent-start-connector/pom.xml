@@ -17,6 +17,10 @@
             <artifactId>agent-start-common</artifactId>
         </dependency>
         <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-persistence</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.baomidou</groupId>
             <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
         </dependency>

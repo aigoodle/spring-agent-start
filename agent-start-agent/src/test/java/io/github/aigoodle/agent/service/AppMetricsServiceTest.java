@@ -12,6 +12,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
+import org.mockito.ArgumentCaptor;
 
 class AppMetricsServiceTest {
     @Test
@@ -37,6 +39,19 @@ class AppMetricsServiceTest {
         MemoryManager memory = mock(MemoryManager.class);
         when(memory.recall(any())).thenReturn(List.of());
         assertThat(new AppMetricsService(memory, mock(AppMapper.class)).summarize("app-1").getTotalMessages()).isZero();
+    }
+
+    @Test
+    void scopedMetricsPassTrustedTenantAndApplicationToMemoryQuery() {
+        MemoryManager memory = mock(MemoryManager.class);
+        when(memory.recall(any())).thenReturn(List.of());
+
+        new AppMetricsService(memory, mock(AppMapper.class)).summarize("tenant-a", "app-a");
+
+        ArgumentCaptor<MemoryQuery> query = ArgumentCaptor.forClass(MemoryQuery.class);
+        verify(memory).recall(query.capture());
+        assertThat(query.getValue().tenantId()).isEqualTo("tenant-a");
+        assertThat(query.getValue().ownerId()).isEqualTo("app-a");
     }
 
     private static MemoryItem item(String id, String conversationId, MemoryRole role, Instant time) {

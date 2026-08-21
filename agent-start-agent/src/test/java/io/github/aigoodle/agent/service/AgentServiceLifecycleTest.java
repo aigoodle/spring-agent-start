@@ -3,6 +3,9 @@ package io.github.aigoodle.agent.service;
 import io.github.aigoodle.agent.api.AgentDefinition;
 import io.github.aigoodle.agent.api.AgentRequest;
 import io.github.aigoodle.agent.api.AgentResponse;
+import io.github.aigoodle.agent.api.AgentStep;
+import io.github.aigoodle.agent.runtime.AgentRunEvent;
+import io.github.aigoodle.agent.runtime.InMemoryAgentRunStore;
 import io.github.aigoodle.agent.entity.AppEntity;
 import io.github.aigoodle.agent.hitl.ApprovalGate;
 import io.github.aigoodle.agent.mapper.AppMapper;
@@ -19,6 +22,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
@@ -26,6 +30,7 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
 
 class AgentServiceLifecycleTest {
 
@@ -49,13 +54,34 @@ class AgentServiceLifecycleTest {
     @Test
     void deletesTheModelSidecarBeforeItsCatalogEntry() {
         Dependencies dependencies = new Dependencies();
+        AppEntity owned = new AppEntity();
+        owned.setId("agent-1");
+        owned.setTenantId("default");
+        when(dependencies.appMapper.selectOne(any())).thenReturn(owned);
         AgentService agentService = dependencies.createService();
 
         agentService.delete("agent-1");
 
         InOrder deletionOrder = inOrder(dependencies.modelConfigService, dependencies.appMapper);
-        deletionOrder.verify(dependencies.modelConfigService).deleteByAppId("agent-1");
-        deletionOrder.verify(dependencies.appMapper).deleteById("agent-1");
+        deletionOrder.verify(dependencies.modelConfigService).deleteByAppId("default", "agent-1");
+        deletionOrder.verify(dependencies.appMapper).delete(any());
+    }
+
+    @Test
+    void tenantScopedManagementCannotAdoptOrDeleteAnUnownedAgent() {
+        Dependencies dependencies = new Dependencies();
+        when(dependencies.appMapper.selectOne(any())).thenReturn(null);
+        AgentService agentService = dependencies.createService();
+
+        assertThatThrownBy(() -> agentService.update("tenant-b", "tenant-a-agent",
+                SaveAppRequest.builder().tenantId("tenant-b").name("stolen").build()))
+                .hasMessageContaining("Application not found");
+        assertThatThrownBy(() -> agentService.delete("tenant-b", "tenant-a-agent"))
+                .hasMessageContaining("Application not found");
+
+        verify(dependencies.appMapper, never()).update(any(), any());
+        verify(dependencies.appMapper, never()).delete(any());
+        verify(dependencies.modelConfigService, never()).deleteByAppId(anyString());
     }
 
     @Test
@@ -83,6 +109,35 @@ class AgentServiceLifecycleTest {
 
         assertThat(response.getConversationId()).isNotBlank();
         assertThat(response.getConversationId()).isNotEqualTo(" ");
+    }
+
+    @Test
+    void persistsReasoningStepsEvenWithoutAnSseListener() {
+        Dependencies dependencies = new Dependencies();
+        InMemoryAgentRunStore store = new InMemoryAgentRunStore();
+        AgentStrategy strategy = mock(AgentStrategy.class);
+        when(dependencies.strategyRegistry.get(any())).thenReturn(strategy);
+        when(dependencies.modelService.getChatClient(anyString(), anyString(), anyString()))
+                .thenReturn(mock(ChatClient.class));
+        doAnswer(invocation -> {
+            var context = invocation.<io.github.aigoodle.agent.strategy.AgentRunContext>getArgument(0);
+            context.publishStep(AgentStep.of(AgentStep.Kind.THOUGHT, "inspect"));
+            context.publishStep(AgentStep.observation("evidence"));
+            AgentResponse response = AgentResponse.forConversation(context.getConversationId());
+            response.complete("done");
+            return response;
+        }).when(strategy).run(any());
+        AgentService service = new AgentService(dependencies.appMapper, dependencies.modelConfigService,
+                dependencies.modelService, dependencies.toolRegistry, dependencies.strategyRegistry,
+                dependencies.memory, dependencies.approvalGate, store);
+        AgentDefinition definition = AgentDefinition.builder().id("agent-1").tenantId("tenant-a")
+                .modelProvider("openai").modelName("gpt-test").memoryEnabled(false).build();
+
+        AgentResponse response = service.runDefinition(definition, AgentRequest.of("hello"));
+
+        assertThat(store.events("tenant-a", response.getRunId(), 0, 20))
+                .extracting(AgentRunEvent::type)
+                .containsSubsequence("STEP_THOUGHT", "STEP_OBSERVATION", "RUN_COMPLETED");
     }
 
     private static final class Dependencies {

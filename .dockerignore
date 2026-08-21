@@ -6,5 +6,6 @@
 **/.vscode/
 **/.DS_Store
 **/*.log
+docker/volumes/
 web/vue-vben-admin/apps/*/dist-analyze/
 web/vue-vben-admin/packages/*/dist/

@@ -27,8 +27,6 @@ import lombok.Data;
 @Data
 public class WorkflowSaveRequest {
 
-    private String tenantId;
-
     /**
      * Owning app id (FK to {@code apps.id}) — <b>required</b>. The workflow
      * row's primary key is pinned to this value so every subsequent save for

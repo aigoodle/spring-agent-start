@@ -2,6 +2,8 @@ package io.github.aigoodle.tool;
 
 import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.tool.adapter.ToolDefinitionCallback;
+import io.github.aigoodle.tool.execution.ToolExecutionContextProvider;
+import io.github.aigoodle.tool.execution.ToolExecutionGateway;
 import org.springframework.ai.tool.ToolCallback;
 
 import java.util.Collections;
@@ -19,11 +21,23 @@ public class ToolRegistry {
 
     private final List<ToolDefinition> declaredTools;
     private final List<ToolProvider> toolProviders;
+    private final ToolExecutionGateway executionGateway;
+    private final ToolExecutionContextProvider contextProvider;
     private volatile Map<String, ToolDefinition> toolsByName;
 
     public ToolRegistry(List<ToolDefinition> declaredTools, List<ToolProvider> toolProviders) {
+        this(declaredTools, toolProviders, ToolExecutionGateway.direct(),
+                ToolExecutionContextProvider.anonymous());
+    }
+
+    public ToolRegistry(List<ToolDefinition> declaredTools, List<ToolProvider> toolProviders,
+                        ToolExecutionGateway executionGateway,
+                        ToolExecutionContextProvider contextProvider) {
         this.declaredTools = declaredTools == null ? List.of() : List.copyOf(declaredTools);
         this.toolProviders = toolProviders == null ? List.of() : List.copyOf(toolProviders);
+        this.executionGateway = executionGateway == null ? ToolExecutionGateway.direct() : executionGateway;
+        this.contextProvider = contextProvider == null
+                ? ToolExecutionContextProvider.anonymous() : contextProvider;
         refresh();
     }
 
@@ -57,13 +71,14 @@ public class ToolRegistry {
     }
 
     public Object execute(String toolName, Map<String, Object> arguments) {
-        return get(toolName).execute(arguments == null ? Map.of() : arguments);
+        return executionGateway.execute(get(toolName), arguments == null ? Map.of() : arguments,
+                contextProvider.currentContext());
     }
 
     /** All tools adapted to Spring AI callbacks, for handing to a ChatClient/agent. */
     public List<ToolCallback> toolCallbacks() {
         return toolsByName.values().stream()
-                .map(ToolDefinitionCallback::new)
+                .map(tool -> new ToolDefinitionCallback(tool, executionGateway, contextProvider))
                 .map(ToolCallback.class::cast)
                 .toList();
     }
@@ -76,7 +91,7 @@ public class ToolRegistry {
         return toolNames.stream()
                 .map(toolsByName::get)
                 .filter(Objects::nonNull)
-                .map(ToolDefinitionCallback::new)
+                .map(tool -> new ToolDefinitionCallback(tool, executionGateway, contextProvider))
                 .map(ToolCallback.class::cast)
                 .toList();
     }

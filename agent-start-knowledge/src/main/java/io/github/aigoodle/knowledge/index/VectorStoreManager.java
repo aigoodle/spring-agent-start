@@ -20,9 +20,15 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class VectorStoreManager {
 
+    private record StoreKey(String tenantId, String datasetId) {
+        private StoreKey {
+            tenantId = tenantId == null || tenantId.isBlank() ? "default" : tenantId;
+        }
+    }
+
     private final ModelService modelService;
     private final VectorStoreFactory factory;
-    private final ConcurrentHashMap<String, VectorStore> stores = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<StoreKey, VectorStore> stores = new ConcurrentHashMap<>();
 
     public VectorStoreManager(ModelService modelService, VectorStoreFactory factory) {
         this.modelService = modelService;
@@ -35,11 +41,13 @@ public class VectorStoreManager {
     }
 
     public VectorStore getStore(DatasetEntity dataset) {
-        return stores.computeIfAbsent(dataset.getId(), id -> create(dataset));
+        StoreKey key = new StoreKey(dataset.getTenantId(), dataset.getId());
+        return stores.computeIfAbsent(key, ignored -> create(dataset));
     }
 
     private VectorStore create(DatasetEntity dataset) {
-        EmbeddingModel embeddingModel = modelService.getEmbeddingModel(dataset.getEmbeddingModelId());
+        EmbeddingModel embeddingModel = modelService.getEmbeddingModel(
+                dataset.getTenantId(), dataset.getEmbeddingModelId());
         if (factory != null) {
             VectorStore custom = factory.create(dataset, embeddingModel);
             if (custom != null) {
@@ -50,6 +58,10 @@ public class VectorStoreManager {
     }
 
     public void evict(String datasetId) {
-        stores.remove(datasetId);
+        stores.keySet().removeIf(key -> key.datasetId().equals(datasetId));
+    }
+
+    public void evict(String tenantId, String datasetId) {
+        stores.remove(new StoreKey(tenantId, datasetId));
     }
 }

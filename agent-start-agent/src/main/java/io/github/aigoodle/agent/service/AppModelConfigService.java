@@ -1,7 +1,10 @@
 package io.github.aigoodle.agent.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import io.github.aigoodle.agent.entity.AppModelConfigEntity;
 import io.github.aigoodle.agent.mapper.AppModelConfigMapper;
+import io.github.aigoodle.common.context.UserContextHolder;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -12,6 +15,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 public class AppModelConfigService {
 
+    private static final String DEFAULT_TENANT_ID = "default";
+
     private final AppModelConfigMapper configMapper;
 
     public AppModelConfigService(AppModelConfigMapper configMapper) {
@@ -20,10 +25,18 @@ public class AppModelConfigService {
 
     /** Load a sidecar by application id, or return {@code null} when none exists. */
     public AppModelConfigEntity findByAppId(String appId) {
+        return findByAppId(UserContextHolder.currentTenantId(), appId);
+    }
+
+    /** Load only the sidecar owned by the supplied tenant and application. */
+    public AppModelConfigEntity findByAppId(String tenantId, String appId) {
         if (appId == null || appId.isBlank()) {
             return null;
         }
-        return configMapper.selectById(appId);
+        return configMapper.selectOne(new LambdaQueryWrapper<AppModelConfigEntity>()
+                .eq(AppModelConfigEntity::getTenantId, effectiveTenant(tenantId))
+                .eq(AppModelConfigEntity::getAppId, appId)
+                .last("LIMIT 1"));
     }
 
     /** Insert a new sidecar or apply the supplied non-null fields to the existing one. */
@@ -34,16 +47,19 @@ public class AppModelConfigService {
             return null;
         }
 
-        String appId = registration.appId();
-        AppModelConfigEntity existingConfiguration = configMapper.selectById(appId);
         prepareIdentity(configuration, registration);
+        String appId = registration.appId();
+        String tenantId = configuration.getTenantId();
+        AppModelConfigEntity existingConfiguration = findByAppId(tenantId, appId);
         if (existingConfiguration == null) {
             configMapper.insert(configuration);
             return configuration;
         }
 
         AppModelConfigPatch.apply(existingConfiguration, configuration);
-        configMapper.updateById(existingConfiguration);
+        configMapper.update(existingConfiguration, new LambdaUpdateWrapper<AppModelConfigEntity>()
+                .eq(AppModelConfigEntity::getTenantId, tenantId)
+                .eq(AppModelConfigEntity::getAppId, appId));
         return existingConfiguration;
     }
 
@@ -56,10 +72,18 @@ public class AppModelConfigService {
     /** Delete the sidecar owned by an application. */
     @Transactional
     public void deleteByAppId(String appId) {
+        deleteByAppId(UserContextHolder.currentTenantId(), appId);
+    }
+
+    /** Delete only the sidecar owned by the supplied tenant and application. */
+    @Transactional
+    public void deleteByAppId(String tenantId, String appId) {
         if (appId == null || appId.isBlank()) {
             return;
         }
-        configMapper.deleteById(appId);
+        configMapper.delete(new LambdaQueryWrapper<AppModelConfigEntity>()
+                .eq(AppModelConfigEntity::getTenantId, effectiveTenant(tenantId))
+                .eq(AppModelConfigEntity::getAppId, appId));
     }
 
     /** Translate the flat agent-editor request into its persistence sidecar. */
@@ -71,8 +95,10 @@ public class AppModelConfigService {
             AppModelConfigEntity configuration, AppModelConfigRegistration registration) {
         configuration.setAppId(registration.appId());
         configuration.setId(registration.appId());
-        if (registration.tenantId() != null && !registration.tenantId().isBlank()) {
-            configuration.setTenantId(registration.tenantId());
-        }
+        configuration.setTenantId(effectiveTenant(registration.tenantId()));
+    }
+
+    private static String effectiveTenant(String tenantId) {
+        return tenantId == null || tenantId.isBlank() ? DEFAULT_TENANT_ID : tenantId;
     }
 }

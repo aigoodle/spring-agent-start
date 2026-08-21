@@ -4,6 +4,7 @@ import io.github.aigoodle.knowledge.entity.DatasetEntity;
 import io.github.aigoodle.knowledge.entity.HitTestingLogEntity;
 import io.github.aigoodle.knowledge.retrieve.RetrievedSegment;
 import io.github.aigoodle.knowledge.service.CreateDatasetRequest;
+import io.github.aigoodle.knowledge.service.KnowledgeService.KnowledgeGraph;
 import io.github.aigoodle.knowledge.service.DatasetService;
 import io.github.aigoodle.knowledge.service.KnowledgeService;
 import io.github.aigoodle.knowledge.service.UpdateDatasetRequest;
@@ -46,7 +47,7 @@ public class DatasetController {
 
     @GetMapping("/{id}")
     public ApiResponse<DatasetEntity> get(@PathVariable String id) {
-        return ApiResponse.ok(datasetService.require(id));
+        return ApiResponse.ok(datasetService.require(currentTenantId(), id));
     }
 
     @PostMapping
@@ -58,24 +59,30 @@ public class DatasetController {
     @PutMapping("/{id}")
     public ApiResponse<DatasetEntity> update(@PathVariable String id,
                                              @RequestBody UpdateDatasetRequest request) {
-        return ApiResponse.ok(datasetService.update(id, request));
+        return ApiResponse.ok(datasetService.update(currentTenantId(), id, request));
     }
 
     @DeleteMapping("/{id}")
     public ApiResponse<Void> delete(@PathVariable String id) {
-        datasetService.delete(id);
+        datasetService.delete(currentTenantId(), id);
         return ApiResponse.ok();
     }
 
     @GetMapping("/{id}/hit-testing/history")
     public ApiResponse<List<HitTestingLogEntity>> hitTestingHistory(
             @PathVariable String id, @RequestParam(defaultValue = "30") int limit) {
-        return ApiResponse.ok(knowledgeService.listHitTestingHistory(id, limit));
+        return ApiResponse.ok(knowledgeService.listHitTestingHistory(currentTenantId(), id, limit));
     }
 
     @PostMapping("/{id}/retrieve")
     public ApiResponse<List<RetrievedSegment>> retrieve(
             @PathVariable String id, @RequestBody RetrieveRequestDto request) {
-        return ApiResponse.ok(knowledgeService.retrieve(id, RetrievalRequestMapper.from(request)));
+        return ApiResponse.ok(knowledgeService.retrieve(
+                currentTenantId(), id, RetrievalRequestMapper.from(request)));
+    }
+
+    @GetMapping("/{id}/knowledge-graph")
+    public ApiResponse<KnowledgeGraph> knowledgeGraph(@PathVariable String id) {
+        return ApiResponse.ok(knowledgeService.buildKnowledgeGraph(currentTenantId(), id));
     }
 }

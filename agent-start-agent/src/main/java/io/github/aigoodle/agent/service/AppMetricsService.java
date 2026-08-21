@@ -3,6 +3,7 @@ package io.github.aigoodle.agent.service;
 import io.github.aigoodle.memory.*;
 import io.github.aigoodle.agent.entity.AppEntity;
 import io.github.aigoodle.agent.mapper.AppMapper;
+import io.github.aigoodle.common.context.UserContextHolder;
 
 import java.time.Instant;
 import java.util.HashSet;
@@ -21,10 +22,13 @@ public class AppMetricsService {
     }
 
     public AppMetricsView summarize(String appId) {
-        AppEntity app = appMapper.selectById(appId);
-        String tenantId = app == null || app.getTenantId() == null ? "default" : app.getTenantId();
+        return summarize(UserContextHolder.currentTenantId(), appId);
+    }
+
+    public AppMetricsView summarize(String tenantId, String appId) {
+        String tenant = tenantId == null || tenantId.isBlank() ? "default" : tenantId;
         List<MemoryItem> messages = memoryManager.recall(new MemoryQuery(
-                tenantId, appId, null, null, Set.of(MemoryTier.SHORT_TERM), METRICS_SCAN_LIMIT));
+                tenant, appId, null, null, Set.of(MemoryTier.SHORT_TERM), METRICS_SCAN_LIMIT));
         MetricsAccumulator metrics = new MetricsAccumulator();
         messages.forEach(metrics::include);
         return metrics.toView(appId, messages.size());

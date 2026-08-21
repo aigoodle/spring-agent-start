@@ -44,7 +44,7 @@ public final class ObservationAgentRunObserver implements AgentRunObserver {
     }
 
     private static String key(AgentRunObservation signal) {
-        return signal.runId() + ':' + signal.resumed();
+        return safe(signal.tenantId()) + ':' + safe(signal.runId()) + ':' + signal.resumed();
     }
 
     private static String safe(String value) {

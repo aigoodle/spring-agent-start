@@ -1,5 +1,6 @@
 package io.github.aigoodle.knowledge.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.github.aigoodle.knowledge.KnowledgeTestApplication;
 import io.github.aigoodle.knowledge.async.DocumentIngestQueueEntity;
 import io.github.aigoodle.knowledge.entity.DatasetEntity;
@@ -67,7 +68,7 @@ class AsyncIngestionTest {
                 .build());
 
         // addText now enqueues + returns immediately when async is on.
-        KnowledgeDocumentEntity doc = knowledgeService.addText(ds.getId(), "sample.txt",
+        KnowledgeDocumentEntity doc = knowledgeService.addText(ds.getTenantId(), ds.getId(), "sample.txt",
                 "Alpha beta gamma. Delta epsilon zeta. Eta theta iota kappa. "
                         + "Repeat: alpha beta gamma delta epsilon zeta eta theta.");
         assertNotNull(doc.getId());
@@ -75,7 +76,10 @@ class AsyncIngestionTest {
                 "Async submission must return with the doc in PENDING state");
 
         // Sidecar row must be present so the worker has raw_text to consume.
-        DocumentIngestQueueEntity task = queueMapper.selectById(doc.getId());
+        DocumentIngestQueueEntity task = queueMapper.selectOne(
+                new LambdaQueryWrapper<DocumentIngestQueueEntity>()
+                        .eq(DocumentIngestQueueEntity::getTenantId, ds.getTenantId())
+                        .eq(DocumentIngestQueueEntity::getDocumentId, doc.getId()).last("LIMIT 1"));
         assertNotNull(task, "Sidecar queue row must exist right after enqueue");
         assertTrue(task.getRawText() != null && !task.getRawText().isBlank());
 
@@ -84,7 +88,9 @@ class AsyncIngestionTest {
         DocumentStatus terminal = null;
         for (int i = 0; i < 50 && terminal == null; i++) {
             Thread.sleep(100);
-            var reloaded = documentMapper.selectById(doc.getId());
+            var reloaded = documentMapper.selectOne(new LambdaQueryWrapper<KnowledgeDocumentEntity>()
+                    .eq(KnowledgeDocumentEntity::getTenantId, ds.getTenantId())
+                    .eq(KnowledgeDocumentEntity::getId, doc.getId()).last("LIMIT 1"));
             var s = reloaded.getStatus();
             if (s == DocumentStatus.COMPLETED || s == DocumentStatus.FAILED) terminal = s;
         }
@@ -92,10 +98,13 @@ class AsyncIngestionTest {
                 "Async ingestion must reach COMPLETED within the wait window");
 
         // Sidecar row should be gone — the runner deletes it on success.
-        assertEquals(0, queueMapper.selectCount(null).intValue(),
+        assertEquals(0, queueMapper.selectCount(new LambdaQueryWrapper<DocumentIngestQueueEntity>()
+                        .eq(DocumentIngestQueueEntity::getTenantId, ds.getTenantId())).intValue(),
                 "Successful run must delete the sidecar queue row");
 
-        var reloaded = documentMapper.selectById(doc.getId());
+        var reloaded = documentMapper.selectOne(new LambdaQueryWrapper<KnowledgeDocumentEntity>()
+                .eq(KnowledgeDocumentEntity::getTenantId, ds.getTenantId())
+                .eq(KnowledgeDocumentEntity::getId, doc.getId()).last("LIMIT 1"));
         assertTrue(reloaded.getSegmentCount() != null && reloaded.getSegmentCount() > 0,
                 "Document must land with a segment count");
     }

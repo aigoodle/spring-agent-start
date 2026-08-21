@@ -12,6 +12,8 @@ import io.github.aigoodle.tool.mcp.McpClientManager;
 import io.github.aigoodle.tool.mcp.McpProperties;
 import io.github.aigoodle.tool.mcp.McpToolProvider;
 import io.github.aigoodle.tool.execution.DefaultToolExecutionGateway;
+import io.github.aigoodle.tool.execution.CurrentUserToolExecutionContextProvider;
+import io.github.aigoodle.tool.execution.ToolExecutionContextProvider;
 import io.github.aigoodle.tool.execution.ToolExecutionGateway;
 import io.github.aigoodle.tool.execution.ToolExecutionListener;
 import io.github.aigoodle.tool.execution.ToolExecutionPolicy;
@@ -54,6 +56,12 @@ public class GoodleToolsAutoConfiguration {
     }
 
     @Bean
+    @ConditionalOnMissingBean
+    public ToolExecutionContextProvider toolExecutionContextProvider() {
+        return new CurrentUserToolExecutionContextProvider();
+    }
+
+    @Bean
     @ConditionalOnProperty(prefix = "spring-agent.tools", name = "builtin", havingValue = "true", matchIfMissing = true)
     public CalculatorTool calculatorTool() {
         return new CalculatorTool();
@@ -74,9 +82,11 @@ public class GoodleToolsAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public ToolRegistry toolRegistry(ObjectProvider<ToolDefinition> declaredTools,
-                                     ObjectProvider<ToolProvider> toolProviders) {
+                                     ObjectProvider<ToolProvider> toolProviders,
+                                     ToolExecutionGateway executionGateway,
+                                     ToolExecutionContextProvider contextProvider) {
         return new ToolRegistry(declaredTools.orderedStream().toList(),
-                toolProviders.orderedStream().toList());
+                toolProviders.orderedStream().toList(), executionGateway, contextProvider);
     }
 
     /**
@@ -122,6 +132,10 @@ public class GoodleToolsAutoConfiguration {
             if (!(beanFactory instanceof BeanDefinitionRegistry registry)) {
                 return;
             }
+            String[] gatewayNames = beanFactory.getBeanNamesForType(ToolExecutionGateway.class, true, false);
+            String[] contextProviderNames = beanFactory.getBeanNamesForType(
+                    ToolExecutionContextProvider.class, true, false);
+            if (gatewayNames.length == 0 || contextProviderNames.length == 0) return;
             for (String toolBeanName : beanFactory.getBeanNamesForType(ToolDefinition.class, true, false)) {
                 String callbackBeanName = toolBeanName + "ToolCallback";
                 if (registry.containsBeanDefinition(callbackBeanName)) {
@@ -129,6 +143,8 @@ public class GoodleToolsAutoConfiguration {
                 }
                 ConstructorArgumentValues constructorArguments = new ConstructorArgumentValues();
                 constructorArguments.addIndexedArgumentValue(0, new RuntimeBeanReference(toolBeanName));
+                constructorArguments.addIndexedArgumentValue(1, new RuntimeBeanReference(gatewayNames[0]));
+                constructorArguments.addIndexedArgumentValue(2, new RuntimeBeanReference(contextProviderNames[0]));
                 RootBeanDefinition callbackDefinition = new RootBeanDefinition(ToolDefinitionCallback.class);
                 callbackDefinition.setConstructorArgumentValues(constructorArguments);
                 registry.registerBeanDefinition(callbackBeanName, callbackDefinition);

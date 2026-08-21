@@ -27,6 +27,8 @@ final class AppModelConfigFactory {
                                                 AppModelConfigEntity sidecar) {
         sidecar.setModelProvider(request.getModelProvider());
         sidecar.setModelName(request.getModelName());
+        sidecar.setRuntimeType(request.getRuntimeType());
+        sidecar.setRuntimeRef(request.getRuntimeRef());
         sidecar.setConfigs(toJson(request.getModelSettings()));
     }
 
@@ -47,6 +49,8 @@ final class AppModelConfigFactory {
         sidecar.setApprovalToolsJson(toJson(request.getApprovalRequiredTools()));
         sidecar.setDelegateAgentIdsJson(toJson(request.getDelegateAgentIds()));
         sidecar.setMaxIterations(positiveOrNull(request.getMaxIterations()));
+        sidecar.setMaxModelCalls(positiveOrNull(request.getMaxModelCalls()));
+        sidecar.setMaxToolCalls(positiveOrNull(request.getMaxToolCalls()));
         sidecar.setMemoryEnabled(request.isMemoryEnabled());
         sidecar.setMemoryWindow(positiveOrNull(request.getMemoryWindow()));
     }

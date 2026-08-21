@@ -28,6 +28,8 @@ class AgentDefinitionFactoryTest {
         assertThat(definition.getModelName()).isEqualTo("gpt-test");
         assertThat(definition.getStrategy()).isEqualTo(AgentStrategyType.REACT);
         assertThat(definition.getMaxIterations()).isEqualTo(6);
+        assertThat(definition.getMaxModelCalls()).isZero();
+        assertThat(definition.getMaxToolCalls()).isZero();
         assertThat(definition.getMemoryWindow()).isEqualTo(20);
         assertThat(definition.isMemoryEnabled()).isTrue();
         assertThat(definition.getToolNames()).isEmpty();
@@ -43,7 +45,9 @@ class AgentDefinitionFactoryTest {
         modelConfig.setApprovalToolsJson("");
         modelConfig.setDelegateAgentIdsJson(" ");
         modelConfig.setConfigs("");
-        when(modelConfigService.findByAppId("agent-1")).thenReturn(modelConfig);
+        modelConfig.setMaxModelCalls(4);
+        modelConfig.setMaxToolCalls(9);
+        when(modelConfigService.findByAppId("default", "agent-1")).thenReturn(modelConfig);
         AgentDefinitionFactory definitionFactory = new AgentDefinitionFactory(modelConfigService);
 
         AgentDefinition definition = definitionFactory.create(agent("agent-1"));
@@ -53,6 +57,8 @@ class AgentDefinitionFactoryTest {
         assertThat(definition.getApprovalRequiredTools()).isEmpty();
         assertThat(definition.getDelegateAgentIds()).isEmpty();
         assertThat(definition.getModelSettings()).isEmpty();
+        assertThat(definition.getMaxModelCalls()).isEqualTo(4);
+        assertThat(definition.getMaxToolCalls()).isEqualTo(9);
     }
 
     @Test
@@ -60,7 +66,7 @@ class AgentDefinitionFactoryTest {
         AppModelConfigService modelConfigService = mock(AppModelConfigService.class);
         AppModelConfigEntity modelConfig = new AppModelConfigEntity();
         modelConfig.setStrategy("guess-and-hope");
-        when(modelConfigService.findByAppId("agent-1")).thenReturn(modelConfig);
+        when(modelConfigService.findByAppId("default", "agent-1")).thenReturn(modelConfig);
         AgentDefinitionFactory definitionFactory = new AgentDefinitionFactory(modelConfigService);
 
         assertThatThrownBy(() -> definitionFactory.create(agent("agent-1")))
@@ -76,7 +82,7 @@ class AgentDefinitionFactoryTest {
         AppModelConfigEntity modelConfig = new AppModelConfigEntity();
         modelConfig.setModelProvider(" ");
         modelConfig.setModelName("sidecar-model");
-        when(modelConfigService.findByAppId("agent-1")).thenReturn(modelConfig);
+        when(modelConfigService.findByAppId("default", "agent-1")).thenReturn(modelConfig);
         AgentDefinitionFactory definitionFactory = new AgentDefinitionFactory(modelConfigService);
         AppEntity agent = agent("agent-1");
         agent.setModelProvider("catalog-provider");

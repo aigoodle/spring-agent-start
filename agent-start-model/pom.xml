@@ -20,6 +20,10 @@
             <groupId>io.github.aigoodle</groupId>
             <artifactId>agent-start-common</artifactId>
         </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-persistence</artifactId>
+        </dependency>
 
         <!-- Spring AI core abstractions -->
         <dependency>

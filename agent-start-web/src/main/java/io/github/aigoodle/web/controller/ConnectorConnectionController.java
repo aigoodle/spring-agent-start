@@ -11,10 +11,10 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import static io.github.aigoodle.common.context.UserContextHolder.currentTenantId;
 
 /** Tenant-scoped connection management. Secret values are accepted but never returned. */
 @RestController
@@ -28,27 +28,26 @@ public class ConnectorConnectionController {
     }
 
     @GetMapping
-    public ApiResponse<List<ConnectionView>> list(
-            @RequestParam(defaultValue = "default") String tenantId) {
-        return ApiResponse.ok(connections.list(tenantId));
+    public ApiResponse<List<ConnectionView>> list() {
+        return ApiResponse.ok(connections.list(currentTenantId()));
     }
 
     @PostMapping
     public ApiResponse<ConnectionView> save(@RequestBody SaveConnectionRequest request) {
-        return ApiResponse.ok(connections.save(request));
+        SaveConnectionRequest trusted = new SaveConnectionRequest(request.id(), currentTenantId(),
+                request.installationId(), request.name(), request.credentials(), request.config());
+        return ApiResponse.ok(connections.save(trusted));
     }
 
     @DeleteMapping("/{id}")
-    public ApiResponse<Void> delete(@PathVariable String id,
-                                    @RequestParam(defaultValue = "default") String tenantId) {
-        connections.delete(id, tenantId);
+    public ApiResponse<Void> delete(@PathVariable String id) {
+        connections.delete(id, currentTenantId());
         return ApiResponse.ok(null);
     }
 
     @PostMapping("/{id}/test")
     public ApiResponse<ConnectorConnectionService.ConnectionTestResult> test(
-            @PathVariable String id,
-            @RequestParam(defaultValue = "default") String tenantId) {
-        return ApiResponse.ok(connections.test(id, tenantId));
+            @PathVariable String id) {
+        return ApiResponse.ok(connections.test(id, currentTenantId()));
     }
 }

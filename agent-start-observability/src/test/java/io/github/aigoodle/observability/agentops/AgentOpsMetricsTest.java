@@ -74,4 +74,35 @@ class AgentOpsMetricsTest {
         assertThat(stops).hasValue(1);
         assertThat(registry.getCurrentObservation()).isNull();
     }
+
+    @Test
+    void activeObservationsAreIsolatedWhenTwoTenantsReuseARunId() {
+        ObservationRegistry registry = ObservationRegistry.create();
+        AtomicInteger starts = new AtomicInteger();
+        AtomicInteger stops = new AtomicInteger();
+        registry.observationConfig().observationHandler(new ObservationHandler<Observation.Context>() {
+            public void onStart(Observation.Context context) { starts.incrementAndGet(); }
+            public void onStop(Observation.Context context) { stops.incrementAndGet(); }
+            public boolean supportsContext(Observation.Context context) { return true; }
+        });
+        var observer = new ObservationAgentRunObserver(registry);
+        var tenantA = signal("shared-run", "tenant-a");
+        var tenantB = signal("shared-run", "tenant-b");
+
+        observer.onStarted(tenantA);
+        observer.onStarted(tenantB);
+        assertThat(starts).hasValue(2);
+        assertThat(stops).hasValue(0);
+
+        observer.onFinished(tenantA);
+        assertThat(stops).hasValue(1);
+        observer.onFinished(tenantB);
+        assertThat(stops).hasValue(2);
+    }
+
+    private static AgentRunObservation signal(String runId, String tenantId) {
+        return new AgentRunObservation(runId, tenantId, "agent-1", "conversation",
+                AgentStrategyType.REACT, false, AgentRunStatus.COMPLETED,
+                Instant.now(), Duration.ofMillis(4), null);
+    }
 }

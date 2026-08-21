@@ -52,6 +52,12 @@ public class AppModelConfigEntity extends BaseEntity {
      */
     private String modelName;
 
+    /** Explicit execution backend; defaults to NATIVE for existing applications. */
+    private String runtimeType;
+
+    /** Opaque host-owned reference resolved by the selected runtime extension. */
+    private String runtimeRef;
+
     /**
      * Full Dify-shaped model reference blob:
      * {@code {provider, modelId, modelName, mode, completionParams}}.
@@ -126,6 +132,10 @@ public class AppModelConfigEntity extends BaseEntity {
     private String delegateAgentIdsJson;
 
     private Integer maxIterations;
+
+    private Integer maxModelCalls;
+
+    private Integer maxToolCalls;
 
     private Boolean memoryEnabled;
 

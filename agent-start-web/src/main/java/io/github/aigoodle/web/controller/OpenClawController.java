@@ -2,6 +2,7 @@ package io.github.aigoodle.web.controller;
 
 import io.github.aigoodle.connector.openclaw.OpenClawDtos;
 import io.github.aigoodle.connector.openclaw.OpenClawGatewayClient;
+import io.github.aigoodle.connector.channel.ChannelCatalogService;
 import io.github.aigoodle.connector.registry.ConnectorRegistry;
 import io.github.aigoodle.tool.ToolRegistry;
 import io.github.aigoodle.web.common.ApiResponse;
@@ -19,12 +20,15 @@ public class OpenClawController {
     private final OpenClawGatewayClient client;
     private final ConnectorRegistry connectors;
     private final ObjectProvider<ToolRegistry> tools;
+    private final ObjectProvider<ChannelCatalogService> channelCatalog;
 
     public OpenClawController(OpenClawGatewayClient client, ConnectorRegistry connectors,
-                              ObjectProvider<ToolRegistry> tools) {
+                              ObjectProvider<ToolRegistry> tools,
+                              ObjectProvider<ChannelCatalogService> channelCatalog) {
         this.client = client;
         this.connectors = connectors;
         this.tools = tools;
+        this.channelCatalog = channelCatalog;
     }
 
     @GetMapping("/runtime") public ApiResponse<OpenClawDtos.RuntimeInfo> runtime() {
@@ -56,5 +60,7 @@ public class OpenClawController {
         connectors.refresh();
         ToolRegistry registry = tools.getIfAvailable();
         if (registry != null) registry.refresh();
+        ChannelCatalogService catalog = channelCatalog.getIfAvailable();
+        if (catalog != null) catalog.invalidate();
     }
 }

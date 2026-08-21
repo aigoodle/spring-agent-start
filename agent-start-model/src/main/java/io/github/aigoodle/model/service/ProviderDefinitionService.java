@@ -139,6 +139,16 @@ public class ProviderDefinitionService {
     }
 
     @Transactional
+    public void updatePartial(String tenantId, String id, Map<String, Object> patch) {
+        ProviderDefinitionEntity entity = requireOwnedDefinition(tenantId, id);
+        ProviderDefinitionPatch.apply(entity, patch);
+        providerMapper.update(entity,
+                new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<ProviderDefinitionEntity>()
+                        .eq(ProviderDefinitionEntity::getTenantId, entity.getTenantId())
+                        .eq(ProviderDefinitionEntity::getId, entity.getId()));
+    }
+
+    @Transactional
     public void delete(String id) {
         ProviderDefinitionEntity entity = providerMapper.selectById(id);
         if (entity == null) return;
@@ -155,11 +165,33 @@ public class ProviderDefinitionService {
                 .eq(PredefinedModelEntity::getProviderName, entity.getName()));
     }
 
+    @Transactional
+    public void delete(String tenantId, String id) {
+        ProviderDefinitionEntity entity = requireOwnedDefinition(tenantId, id);
+        if ("builtin".equalsIgnoreCase(entity.getSource())) {
+            throw new PlatformException("provider_immutable", "Built-in providers cannot be deleted", null);
+        }
+        providerMapper.delete(new LambdaQueryWrapper<ProviderDefinitionEntity>()
+                .eq(ProviderDefinitionEntity::getTenantId, entity.getTenantId())
+                .eq(ProviderDefinitionEntity::getId, entity.getId()));
+        predefinedMapper.delete(new LambdaQueryWrapper<PredefinedModelEntity>()
+                .eq(PredefinedModelEntity::getTenantId, entity.getTenantId())
+                .eq(PredefinedModelEntity::getProviderName, entity.getName()));
+    }
+
     // ---------------------------------------------------------- predefined models
 
     public List<PredefinedModelEntity> listPredefined(String providerName) {
         return predefinedMapper.selectList(new LambdaQueryWrapper<PredefinedModelEntity>()
                 .eq(PredefinedModelEntity::getProviderName, providerName)
+                .orderByAsc(PredefinedModelEntity::getSortOrder)
+                .orderByAsc(PredefinedModelEntity::getModel));
+    }
+
+    public List<PredefinedModelEntity> listPredefined(String tenantId, String providerName) {
+        return predefinedMapper.selectList(new LambdaQueryWrapper<PredefinedModelEntity>()
+                .eq(PredefinedModelEntity::getProviderName, providerName)
+                .in(PredefinedModelEntity::getTenantId, effectiveTenants(tenantId))
                 .orderByAsc(PredefinedModelEntity::getSortOrder)
                 .orderByAsc(PredefinedModelEntity::getModel));
     }
@@ -170,6 +202,17 @@ public class ProviderDefinitionService {
                 .eq(PredefinedModelEntity::getModel, model)
                 .eq(PredefinedModelEntity::getModelType, type)
                 .last("limit 1"));
+    }
+
+    public PredefinedModelEntity findPredefined(String tenantId, String providerName,
+                                                String model, ModelType type) {
+        return predefinedMapper.selectOne(new LambdaQueryWrapper<PredefinedModelEntity>()
+                .eq(PredefinedModelEntity::getProviderName, providerName)
+                .eq(PredefinedModelEntity::getModel, model)
+                .eq(PredefinedModelEntity::getModelType, type)
+                .in(PredefinedModelEntity::getTenantId, effectiveTenants(tenantId))
+                .orderByDesc(PredefinedModelEntity::getTenantId)
+                .last("LIMIT 1"));
     }
 
     /**
@@ -185,8 +228,13 @@ public class ProviderDefinitionService {
         if (next.getTenantId() == null || next.getTenantId().isBlank()) {
             next.setTenantId(SYSTEM_TENANT);
         }
-        PredefinedModelEntity existing = findPredefined(next.getProviderName(),
-                next.getModel(), next.getModelType());
+        PredefinedModelEntity existing = predefinedMapper.selectOne(
+                new LambdaQueryWrapper<PredefinedModelEntity>()
+                        .eq(PredefinedModelEntity::getTenantId, next.getTenantId())
+                        .eq(PredefinedModelEntity::getProviderName, next.getProviderName())
+                        .eq(PredefinedModelEntity::getModel, next.getModel())
+                        .eq(PredefinedModelEntity::getModelType, next.getModelType())
+                        .last("LIMIT 1"));
         if (existing == null) {
             if (next.getSortOrder() == null) next.setSortOrder(100);
             predefinedMapper.insert(next);
@@ -205,6 +253,31 @@ public class ProviderDefinitionService {
     @Transactional
     public void deletePredefined(String id) {
         predefinedMapper.deleteById(id);
+    }
+
+    @Transactional
+    public void deletePredefined(String tenantId, String id) {
+        PredefinedModelEntity entity = predefinedMapper.selectOne(
+                new LambdaQueryWrapper<PredefinedModelEntity>()
+                        .eq(PredefinedModelEntity::getTenantId, normalizedTenant(tenantId))
+                        .eq(PredefinedModelEntity::getId, id).last("LIMIT 1"));
+        if (entity == null) throw new PlatformException("predefined_model_not_found", "Model not found", null);
+        predefinedMapper.delete(new LambdaQueryWrapper<PredefinedModelEntity>()
+                .eq(PredefinedModelEntity::getTenantId, entity.getTenantId())
+                .eq(PredefinedModelEntity::getId, entity.getId()));
+    }
+
+    private ProviderDefinitionEntity requireOwnedDefinition(String tenantId, String id) {
+        ProviderDefinitionEntity entity = providerMapper.selectOne(
+                new LambdaQueryWrapper<ProviderDefinitionEntity>()
+                        .eq(ProviderDefinitionEntity::getTenantId, normalizedTenant(tenantId))
+                        .eq(ProviderDefinitionEntity::getId, id).last("LIMIT 1"));
+        if (entity == null) throw new PlatformException("provider_not_found", "Provider not found", null);
+        return entity;
+    }
+
+    private static String normalizedTenant(String tenantId) {
+        return tenantId == null || tenantId.isBlank() ? "default" : tenantId;
     }
 
     /**

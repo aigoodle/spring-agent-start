@@ -58,7 +58,7 @@ class NodeModelReferenceTest {
         when(modelService.findOrMaterialize(
                 "tenant-a", "openai", "gpt-4o", ModelType.LLM))
                 .thenReturn(materializedModel);
-        when(modelService.getChatClient("materialized-id")).thenReturn(expectedClient);
+        when(modelService.getChatClient("tenant-a", "materialized-id")).thenReturn(expectedClient);
         ExecutionContext context = new ExecutionContext();
         context.setTenantId("tenant-a");
         NodeDef node = NodeDef.of("llm", NodeType.LLM)

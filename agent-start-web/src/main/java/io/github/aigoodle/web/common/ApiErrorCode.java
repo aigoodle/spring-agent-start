@@ -19,6 +19,10 @@ public enum ApiErrorCode {
     FORBIDDEN("forbidden", HttpStatus.FORBIDDEN, "Not allowed to access this resource"),
     NOT_FOUND("not_found", HttpStatus.NOT_FOUND, "Resource does not exist"),
     CONFLICT("conflict", HttpStatus.CONFLICT, "Resource state conflict"),
+    RUN_CONCURRENT_UPDATE("run_concurrent_update", HttpStatus.CONFLICT, "Agent run was modified concurrently"),
+    INVALID_RUN_TRANSITION("invalid_run_transition", HttpStatus.CONFLICT, "Agent run state transition is invalid"),
+    AGENT_RUN_NOT_WAITING("agent_run_not_waiting", HttpStatus.CONFLICT, "Agent run is no longer waiting for approval"),
+    AGENT_RUN_NOT_PAUSED("agent_run_not_paused", HttpStatus.CONFLICT, "Agent run is no longer paused"),
     RATE_LIMITED("rate_limited", HttpStatus.TOO_MANY_REQUESTS, "Too many requests"),
 
     // ------- Business-domain errors (4xx-adjacent)

@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+import static io.github.aigoodle.common.context.UserContextHolder.currentTenantId;
+
 /**
  * Manage the knowledge bases attached to an app. Powers the "知识库" tab in
  * the app design drawer: list currently attached datasets, add one, remove
@@ -39,26 +41,29 @@ public class AppDatasetController {
 
     @GetMapping
     public ApiResponse<List<AttachedDatasetView>> list(@PathVariable String appId) {
-        return ApiResponse.ok(appDatasetService.list(appId));
+        return ApiResponse.ok(appDatasetService.list(currentTenantId(), appId));
     }
 
     /** Additive — merges the supplied ids with the existing attached set. */
     @PostMapping
     public ApiResponse<List<AttachedDatasetView>> attach(@PathVariable String appId,
                                                          @RequestBody AttachDatasetsRequest request) {
-        return ApiResponse.ok(appDatasetService.attach(appId, request.getDatasetIds()));
+        return ApiResponse.ok(appDatasetService.attach(
+                currentTenantId(), appId, request.getDatasetIds()));
     }
 
     /** Replace the whole attached list — used by the "save" button on the settings panel. */
     @PutMapping
     public ApiResponse<List<AttachedDatasetView>> replace(@PathVariable String appId,
                                                           @RequestBody AttachDatasetsRequest request) {
-        return ApiResponse.ok(appDatasetService.replace(appId, request.getDatasetIds()));
+        return ApiResponse.ok(appDatasetService.replace(
+                currentTenantId(), appId, request.getDatasetIds()));
     }
 
     @DeleteMapping("/{datasetId}")
     public ApiResponse<List<AttachedDatasetView>> detach(@PathVariable String appId,
                                                          @PathVariable String datasetId) {
-        return ApiResponse.ok(appDatasetService.detach(appId, datasetId));
+        return ApiResponse.ok(appDatasetService.detach(currentTenantId(), appId, datasetId));
     }
+
 }

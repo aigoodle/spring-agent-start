@@ -2,6 +2,7 @@ package io.github.aigoodle.web.controller;
 
 import io.github.aigoodle.agent.entity.AppAnnotationSettingEntity;
 import io.github.aigoodle.agent.service.AppAnnotationSettingService;
+import io.github.aigoodle.agent.service.AppService;
 import io.github.aigoodle.web.common.ApiResponse;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -14,6 +15,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 
+import static io.github.aigoodle.common.context.UserContextHolder.currentTenantId;
+
 /** REST endpoints for an application's annotation-retrieval settings. */
 @RestController
 @ConditionalOnBean(AppAnnotationSettingService.class)
@@ -21,28 +24,34 @@ import java.util.Map;
 public class AppAnnotationSettingController {
 
     private final AppAnnotationSettingService settingService;
+    private final AppService apps;
 
-    public AppAnnotationSettingController(AppAnnotationSettingService settingService) {
-        this.settingService = settingService;
+    public AppAnnotationSettingController(AppAnnotationSettingService settingService, AppService apps) {
+        this.settingService = settingService; this.apps = apps;
     }
 
     @GetMapping
     public ApiResponse<AppAnnotationSettingEntity> get(@PathVariable String appId) {
-        return ApiResponse.ok(settingService.getByApp(appId));
+        requireOwned(appId);
+        return ApiResponse.ok(settingService.getByApp(currentTenantId(), appId));
     }
 
     @PutMapping
     public ApiResponse<AppAnnotationSettingEntity> save(
             @PathVariable String appId,
             @RequestBody AppAnnotationSettingEntity updates) {
-        return ApiResponse.ok(settingService.save(appId, updates));
+        requireOwned(appId);
+        return ApiResponse.ok(settingService.save(currentTenantId(), appId, updates));
     }
 
     @PostMapping("/status")
     public ApiResponse<AppAnnotationSettingEntity> setStatus(
             @PathVariable String appId,
             @RequestBody Map<String, Boolean> status) {
+        requireOwned(appId);
         boolean enabled = Boolean.TRUE.equals(status.get("enabled"));
-        return ApiResponse.ok(settingService.setEnabled(appId, enabled));
+        return ApiResponse.ok(settingService.setEnabled(currentTenantId(), appId, enabled));
     }
+
+    private void requireOwned(String appId) { apps.require(currentTenantId(), appId); }
 }

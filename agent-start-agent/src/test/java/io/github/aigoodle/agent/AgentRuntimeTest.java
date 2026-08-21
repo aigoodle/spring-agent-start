@@ -5,6 +5,7 @@ import io.github.aigoodle.agent.api.AgentResponse;
 import io.github.aigoodle.agent.api.AgentStrategyType;
 import io.github.aigoodle.agent.entity.AppEntity;
 import io.github.aigoodle.agent.runtime.AgentRunStatus;
+import io.github.aigoodle.agent.mapper.AgentRunMapper;
 import io.github.aigoodle.memory.MemoryManager;
 import io.github.aigoodle.agent.service.AgentService;
 import io.github.aigoodle.agent.service.SaveAppRequest;
@@ -15,6 +16,10 @@ import io.github.aigoodle.model.service.ModelRegistration;
 import io.github.aigoodle.model.service.ModelService;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
+import io.github.aigoodle.common.context.CurrentUser;
+import io.github.aigoodle.common.context.UserContextHolder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -32,12 +37,24 @@ import static org.junit.jupiter.api.Assertions.*;
 @SpringBootTest(classes = AgentTestApplication.class)
 class AgentRuntimeTest {
 
+    @BeforeEach
+    void enterTenantContext() {
+        UserContextHolder.set(CurrentUser.builder().userId("agent-test").tenantId("ag").build());
+    }
+
+    @AfterEach
+    void clearTenantContext() {
+        UserContextHolder.clear();
+    }
+
     @Autowired
     private ModelService modelService;
     @Autowired
     private AgentService agentService;
     @Autowired
     private MemoryManager memoryManager;
+    @Autowired
+    private AgentRunMapper agentRunMapper;
 
     @Value("${ollama.base-url}")
     private String ollamaBaseUrl;
@@ -79,9 +96,39 @@ class AgentRuntimeTest {
         assertEquals(AgentRunStatus.COMPLETED, persistedRun.status());
         assertEquals(agent.getId(), persistedRun.agentId());
         assertNotNull(persistedRun.definitionJson());
-        assertEquals(List.of("RUN_CREATED", "RUN_RUNNING", "TOOL_SUCCEEDED", "RUN_COMPLETED"),
+        assertEquals(List.of("RUN_CREATED", "RUN_RUNNING", "STEP_ACTION", "TOOL_SUCCEEDED",
+                        "STEP_OBSERVATION", "STEP_FINAL", "RUN_COMPLETED"),
                 agentService.runEvents(r.getRunId(), 0, 10).stream()
                         .map(event -> event.type()).toList());
+
+        UserContextHolder.set(CurrentUser.builder().userId("foreign-user").tenantId("tenant-b").build());
+        assertTrue(agentService.findRun(r.getRunId()).isEmpty());
+        assertTrue(agentService.runEvents(r.getRunId(), 0, 10).isEmpty());
+        Throwable unsafeLookup = assertThrows(RuntimeException.class,
+                () -> agentRunMapper.selectById(r.getRunId()));
+        while (unsafeLookup.getCause() != null) unsafeLookup = unsafeLookup.getCause();
+        assertInstanceOf(SecurityException.class, unsafeLookup);
+    }
+
+    @Test
+    void persistenceGuardRejectsCrossTenantAgentAndSidecarAccess() {
+        AppEntity owned = agentService.create(SaveAppRequest.builder()
+                .tenantId("ag").name("guarded-agent").mode("agent")
+                .modelProvider("scripted").modelName(scriptedModel("guarded-agent-model"))
+                .build());
+
+        assertTenantMismatch(() -> agentService.require("tenant-b", owned.getId()));
+        assertTenantMismatch(() -> agentService.getModelConfig("tenant-b", owned.getId()));
+        assertTenantMismatch(() -> agentService.create(SaveAppRequest.builder()
+                .tenantId("tenant-b").name("forged-agent").mode("agent").build()));
+    }
+
+    private static void assertTenantMismatch(org.junit.jupiter.api.function.Executable executable) {
+        Throwable failure = assertThrows(RuntimeException.class, executable);
+        Throwable root = failure;
+        while (root.getCause() != null) root = root.getCause();
+        assertInstanceOf(SecurityException.class, root);
+        assertTrue(root.getMessage().contains("authenticated tenant"));
     }
 
     @Test

@@ -3,6 +3,7 @@ package io.github.aigoodle.model.crypto;
 import io.github.aigoodle.common.crypto.AesGcmTextEncryptor;
 import io.github.aigoodle.common.crypto.TextEncryptor;
 import io.github.aigoodle.model.service.CredentialCodec;
+import io.github.aigoodle.model.service.DerivedTenantCredentialEncryptor;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
@@ -54,5 +55,23 @@ class EncryptionTest {
         Map<String, Object> masked = codec.obfuscate(Map.of("apiKey", "sk-abcdef0123"), java.util.List.of("apiKey"));
         assertTrue(masked.get("apiKey").toString().contains("******"));
         assertFalse(masked.get("apiKey").toString().equals("sk-abcdef0123"));
+    }
+
+    @Test
+    void tenantCredentialCannotBeDecryptedByAnotherTenant() {
+        CredentialCodec codec = new CredentialCodec(encryptor,
+                new DerivedTenantCredentialEncryptor("unit-test-root"));
+        String encoded = codec.encode("tenant-a", Map.of("apiKey", "sk-a"));
+        assertTrue(encoded.startsWith("tenant:v1:"));
+        assertEquals("sk-a", codec.decode("tenant-a", encoded).get("apiKey"));
+        assertThrows(RuntimeException.class, () -> codec.decode("tenant-b", encoded));
+    }
+
+    @Test
+    void tenantCodecCanStillReadLegacyCiphertext() {
+        CredentialCodec codec = new CredentialCodec(encryptor,
+                new DerivedTenantCredentialEncryptor("unit-test-root"));
+        String legacy = encryptor.encrypt(io.github.aigoodle.common.util.JsonUtils.toJson(Map.of("apiKey", "old")));
+        assertEquals("old", codec.decode("tenant-a", legacy).get("apiKey"));
     }
 }

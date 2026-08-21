@@ -23,6 +23,8 @@ class AppModelConfigFactoryTest {
                 .datasetIds(List.of("dataset-1"))
                 .modelSettings(Map.of("temperature", 0.2))
                 .maxIterations(8)
+                .maxModelCalls(12)
+                .maxToolCalls(20)
                 .memoryWindow(30)
                 .memoryEnabled(true)
                 .build();
@@ -37,6 +39,8 @@ class AppModelConfigFactoryTest {
         assertThat(configuration.getDatasetIdsJson()).isEqualTo("[\"dataset-1\"]");
         assertThat(configuration.getConfigs()).contains("\"temperature\":0.2");
         assertThat(configuration.getMaxIterations()).isEqualTo(8);
+        assertThat(configuration.getMaxModelCalls()).isEqualTo(12);
+        assertThat(configuration.getMaxToolCalls()).isEqualTo(20);
         assertThat(configuration.getMemoryWindow()).isEqualTo(30);
     }
 
@@ -46,6 +50,8 @@ class AppModelConfigFactoryTest {
                 .instructions("Legacy instructions")
                 .prePrompt(" ")
                 .maxIterations(-1)
+                .maxModelCalls(0)
+                .maxToolCalls(-1)
                 .memoryWindow(0)
                 .build();
 
@@ -53,6 +59,8 @@ class AppModelConfigFactoryTest {
 
         assertThat(configuration.getPrePrompt()).isEqualTo("Legacy instructions");
         assertThat(configuration.getMaxIterations()).isNull();
+        assertThat(configuration.getMaxModelCalls()).isNull();
+        assertThat(configuration.getMaxToolCalls()).isNull();
         assertThat(configuration.getMemoryWindow()).isNull();
     }
 

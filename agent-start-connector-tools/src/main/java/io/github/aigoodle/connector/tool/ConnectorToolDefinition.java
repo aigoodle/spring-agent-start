@@ -49,6 +49,7 @@ public final class ConnectorToolDefinition implements ContextualToolDefinition, 
     @Override
     public Object execute(Map<String, Object> arguments, ToolExecutionContext toolContext) {
         Map<String, Object> attributes = new LinkedHashMap<>();
+        attributes.putAll(toolContext.metadata());
         if (toolContext.conversationId() != null) {
             attributes.put("conversationId", toolContext.conversationId());
         }

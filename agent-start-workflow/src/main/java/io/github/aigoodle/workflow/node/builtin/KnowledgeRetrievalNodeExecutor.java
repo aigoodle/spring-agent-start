@@ -33,7 +33,7 @@ public class KnowledgeRetrievalNodeExecutor implements NodeExecutor {
         }
 
         List<RetrievedSegment> segments = knowledgeService.retrieve(
-                configuration.datasetIds(), configuration.retrievalRequest());
+                context.getTenantId(), configuration.datasetIds(), configuration.retrievalRequest());
         return KnowledgeRetrievalResultMapper.map(segments);
     }
 }

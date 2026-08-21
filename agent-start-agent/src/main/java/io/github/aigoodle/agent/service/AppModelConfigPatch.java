@@ -14,6 +14,14 @@ final class AppModelConfigPatch {
     static void apply(AppModelConfigEntity target, AppModelConfigEntity patch) {
         copyIfPresent(patch::getModelProvider, target::setModelProvider);
         copyIfPresent(patch::getModelName, target::setModelName);
+        if (patch.getRuntimeType() != null) {
+            target.setRuntimeType(patch.getRuntimeType());
+            // runtimeRef belongs to runtimeType as one atomic selection; switching back
+            // to NATIVE must clear a previously configured external reference.
+            target.setRuntimeRef(patch.getRuntimeRef());
+        } else {
+            copyIfPresent(patch::getRuntimeRef, target::setRuntimeRef);
+        }
         copyIfPresent(patch::getModelJson, target::setModelJson);
         copyIfPresent(patch::getConfigs, target::setConfigs);
         copyIfPresent(patch::getPrePrompt, target::setPrePrompt);
@@ -33,6 +41,8 @@ final class AppModelConfigPatch {
         copyIfPresent(patch::getApprovalToolsJson, target::setApprovalToolsJson);
         copyIfPresent(patch::getDelegateAgentIdsJson, target::setDelegateAgentIdsJson);
         copyIfPresent(patch::getMaxIterations, target::setMaxIterations);
+        copyIfPresent(patch::getMaxModelCalls, target::setMaxModelCalls);
+        copyIfPresent(patch::getMaxToolCalls, target::setMaxToolCalls);
         copyIfPresent(patch::getMemoryEnabled, target::setMemoryEnabled);
         copyIfPresent(patch::getMemoryWindow, target::setMemoryWindow);
         copyIfPresent(patch::getDatasetIdsJson, target::setDatasetIdsJson);

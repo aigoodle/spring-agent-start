@@ -3,7 +3,8 @@ package io.github.aigoodle.agent.service;
 import io.github.aigoodle.agent.entity.AppApiTokenEntity;
 import io.github.aigoodle.agent.mapper.AppApiTokenMapper;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
+
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -11,34 +12,56 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class AppApiTokenServiceTest {
 
     @Test
     void createsOpaqueTokenWithNormalizedDefaults() {
         AppApiTokenMapper tokenMapper = mock(AppApiTokenMapper.class);
+        AtomicReference<String> persistedToken = new AtomicReference<>();
+        when(tokenMapper.insert(any(AppApiTokenEntity.class))).thenAnswer(invocation -> {
+            persistedToken.set(invocation.<AppApiTokenEntity>getArgument(0).getToken());
+            return 1;
+        });
         AppApiTokenService tokenService = new AppApiTokenService(tokenMapper);
 
         AppApiTokenEntity apiToken = tokenService.create("app-1", " ", null, "");
 
-        ArgumentCaptor<AppApiTokenEntity> insertedToken =
-                ArgumentCaptor.forClass(AppApiTokenEntity.class);
-        verify(tokenMapper).insert(insertedToken.capture());
-        assertThat(apiToken).isSameAs(insertedToken.getValue());
         assertThat(apiToken.getTenantId()).isEqualTo("default");
         assertThat(apiToken.getName()).isEqualTo("default");
         assertThat(apiToken.getType()).isEqualTo("app");
         assertThat(apiToken.getToken()).startsWith("app-").doesNotContain("=");
+        assertThat(persistedToken.get())
+                .startsWith("sha256$")
+                .contains("$" + AppApiTokenService.tokenHint(apiToken.getToken()) + "$")
+                .doesNotContain(apiToken.getToken());
     }
 
     @Test
     void lastUsedUpdateNeverDisruptsRequestPath() {
         AppApiTokenMapper tokenMapper = mock(AppApiTokenMapper.class);
         doThrow(new IllegalStateException("database unavailable"))
-                .when(tokenMapper).updateById(any(AppApiTokenEntity.class));
+                .when(tokenMapper).update(any(AppApiTokenEntity.class), any());
         AppApiTokenService tokenService = new AppApiTokenService(tokenMapper);
 
         assertThatCode(() -> tokenService.touchLastUsed("token-1"))
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    void tenantScopedRenameAndDeleteCannotTouchAnUnknownForeignToken() {
+        AppApiTokenMapper mapper = mock(AppApiTokenMapper.class);
+        when(mapper.selectOne(any())).thenReturn(null);
+        AppApiTokenService service = new AppApiTokenService(mapper);
+
+        assertThatThrownBy(() -> service.rename("tenant-b", "app-1", "foreign-token", "stolen"))
+                .hasMessageContaining("API token not found");
+        assertThatThrownBy(() -> service.delete("tenant-b", "app-1", "foreign-token"))
+                .hasMessageContaining("API token not found");
+        verify(mapper, never()).update(any(), any());
+        verify(mapper, never()).delete(any());
     }
 }

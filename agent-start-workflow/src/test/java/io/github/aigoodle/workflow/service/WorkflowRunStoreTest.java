@@ -27,10 +27,11 @@ class WorkflowRunStoreTest {
                 .succeed(Map.of("answer", "Done"));
 
         runStore.recordStoredRun(
-                "workflow-1", "conversation-1", Map.of("question", "Why?"), result);
+                "tenant-a", "workflow-1", "conversation-1", Map.of("question", "Why?"), result);
 
         WorkflowRunEntity entity = insertedEntity();
         assertThat(entity.getId()).isEqualTo("run-1");
+        assertThat(entity.getTenantId()).isEqualTo("tenant-a");
         assertThat(entity.getWorkflowId()).isEqualTo("workflow-1");
         assertThat(entity.getConversationId()).isEqualTo("conversation-1");
         assertThat(entity.getStatus()).isEqualTo("SUCCESS");
@@ -43,10 +44,11 @@ class WorkflowRunStoreTest {
         WorkflowRunResult result = WorkflowRunResult.forRun("run-2", new ArrayList<>())
                 .fail("Node failed", Map.of());
 
-        runStore.recordAdHocRun(null, Map.of(), result);
+        runStore.recordAdHocRun("tenant-a", null, Map.of(), result);
 
         WorkflowRunEntity entity = insertedEntity();
         assertThat(entity.getWorkflowId()).isNull();
+        assertThat(entity.getTenantId()).isEqualTo("tenant-a");
         assertThat(entity.getStatus()).isEqualTo("FAILED");
         assertThat(entity.getError()).isEqualTo("Node failed");
     }
@@ -58,7 +60,7 @@ class WorkflowRunStoreTest {
         WorkflowRunResult result = WorkflowRunResult.forRun("run-3", new ArrayList<>())
                 .succeed(Map.of());
 
-        assertThatCode(() -> runStore.recordAdHocRun(null, Map.of(), result))
+        assertThatCode(() -> runStore.recordAdHocRun("tenant-a", null, Map.of(), result))
                 .doesNotThrowAnyException();
     }
 

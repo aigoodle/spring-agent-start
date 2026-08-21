@@ -41,6 +41,10 @@ public class SaveAppRequest {
     private String modelName;
     /** Provider key that owns {@link #modelName} (e.g. {@code qwen}). */
     private String modelProvider;
+    /** NATIVE or a registered host-provided runtime type. */
+    private String runtimeType;
+    /** Opaque host-owned Agent/Graph reference used by the selected runtime. */
+    private String runtimeRef;
     @Builder.Default
     private AgentStrategyType strategy = AgentStrategyType.REACT;
     @Builder.Default
@@ -51,6 +55,10 @@ public class SaveAppRequest {
     private List<String> delegateAgentIds = List.of();
     @Builder.Default
     private int maxIterations = 6;
+    /** Per-run model request budget; zero disables the additional budget. */
+    private int maxModelCalls;
+    /** Per-run tool execution budget; zero disables the additional budget. */
+    private int maxToolCalls;
     @Builder.Default
     private boolean memoryEnabled = true;
     @Builder.Default

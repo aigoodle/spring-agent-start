@@ -24,9 +24,9 @@ public final class AppToolViewMapper {
         this.toolRegistryProvider = toolRegistryProvider;
     }
 
-    public List<Map<String, Object>> toolsOf(String agentId) {
-        appService.require(agentId);
-        AppModelConfigEntity modelConfig = appService.getModelConfig(agentId);
+    public List<Map<String, Object>> toolsOf(String tenantId, String agentId) {
+        appService.require(tenantId, agentId);
+        AppModelConfigEntity modelConfig = appService.getModelConfig(tenantId, agentId);
         List<String> configuredToolNames = configuredToolNames(modelConfig);
         ToolRegistry toolRegistry = toolRegistryProvider.getIfAvailable();
         if (configuredToolNames.isEmpty() || toolRegistry == null) {

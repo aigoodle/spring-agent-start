@@ -2,6 +2,7 @@ package io.github.aigoodle.knowledge.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.github.aigoodle.common.exception.PlatformException;
+import io.github.aigoodle.common.context.UserContextHolder;
 import io.github.aigoodle.common.util.JsonUtils;
 import io.github.aigoodle.knowledge.config.ProcessRule;
 import io.github.aigoodle.knowledge.config.RetrievalConfig;
@@ -30,25 +31,45 @@ public class DatasetService {
     }
 
     public DatasetEntity get(String id) {
-        return datasetMapper.selectById(id);
+        return get(UserContextHolder.currentTenantId(), id);
+    }
+
+    public DatasetEntity get(String tenantId, String id) {
+        return datasetMapper.selectOne(new LambdaQueryWrapper<DatasetEntity>()
+                .eq(DatasetEntity::getTenantId, effectiveTenant(tenantId))
+                .eq(DatasetEntity::getId, id).last("LIMIT 1"));
     }
 
     public DatasetEntity require(String id) {
-        DatasetEntity dataset = datasetMapper.selectById(id);
+        return require(UserContextHolder.currentTenantId(), id);
+    }
+
+    public DatasetEntity require(String tenantId, String id) {
+        DatasetEntity dataset = datasetMapper.selectOne(new LambdaQueryWrapper<DatasetEntity>()
+                .eq(DatasetEntity::getTenantId, effectiveTenant(tenantId))
+                .eq(DatasetEntity::getId, id).last("LIMIT 1"));
         if (dataset == null) {
-            throw new PlatformException("dataset_not_found", "Dataset not found: " + id, null);
+            throw new PlatformException("dataset_not_found", "Dataset not found", null);
         }
         return dataset;
     }
 
     public List<DatasetEntity> list(String tenantId) {
         return datasetMapper.selectList(new LambdaQueryWrapper<DatasetEntity>()
-                .eq(DatasetEntity::getTenantId, tenantId == null ? "default" : tenantId));
+                .eq(DatasetEntity::getTenantId, effectiveTenant(tenantId)));
     }
 
     @Transactional
     public void delete(String id) {
-        datasetMapper.deleteById(id);
+        delete(UserContextHolder.currentTenantId(), id);
+    }
+
+    @Transactional
+    public void delete(String tenantId, String id) {
+        require(tenantId, id);
+        datasetMapper.delete(new LambdaQueryWrapper<DatasetEntity>()
+                .eq(DatasetEntity::getTenantId, effectiveTenant(tenantId))
+                .eq(DatasetEntity::getId, id));
     }
 
     /**
@@ -58,9 +79,14 @@ public class DatasetService {
      */
     @Transactional
     public DatasetEntity update(String id, UpdateDatasetRequest patch) {
-        DatasetEntity dataset = require(id);
+        return update(UserContextHolder.currentTenantId(), id, patch);
+    }
+
+    @Transactional
+    public DatasetEntity update(String tenantId, String id, UpdateDatasetRequest patch) {
+        DatasetEntity dataset = require(tenantId, id);
         DatasetPatchApplicator.apply(dataset, patch);
-        datasetMapper.updateById(dataset);
+        updateOwned(dataset);
         return dataset;
     }
 
@@ -80,7 +106,7 @@ public class DatasetService {
                 0, valueOrZero(dataset.getDocumentCount()) + change.documents()));
         dataset.setSegmentCount(Math.max(
                 0, valueOrZero(dataset.getSegmentCount()) + change.segments()));
-        datasetMapper.updateById(dataset);
+        updateOwned(dataset);
     }
 
     /** @deprecated Use {@link #applyCountChange(DatasetEntity, DatasetCountChange)}. */
@@ -91,5 +117,16 @@ public class DatasetService {
 
     private static int valueOrZero(Integer value) {
         return value == null ? 0 : value;
+    }
+
+    private void updateOwned(DatasetEntity dataset) {
+        datasetMapper.update(dataset,
+                new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<DatasetEntity>()
+                        .eq(DatasetEntity::getTenantId, effectiveTenant(dataset.getTenantId()))
+                        .eq(DatasetEntity::getId, dataset.getId()));
+    }
+
+    private static String effectiveTenant(String tenantId) {
+        return tenantId == null || tenantId.isBlank() ? "default" : tenantId;
     }
 }

@@ -8,7 +8,6 @@ import java.util.List;
 @Data
 public class PromptTemplateRequest {
 
-    private String tenantId;
     private String name;
     private String category;
     private String description;

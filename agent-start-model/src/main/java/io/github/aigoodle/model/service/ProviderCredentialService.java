@@ -1,6 +1,8 @@
 package io.github.aigoodle.model.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import io.github.aigoodle.common.context.UserContextHolder;
 import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.model.entity.ProviderCredentialEntity;
 import io.github.aigoodle.model.mapper.ProviderCredentialMapper;
@@ -33,7 +35,7 @@ public class ProviderCredentialService {
         credential.setTenantId(defaultTenant(registration.tenantId()));
         credential.setProviderName(registration.providerName());
         credential.setCredentialName(defaultCredentialName(registration));
-        credential.setEncryptedConfig(credentialCodec.encode(registration.credentials()));
+        credential.setEncryptedConfig(credentialCodec.encode(credential.getTenantId(), registration.credentials()));
         credential.setEnabled(Boolean.TRUE);
         credentialMapper.insert(credential);
         return credential;
@@ -50,17 +52,32 @@ public class ProviderCredentialService {
 
     @Transactional
     public void update(String id, Map<String, Object> credentials) {
-        ProviderCredentialEntity credential = require(id);
-        credential.setEncryptedConfig(credentialCodec.encode(credentials));
-        credentialMapper.updateById(credential);
+        update(UserContextHolder.currentTenantId(), id, credentials);
+    }
+
+    @Transactional
+    public void update(String tenantId, String id, Map<String, Object> credentials) {
+        ProviderCredentialEntity credential = require(tenantId, id);
+        credential.setEncryptedConfig(credentialCodec.encode(credential.getTenantId(), credentials));
+        updateOwned(credential);
     }
 
     public ProviderCredentialEntity get(String id) {
-        return credentialMapper.selectById(id);
+        return get(UserContextHolder.currentTenantId(), id);
+    }
+
+    public ProviderCredentialEntity get(String tenantId, String id) {
+        return credentialMapper.selectOne(new LambdaQueryWrapper<ProviderCredentialEntity>()
+                .eq(ProviderCredentialEntity::getTenantId, defaultTenant(tenantId))
+                .eq(ProviderCredentialEntity::getId, id).last("limit 1"));
     }
 
     public ProviderCredentialEntity require(String id) {
-        ProviderCredentialEntity credential = credentialMapper.selectById(id);
+        return require(UserContextHolder.currentTenantId(), id);
+    }
+
+    public ProviderCredentialEntity require(String tenantId, String id) {
+        ProviderCredentialEntity credential = get(tenantId, id);
         if (credential == null) {
             throw new PlatformException("credential_not_found", "Provider credential not found: " + id, null);
         }
@@ -68,7 +85,12 @@ public class ProviderCredentialService {
     }
 
     public Map<String, Object> decodeCredentials(String id) {
-        return credentialCodec.decode(require(id).getEncryptedConfig());
+        ProviderCredentialEntity credential = require(id);
+        return credentialCodec.decode(credential.getTenantId(), credential.getEncryptedConfig());
+    }
+
+    public Map<String, Object> decodeCredentials(String tenantId, String id) {
+        return credentialCodec.decode(defaultTenant(tenantId), require(tenantId, id).getEncryptedConfig());
     }
 
     public List<ProviderCredentialEntity> listByProvider(String tenantId, String providerName) {
@@ -80,7 +102,14 @@ public class ProviderCredentialService {
 
     @Transactional
     public void delete(String id) {
-        credentialMapper.deleteById(id);
+        delete(UserContextHolder.currentTenantId(), id);
+    }
+
+    @Transactional
+    public void delete(String tenantId, String id) {
+        credentialMapper.delete(new LambdaQueryWrapper<ProviderCredentialEntity>()
+                .eq(ProviderCredentialEntity::getTenantId, defaultTenant(tenantId))
+                .eq(ProviderCredentialEntity::getId, id));
     }
 
     // ------------------------------------------------------- primary credential
@@ -115,9 +144,9 @@ public class ProviderCredentialService {
                     CredentialPatchMerger.merge(Map.of(), patch)));
         }
         Map<String, Object> mergedCredentials = CredentialPatchMerger.merge(
-                credentialCodec.decode(existing.getEncryptedConfig()), patch);
-        existing.setEncryptedConfig(credentialCodec.encode(mergedCredentials));
-        credentialMapper.updateById(existing);
+                credentialCodec.decode(existing.getTenantId(), existing.getEncryptedConfig()), patch);
+        existing.setEncryptedConfig(credentialCodec.encode(existing.getTenantId(), mergedCredentials));
+        updateOwned(existing);
         return existing;
     }
 
@@ -125,7 +154,9 @@ public class ProviderCredentialService {
     public void deletePrimary(String tenantId, String providerName) {
         ProviderCredentialEntity existing = findPrimary(tenantId, providerName);
         if (existing != null) {
-            credentialMapper.deleteById(existing.getId());
+            credentialMapper.delete(new LambdaQueryWrapper<ProviderCredentialEntity>()
+                    .eq(ProviderCredentialEntity::getTenantId, defaultTenant(tenantId))
+                    .eq(ProviderCredentialEntity::getId, existing.getId()));
         }
     }
 
@@ -139,7 +170,7 @@ public class ProviderCredentialService {
             return new HashMap<>();
         }
         return credentialCodec.obfuscate(
-                credentialCodec.decode(entity.getEncryptedConfig()), secretKeys);
+                credentialCodec.decode(entity.getTenantId(), entity.getEncryptedConfig()), secretKeys);
     }
 
     private static String defaultTenant(String tenantId) {
@@ -150,5 +181,11 @@ public class ProviderCredentialService {
         return registration.credentialName() == null || registration.credentialName().isBlank()
                 ? registration.providerName()
                 : registration.credentialName();
+    }
+
+    private void updateOwned(ProviderCredentialEntity credential) {
+        credentialMapper.update(credential, new LambdaUpdateWrapper<ProviderCredentialEntity>()
+                .eq(ProviderCredentialEntity::getTenantId, defaultTenant(credential.getTenantId()))
+                .eq(ProviderCredentialEntity::getId, credential.getId()));
     }
 }

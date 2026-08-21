@@ -147,8 +147,9 @@ public class GoodleWorkflowAutoConfiguration {
     }
 
     @Bean
-    public AgentNodeExecutor agentNodeExecutor(io.github.aigoodle.agent.runtime.AgentRuntime agentRuntime) {
-        return new AgentNodeExecutor(agentRuntime);
+    public AgentNodeExecutor agentNodeExecutor(io.github.aigoodle.agent.runtime.AgentRuntime agentRuntime,
+                                               ModelService modelService) {
+        return new AgentNodeExecutor(agentRuntime, modelService);
     }
 
     // ---- optional: knowledge-based nodes ----

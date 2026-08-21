@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import io.github.aigoodle.memory.*;
 import io.github.aigoodle.memory.entity.MemoryEntity;
 import io.github.aigoodle.memory.mapper.MemoryMapper;
+import io.github.aigoodle.persistence.TenantSqlScope;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
@@ -54,8 +55,8 @@ public class JdbcMemoryStore implements MemoryStore {
 
     @Override
     public void purgeExpired(Instant now) {
-        mapper.delete(new LambdaQueryWrapper<MemoryEntity>()
-                .lt(MemoryEntity::getExpiresAt, toLocal(now)));
+        TenantSqlScope.bypass(() -> mapper.delete(new LambdaQueryWrapper<MemoryEntity>()
+                .lt(MemoryEntity::getExpiresAt, toLocal(now))));
     }
 
     @Override
@@ -67,9 +68,10 @@ public class JdbcMemoryStore implements MemoryStore {
     }
 
     @Override
-    public void recordAccess(Collection<String> memoryIds, Instant accessedAt) {
+    public void recordAccess(String tenantId, Collection<String> memoryIds, Instant accessedAt) {
         if (memoryIds == null || memoryIds.isEmpty()) return;
         mapper.update(null, new LambdaUpdateWrapper<MemoryEntity>()
+                .eq(MemoryEntity::getTenantId, tenantId)
                 .in(MemoryEntity::getId, memoryIds)
                 .setSql("access_count = COALESCE(access_count, 0) + 1")
                 .set(MemoryEntity::getUpdatedAt, toLocal(accessedAt)));

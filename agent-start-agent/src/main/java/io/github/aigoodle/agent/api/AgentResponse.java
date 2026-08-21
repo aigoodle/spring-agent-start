@@ -32,6 +32,12 @@ public class AgentResponse {
     /** Set when {@link Status#AWAITING_APPROVAL}: the tool call awaiting a human decision. */
     private PendingApproval pendingApproval;
 
+    /**
+     * All tool calls waiting at the same checkpoint. The singular field remains populated with the
+     * first item for backwards-compatible clients; new clients should prefer this list.
+     */
+    private final List<PendingApproval> pendingApprovals = new ArrayList<>();
+
     public static AgentResponse forConversation(String conversationId) {
         AgentResponse response = new AgentResponse();
         response.setConversationId(conversationId);
@@ -50,6 +56,7 @@ public class AgentResponse {
         this.text = answer;
         this.error = null;
         this.pendingApproval = null;
+        this.pendingApprovals.clear();
         this.checkpoint = null;
         return this;
     }
@@ -59,6 +66,21 @@ public class AgentResponse {
         this.text = null;
         this.error = null;
         this.pendingApproval = Objects.requireNonNull(approval, "approval must not be null");
+        this.pendingApprovals.clear();
+        this.pendingApprovals.add(approval);
+        return this;
+    }
+
+    public AgentResponse awaitApprovals(List<PendingApproval> approvals) {
+        if (approvals == null || approvals.isEmpty() || approvals.stream().anyMatch(Objects::isNull)) {
+            throw new IllegalArgumentException("approvals must not be empty or contain null");
+        }
+        this.status = Status.AWAITING_APPROVAL;
+        this.text = null;
+        this.error = null;
+        this.pendingApprovals.clear();
+        this.pendingApprovals.addAll(approvals);
+        this.pendingApproval = this.pendingApprovals.get(0);
         return this;
     }
 
@@ -68,6 +90,7 @@ public class AgentResponse {
                 + " iterations without a final answer.";
         this.error = null;
         this.pendingApproval = null;
+        this.pendingApprovals.clear();
         this.checkpoint = null;
         return this;
     }

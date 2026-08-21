@@ -110,7 +110,7 @@ public final class AppAccessResolver {
     private void touch(AppApiTokenEntity token) {
         AppApiTokenService tokenService = apiTokenServiceProvider.getIfAvailable();
         if (tokenService != null) {
-            tokenService.touchLastUsed(token.getId());
+            tokenService.touchLastUsed(token.getTenantId(), token.getId());
         }
     }
 

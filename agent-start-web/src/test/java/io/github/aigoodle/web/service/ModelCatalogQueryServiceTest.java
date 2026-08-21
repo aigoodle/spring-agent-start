@@ -35,8 +35,8 @@ class ModelCatalogQueryServiceTest {
                 .label("Temperature")
                 .type(ModelParameterRule.Type.FLOAT)
                 .build();
-        when(modelService.parameterRulesFor("model-1")).thenReturn(List.of(temperature));
-        when(modelService.getModelProperties("model-1")).thenReturn(Map.of(
+        when(modelService.parameterRulesFor("tenant-a", "model-1")).thenReturn(List.of(temperature));
+        when(modelService.getModelProperties("tenant-a", "model-1")).thenReturn(Map.of(
                 "temperature", 0.7,
                 "apiKey", "must-not-leak"));
         ModelCatalogQueryService queryService = new ModelCatalogQueryService(
@@ -46,7 +46,7 @@ class ModelCatalogQueryServiceTest {
                 mock(ProviderDefinitionService.class),
                 mock(ProviderModelSettingsService.class));
 
-        ModelParametersView parameterView = queryService.parameters("model-1");
+        ModelParametersView parameterView = queryService.parameters("tenant-a", "model-1");
 
         assertThat(parameterView.getParameters())
                 .isEqualTo(Map.of("temperature", 0.7));
@@ -79,7 +79,7 @@ class ModelCatalogQueryServiceTest {
         when(settingsService.settingIndex("t1", "openai"))
                 .thenReturn(Map.of("gpt-4o::LLM", enabledSetting));
 
-        when(definitionService.listPredefined("openai")).thenReturn(List.of(
+        when(definitionService.listPredefined("t1", "openai")).thenReturn(List.of(
                 predefined("openai", "gpt-4o", ModelType.LLM),
                 predefined("openai", "gpt-4o-mini", ModelType.LLM)));
 
@@ -153,7 +153,7 @@ class ModelCatalogQueryServiceTest {
                 .thenReturn(Map.of("gpt-4o::LLM", enabledSetting));
         when(settingsService.listDefaults("t1")).thenReturn(Map.of());
 
-        when(definitionService.listPredefined("openai")).thenReturn(List.of(
+        when(definitionService.listPredefined("t1", "openai")).thenReturn(List.of(
                 predefined("openai", "gpt-4o", ModelType.LLM)));
         when(modelService.listByProvider("t1", "openai")).thenReturn(List.of(
                 agentModel("openai", "gpt-4o", ModelType.LLM, true),

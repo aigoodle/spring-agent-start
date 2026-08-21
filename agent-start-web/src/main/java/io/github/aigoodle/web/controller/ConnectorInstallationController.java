@@ -8,10 +8,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import static io.github.aigoodle.common.context.UserContextHolder.currentTenantId;
 
 @RestController
 @ConditionalOnBean(ConnectorInstallationService.class)
@@ -24,26 +24,22 @@ public class ConnectorInstallationController {
     }
 
     @GetMapping
-    public ApiResponse<List<InstallationView>> list(
-            @RequestParam(defaultValue = "default") String tenantId) {
-        return ApiResponse.ok(installations.list(tenantId));
+    public ApiResponse<List<InstallationView>> list() {
+        return ApiResponse.ok(installations.list(currentTenantId()));
     }
 
     @PostMapping("/synchronize")
-    public ApiResponse<List<InstallationView>> synchronize(
-            @RequestParam(defaultValue = "default") String tenantId) {
-        return ApiResponse.ok(installations.synchronize(tenantId));
+    public ApiResponse<List<InstallationView>> synchronize() {
+        return ApiResponse.ok(installations.synchronize(currentTenantId()));
     }
 
     @PostMapping("/{id}/enable")
-    public ApiResponse<InstallationView> enable(@PathVariable String id,
-                                                @RequestParam(defaultValue = "default") String tenantId) {
-        return ApiResponse.ok(installations.setEnabled(id, tenantId, true));
+    public ApiResponse<InstallationView> enable(@PathVariable String id) {
+        return ApiResponse.ok(installations.setEnabled(id, currentTenantId(), true));
     }
 
     @PostMapping("/{id}/disable")
-    public ApiResponse<InstallationView> disable(@PathVariable String id,
-                                                 @RequestParam(defaultValue = "default") String tenantId) {
-        return ApiResponse.ok(installations.setEnabled(id, tenantId, false));
+    public ApiResponse<InstallationView> disable(@PathVariable String id) {
+        return ApiResponse.ok(installations.setEnabled(id, currentTenantId(), false));
     }
 }

@@ -5,7 +5,6 @@ import io.github.aigoodle.memory.MemoryItem;
 import io.github.aigoodle.memory.MemoryManager;
 import io.github.aigoodle.memory.MemoryRole;
 import io.github.aigoodle.agent.service.AppConversationService;
-import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.completion.support.AppAccessResolver;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
@@ -15,7 +14,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 /** Provides the console-oriented conversation and message history read model. */
 @Service
@@ -30,29 +28,28 @@ public class ConversationHistoryService {
         this.memoryManagers = memoryManagers;
     }
 
-    public List<Map<String, Object>> conversations(String appId, int limit) {
+    public List<Map<String, Object>> conversations(String tenantId, String appId, int limit) {
         AppConversationService conversationService = conversationServices.getIfAvailable();
         if (conversationService == null) {
             return List.of();
         }
         MemoryManager memory = memoryManagers.getIfAvailable();
-        return conversationService.listByApp(appId).stream()
+        return conversationService.listByApp(tenantId, appId).stream()
                 .limit(limit)
                 .map(conversation -> toConversationView(conversation, memory))
                 .toList();
     }
 
-    public List<Map<String, Object>> messages(String appId,
+    public List<Map<String, Object>> messages(String tenantId, String appId,
                                               String conversationId,
                                               int limit) {
-        verifyOwnership(appId, conversationId);
+        AppConversationService conversationService = conversationServices.getIfAvailable();
+        if (conversationService == null) return List.of();
+        AppConversationEntity conversation = conversationService.require(tenantId, appId, conversationId);
         MemoryManager memory = memoryManagers.getIfAvailable();
         if (memory == null) {
             return List.of();
         }
-        AppConversationService conversationService = conversationServices.getIfAvailable();
-        if (conversationService == null) return List.of();
-        AppConversationEntity conversation = conversationService.require(conversationId);
         return memory.history(conversation.getTenantId(), appId, conversationId, limit).stream()
                 .map(ConversationHistoryService::toMessageView)
                 .toList();
@@ -94,18 +91,6 @@ public class ConversationHistoryService {
                     .orElse(conversation.getName());
         } catch (RuntimeException memoryFailure) {
             return conversation.getName();
-        }
-    }
-
-    private void verifyOwnership(String appId, String conversationId) {
-        AppConversationService conversationService = conversationServices.getIfAvailable();
-        if (conversationService == null) {
-            return;
-        }
-        AppConversationEntity conversation = conversationService.require(conversationId);
-        if (!Objects.equals(appId, conversation.getAppId())) {
-            throw new PlatformException("conversation_not_found",
-                    "Conversation not found: " + conversationId, null);
         }
     }
 

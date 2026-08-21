@@ -1,6 +1,7 @@
 package io.github.aigoodle.connector.openclaw;
 
 import io.github.aigoodle.connector.ConnectorException;
+import io.github.aigoodle.connector.channel.ChannelOutboundMessage;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -60,6 +61,69 @@ public class RestOpenClawGatewayClient implements OpenClawGatewayClient {
     @Override public void disable(String pluginId) { postEmpty("/plugins/{id}/disable", pluginId); }
     @Override public void uninstall(String pluginId) {
         client.delete().uri(ROOT + "/plugins/{id}", pluginId).retrieve().toBodilessEntity();
+    }
+    @Override public List<OpenClawDtos.ChannelInfo> channels() {
+        List<OpenClawDtos.ChannelInfo> value = client.get().uri(ROOT + "/channels").retrieve()
+                .body(new ParameterizedTypeReference<>() {});
+        return value == null ? List.of() : value;
+    }
+    @Override public List<OpenClawDtos.ChannelAccountInfo> channelAccounts(String channelId) {
+        List<OpenClawDtos.ChannelAccountInfo> value = client.get()
+                .uri(ROOT + "/channels/{channelId}/accounts", channelId).retrieve()
+                .body(new ParameterizedTypeReference<>() {});
+        return value == null ? List.of() : value;
+    }
+    @Override public OpenClawDtos.ChannelAccountInfo saveChannelAccount(
+            String channelId, String accountId, OpenClawDtos.SaveChannelAccountRequest request) {
+        return required(client.put().uri(ROOT + "/channels/{channelId}/accounts/{accountId}", channelId, accountId)
+                .contentType(MediaType.APPLICATION_JSON).body(request).retrieve()
+                .body(OpenClawDtos.ChannelAccountInfo.class));
+    }
+    @Override public OpenClawDtos.ChannelAccountInfo testChannelAccount(String channelId, String accountId) {
+        return required(client.post().uri(ROOT + "/channels/{channelId}/accounts/{accountId}/test", channelId, accountId)
+                .retrieve().body(OpenClawDtos.ChannelAccountInfo.class));
+    }
+    @Override public void deleteChannelAccount(String channelId, String accountId) {
+        client.delete().uri(ROOT + "/channels/{channelId}/accounts/{accountId}", channelId, accountId)
+                .retrieve().toBodilessEntity();
+    }
+    @Override public void sendChannelMessage(String channelId, String accountId, String targetId, String content) {
+        sendChannelMessageWithResult(channelId, accountId, targetId, content);
+    }
+    @Override public Map<String, Object> sendChannelMessageWithResult(
+            String channelId, String accountId, String targetId, String content) {
+        return sendChannelMessageWithResult(channelId, accountId, targetId, content, null);
+    }
+    @Override public Map<String, Object> sendChannelMessageWithResult(
+            String channelId, String accountId, String targetId, String content, String idempotencyKey) {
+        Map<String, Object> body = new java.util.LinkedHashMap<>();
+        body.put("targetId", targetId);
+        body.put("content", content);
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) body.put("idempotencyKey", idempotencyKey);
+        Map<String, Object> response = client.post()
+                .uri(ROOT + "/channels/{channelId}/accounts/{accountId}/send", channelId, accountId)
+                .contentType(MediaType.APPLICATION_JSON).body(body)
+                .retrieve().body(new ParameterizedTypeReference<>() {});
+        return response == null ? Map.of() : response;
+    }
+
+    @Override public Map<String, Object> sendChannelMessageWithResult(ChannelOutboundMessage message) {
+        Map<String, Object> body = new java.util.LinkedHashMap<>();
+        body.put("targetId", message.targetId());
+        body.put("content", message.content());
+        body.put("messageType", message.messageType());
+        if (!message.attachments().isEmpty()) body.put("attachments", message.attachments());
+        if (!message.contentPayload().isEmpty()) body.put("contentPayload", message.contentPayload());
+        Object idempotencyKey = message.metadata().get("idempotencyKey");
+        if (idempotencyKey != null && !String.valueOf(idempotencyKey).isBlank()) {
+            body.put("idempotencyKey", String.valueOf(idempotencyKey));
+        }
+        Map<String, Object> response = client.post()
+                .uri(ROOT + "/channels/{channelId}/accounts/{accountId}/send",
+                        message.channelId(), message.accountId())
+                .contentType(MediaType.APPLICATION_JSON).body(body)
+                .retrieve().body(new ParameterizedTypeReference<>() {});
+        return response == null ? Map.of() : response;
     }
 
     private void postEmpty(String path, String pluginId) {

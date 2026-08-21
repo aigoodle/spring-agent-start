@@ -3,6 +3,7 @@ package io.github.aigoodle.agent.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.github.aigoodle.agent.entity.AppSiteEntity;
 import io.github.aigoodle.agent.mapper.AppSiteMapper;
+import io.github.aigoodle.common.context.UserContextHolder;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
@@ -23,31 +24,43 @@ public class AppSiteService {
     }
 
     public AppSiteEntity getByApp(String appId) {
-        AppSiteEntity existingSite = siteMapper.selectOne(new LambdaQueryWrapper<AppSiteEntity>()
-                .eq(AppSiteEntity::getAppId, appId)
-                .last("LIMIT 1"));
-        if (existingSite != null) {
-            return existingSite;
-        }
-        AppSiteEntity defaultSite = new AppSiteEntity();
-        defaultSite.setAppId(appId);
-        defaultSite.setStatus("normal");
-        return defaultSite;
+        return getByApp(UserContextHolder.currentTenantId(), appId);
+    }
+
+    public AppSiteEntity getByApp(String tenantId, String appId) {
+        String tenant = normalizedTenant(tenantId);
+        AppSiteEntity existing = siteMapper.selectOne(new LambdaQueryWrapper<AppSiteEntity>()
+                .eq(AppSiteEntity::getTenantId, tenant).eq(AppSiteEntity::getAppId, appId).last("LIMIT 1"));
+        if (existing != null) return existing;
+        AppSiteEntity defaults = new AppSiteEntity();
+        defaults.setTenantId(tenant); defaults.setAppId(appId); defaults.setStatus("normal");
+        return defaults;
     }
 
     @Transactional
     public AppSiteEntity save(String appId, AppSiteEntity siteUpdates) {
-        AppSiteEntity existingSite = siteMapper.selectOne(new LambdaQueryWrapper<AppSiteEntity>()
-                .eq(AppSiteEntity::getAppId, appId)
-                .last("LIMIT 1"));
-        if (existingSite == null) {
-            initializeNewSite(appId, siteUpdates);
-            siteMapper.insert(siteUpdates);
-            return siteUpdates;
+        return save(UserContextHolder.currentTenantId(), appId, siteUpdates);
+    }
+
+    @Transactional
+    public AppSiteEntity save(String tenantId, String appId, AppSiteEntity updates) {
+        String tenant = normalizedTenant(tenantId);
+        AppSiteEntity existing = siteMapper.selectOne(new LambdaQueryWrapper<AppSiteEntity>()
+                .eq(AppSiteEntity::getTenantId, tenant).eq(AppSiteEntity::getAppId, appId).last("LIMIT 1"));
+        if (existing == null) {
+            updates.setId(null); updates.setTenantId(tenant);
+            initializeNewSite(appId, updates); siteMapper.insert(updates); return updates;
         }
-        applyUpdates(existingSite, siteUpdates);
-        siteMapper.updateById(existingSite);
-        return existingSite;
+        applyUpdates(existing, updates);
+        siteMapper.update(existing,
+                new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<AppSiteEntity>()
+                        .eq(AppSiteEntity::getTenantId, tenant).eq(AppSiteEntity::getAppId, appId)
+                        .eq(AppSiteEntity::getId, existing.getId()));
+        return existing;
+    }
+
+    private static String normalizedTenant(String tenantId) {
+        return tenantId == null || tenantId.isBlank() ? "default" : tenantId;
     }
 
     private static void initializeNewSite(String appId, AppSiteEntity newSite) {

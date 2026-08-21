@@ -9,6 +9,9 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -79,5 +82,21 @@ class PromptTemplateServiceTest {
         assertThat(templates.getAllValues())
                 .extracting(PromptTemplateEntity::getTenantId)
                 .containsOnly("tenant-a");
+    }
+
+    @Test
+    void tenantScopedMutationNeverTouchesForeignTemplate() {
+        PromptTemplateMapper mapper = mock(PromptTemplateMapper.class);
+        when(mapper.selectOne(any())).thenReturn(null);
+        PromptTemplateService service = new PromptTemplateService(mapper);
+
+        assertThatThrownBy(() -> service.update("tenant-a", "template-b",
+                new PromptTemplatePatch("stolen", null, null, null, null)))
+                .hasMessageContaining("Prompt template not found");
+        assertThatThrownBy(() -> service.delete("tenant-a", "template-b"))
+                .hasMessageContaining("Prompt template not found");
+
+        verify(mapper, never()).update(any(), any());
+        verify(mapper, never()).delete(any());
     }
 }

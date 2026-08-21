@@ -69,6 +69,7 @@
             <groupId>io.github.aigoodle</groupId>
             <artifactId>agent-start-connector-openclaw</artifactId>
         </dependency>
+        <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-connector-hermes</artifactId></dependency>
         <dependency>
             <groupId>io.github.aigoodle</groupId>
             <artifactId>agent-start-trigger</artifactId>

@@ -77,7 +77,7 @@ public final class ModelProviderViewAssembler {
         view.setDefaultParameterRules(
                 defaultRulesByModelType(definition, supportedTypes));
         List<PredefinedModelEntity> predefinedModels =
-                definitionService.listPredefined(definition.getName());
+                definitionService.listPredefined(tenantId, definition.getName());
         view.setPredefinedModels(predefinedModels.stream()
                 .map(this::toPredefinedModelRow)
                 .toList());
@@ -232,4 +232,3 @@ public final class ModelProviderViewAssembler {
                 && providerName.equalsIgnoreCase(defaultModel.getProviderName());
     }
 }
-

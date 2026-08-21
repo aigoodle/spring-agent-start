@@ -1,12 +1,15 @@
 package io.github.aigoodle.agent.strategy;
 
+import io.github.aigoodle.agent.api.AgentDefinition;
 import io.github.aigoodle.agent.api.AgentStep;
 import io.github.aigoodle.agent.hitl.ApprovalGate;
+import io.github.aigoodle.tool.ToolDefinition;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.time.Instant;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -102,5 +105,49 @@ class AgentRunContextTest {
                 .isInstanceOf(AgentRunInterruptedException.class)
                 .satisfies(error -> assertThat(
                         ((AgentRunInterruptedException) error).isTimedOut()).isFalse());
+    }
+
+    @Test
+    void failsClosedBeforeExceedingModelAndToolBudgets() {
+        AgentRunContext context = AgentRunContext.builder()
+                .definition(AgentDefinition.builder()
+                        .tenantId("tenant-a").maxModelCalls(1).maxToolCalls(1).build())
+                .build();
+
+        assertThat(context.claimModelCall()).isEqualTo(1);
+        assertThatThrownBy(context::claimModelCall)
+                .isInstanceOfSatisfying(AgentExecutionBudgetExceededException.class, error -> {
+                    assertThat(error.resource()).isEqualTo("model");
+                    assertThat(error.limit()).isEqualTo(1);
+                });
+
+        assertThat(context.executeTool(echoTool(), Map.of("value", "first"))).isEqualTo("first");
+        assertThatThrownBy(() -> context.executeTool(echoTool(), Map.of("value", "second")))
+                .isInstanceOfSatisfying(AgentExecutionBudgetExceededException.class, error -> {
+                    assertThat(error.resource()).isEqualTo("tool");
+                    assertThat(error.limit()).isEqualTo(1);
+                });
+        assertThat(context.modelCallCount()).isEqualTo(1);
+        assertThat(context.toolCallCount()).isEqualTo(1);
+    }
+
+    @Test
+    void zeroBudgetsRemainBackwardCompatibleAndUnlimited() {
+        AgentRunContext context = AgentRunContext.builder()
+                .definition(AgentDefinition.builder().build())
+                .build();
+
+        assertThat(context.claimModelCall()).isEqualTo(1);
+        assertThat(context.claimModelCall()).isEqualTo(2);
+        assertThat(context.executeTool(echoTool(), Map.of("value", "ok"))).isEqualTo("ok");
+    }
+
+    private static ToolDefinition echoTool() {
+        return new ToolDefinition() {
+            public String name() { return "echo"; }
+            public String description() { return "echo"; }
+            public String inputSchema() { return "{}"; }
+            public Object execute(Map<String, Object> arguments) { return arguments.get("value"); }
+        };
     }
 }

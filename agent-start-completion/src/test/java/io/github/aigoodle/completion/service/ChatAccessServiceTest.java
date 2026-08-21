@@ -19,7 +19,7 @@ class ChatAccessServiceTest {
     void tenantCanResolveItsOwnApplication() {
         AppService agents = mock(AppService.class);
         AppEntity app = app("app-1", "tenant-a");
-        when(agents.require("app-1")).thenReturn(app);
+        when(agents.require("tenant-a", "app-1")).thenReturn(app);
         ChatAccessService access = new ChatAccessService(agents, emptyProvider());
 
         assertThat(access.requireOwnedApp("app-1", "tenant-a")).isEqualTo("app-1");
@@ -28,7 +28,8 @@ class ChatAccessServiceTest {
     @Test
     void rejectsApplicationOwnedByAnotherTenant() {
         AppService agents = mock(AppService.class);
-        when(agents.require("app-1")).thenReturn(app("app-1", "tenant-b"));
+        when(agents.require("tenant-a", "app-1"))
+                .thenThrow(new PlatformException("app_not_found", "应用不存在或无权访问", null));
         ChatAccessService access = new ChatAccessService(agents, emptyProvider());
 
         assertThatThrownBy(() -> access.requireOwnedApp("app-1", "tenant-a"))
@@ -39,7 +40,7 @@ class ChatAccessServiceTest {
     @Test
     void rejectsWorkflowOverrideFromAnotherApplication() {
         AppService agents = mock(AppService.class);
-        when(agents.require("app-1")).thenReturn(app("app-1", "tenant-a"));
+        when(agents.require("tenant-a", "app-1")).thenReturn(app("app-1", "tenant-a"));
         WorkflowService workflows = mock(WorkflowService.class);
         WorkflowEntity workflow = new WorkflowEntity();
         workflow.setId("workflow-2");

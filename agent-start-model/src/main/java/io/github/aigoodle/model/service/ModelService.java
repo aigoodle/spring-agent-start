@@ -1,7 +1,9 @@
 package io.github.aigoodle.model.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import io.github.aigoodle.common.context.UserContextHolder;
 import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.common.util.JsonUtils;
 import io.github.aigoodle.model.entity.ModelEntity;
@@ -82,7 +84,7 @@ public class ModelService {
         }
         String tenantId = normalizeTenantId(registration.getTenantId());
 
-        String encryptedConfiguration = credentialCodec.encode(registration.getCredentials());
+        String encryptedConfiguration = credentialCodec.encode(tenantId, registration.getCredentials());
         ModelEntity registeredModel = ModelEntityFactory.registered(
                 registration, tenantId, encryptedConfiguration);
         modelMapper.insert(registeredModel);
@@ -116,6 +118,15 @@ public class ModelService {
         return saveConfiguration(entity, updatedConfiguration);
     }
 
+    @Transactional
+    public ModelEntity updateCredentials(String tenantId, String id, Map<String, Object> patch) {
+        ModelEntity entity = require(tenantId, id);
+        if (patch == null || patch.isEmpty()) return entity;
+        Map<String, Object> updatedConfiguration = decodeConfiguration(entity);
+        updatedConfiguration.putAll(patch);
+        return saveConfiguration(entity, updatedConfiguration);
+    }
+
     /** Overwrite every credential field. Rarely what you want — see {@link #updateCredentials}. */
     @Transactional
     public ModelEntity replaceCredentials(String id, Map<String, Object> credentials) {
@@ -132,6 +143,10 @@ public class ModelService {
     public Map<String, Object> getModelProperties(String id) {
         ModelEntity entity = require(id);
         return decodeConfiguration(entity);
+    }
+
+    public Map<String, Object> getModelProperties(String tenantId, String id) {
+        return decodeConfiguration(require(tenantId, id));
     }
 
     /**
@@ -160,6 +175,17 @@ public class ModelService {
         return saveConfiguration(entity, updatedConfiguration);
     }
 
+    @Transactional
+    public ModelEntity updateParameters(String tenantId, String id, Map<String, Object> parameters) {
+        ModelEntity entity = require(tenantId, id);
+        if (parameters == null || parameters.isEmpty()) return entity;
+        Map<String, Object> updatedConfiguration = decodeConfiguration(entity);
+        parameters.forEach((key, value) -> {
+            if (value == null) updatedConfiguration.remove(key); else updatedConfiguration.put(key, value);
+        });
+        return saveConfiguration(entity, updatedConfiguration);
+    }
+
     /**
      * Resolve the parameter rules the UI should render for this model — either the
      * PredefinedModel-level override or the provider-wide default per model type.
@@ -175,6 +201,21 @@ public class ModelService {
                     && !predefinedModel.getParameterRules().isEmpty()) {
                 return predefinedModel.getParameterRules();
             }
+        }
+        return provider.defaultParameterRules(entity.getModelType());
+    }
+
+    public List<ModelParameterRule> parameterRulesFor(String tenantId, String id) {
+        return parameterRulesFor(require(tenantId, id));
+    }
+
+    private List<ModelParameterRule> parameterRulesFor(ModelEntity entity) {
+        ModelProvider provider = providerRegistry.get(entity.getProviderName());
+        for (PredefinedModel predefinedModel : provider.predefinedModels()) {
+            if (predefinedModel.getModel().equalsIgnoreCase(entity.getModelName())
+                    && predefinedModel.getModelType() == entity.getModelType()
+                    && predefinedModel.getParameterRules() != null
+                    && !predefinedModel.getParameterRules().isEmpty()) return predefinedModel.getParameterRules();
         }
         return provider.defaultParameterRules(entity.getModelType());
     }
@@ -200,25 +241,54 @@ public class ModelService {
     public void setDefault(String id) {
         ModelEntity entity = require(id);
         entity.setIsDefault(Boolean.TRUE);
-        modelMapper.updateById(entity);
+        updateOwned(entity);
+        clearOtherDefaults(entity.getTenantId(), entity.getModelType(), id);
+    }
+
+    @Transactional
+    public void setDefault(String tenantId, String id) {
+        ModelEntity entity = require(tenantId, id);
+        entity.setIsDefault(Boolean.TRUE);
+        updateOwned(entity);
         clearOtherDefaults(entity.getTenantId(), entity.getModelType(), id);
     }
 
     @Transactional
     public void delete(String id) {
-        modelMapper.deleteById(id);
-        instanceFactory.evict(id);
+        delete(UserContextHolder.currentTenantId(), id);
+    }
+
+    @Transactional
+    public void delete(String tenantId, String id) {
+        require(tenantId, id);
+        modelMapper.delete(new LambdaQueryWrapper<ModelEntity>()
+                .eq(ModelEntity::getTenantId, normalizeTenantId(tenantId)).eq(ModelEntity::getId, id));
+        instanceFactory.evict(normalizeTenantId(tenantId), id);
     }
 
     public ModelEntity get(String id) {
-        return modelMapper.selectById(id);
+        return get(UserContextHolder.currentTenantId(), id);
+    }
+
+    public ModelEntity get(String tenantId, String id) {
+        return modelMapper.selectOne(new LambdaQueryWrapper<ModelEntity>()
+                .eq(ModelEntity::getTenantId, normalizeTenantId(tenantId))
+                .eq(ModelEntity::getId, id).last("limit 1"));
     }
 
     public ModelEntity require(String id) {
-        ModelEntity entity = modelMapper.selectById(id);
+        ModelEntity entity = get(UserContextHolder.currentTenantId(), id);
         if (entity == null) {
             throw new PlatformException("model_not_found", "Model not found: " + id, null);
         }
+        return entity;
+    }
+
+    public ModelEntity require(String tenantId, String id) {
+        ModelEntity entity = modelMapper.selectOne(new LambdaQueryWrapper<ModelEntity>()
+                .eq(ModelEntity::getTenantId, normalizeTenantId(tenantId))
+                .eq(ModelEntity::getId, id).last("limit 1"));
+        if (entity == null) throw new PlatformException("model_not_found", "Model not found: " + id, null);
         return entity;
     }
 
@@ -318,13 +388,15 @@ public class ModelService {
     public ModelEndpoint resolveEndpoint(ModelEntity entity) {
         Map<String, Object> endpointProperties = new HashMap<>();
         if (entity.getCredentialId() != null) {
-            endpointProperties.putAll(credentialService.decodeCredentials(entity.getCredentialId()));
+            endpointProperties.putAll(credentialService.decodeCredentials(
+                    entity.getTenantId(), entity.getCredentialId()));
         }
         endpointProperties.putAll(decodeConfiguration(entity));
 
         Object apiKey = endpointProperties.remove("apiKey");
         Object baseUrl = endpointProperties.remove("baseUrl");
         return ModelEndpoint.builder()
+                .tenantId(entity.getTenantId())
                 .id(entity.getId())
                 .providerName(entity.getProviderName())
                 .modelName(entity.getModelName())
@@ -339,14 +411,26 @@ public class ModelService {
         return resolveEndpoint(require(id));
     }
 
+    public ModelEndpoint resolveEndpoint(String tenantId, String id) {
+        return resolveEndpoint(require(tenantId, id));
+    }
+
     // -------------------------------------------------------------- runtime
 
     public ModelInstance getModelInstance(String id) {
         return instanceFactory.getOrCreate(resolveEndpoint(id));
     }
 
+    public ModelInstance getModelInstance(String tenantId, String id) {
+        return instanceFactory.getOrCreate(resolveEndpoint(tenantId, id));
+    }
+
     public ChatClient getChatClient(String id) {
         return getModelInstance(id).getChatClient();
+    }
+
+    public ChatClient getChatClient(String tenantId, String id) {
+        return getModelInstance(tenantId, id).getChatClient();
     }
 
     /**
@@ -359,15 +443,23 @@ public class ModelService {
     public ChatClient getChatClient(String tenantId, String providerName, String modelName) {
         ModelEntity entity = findOrMaterialize(
                 normalizeTenantId(tenantId), providerName, modelName, ModelType.LLM);
-        return getChatClient(entity.getId());
+        return getChatClient(tenantId, entity.getId());
     }
 
     public ChatModel getChatModel(String id) {
         return getModelInstance(id).getChatModel();
     }
 
+    public ChatModel getChatModel(String tenantId, String id) {
+        return getModelInstance(tenantId, id).getChatModel();
+    }
+
     public EmbeddingModel getEmbeddingModel(String id) {
         return getModelInstance(id).getEmbeddingModel();
+    }
+
+    public EmbeddingModel getEmbeddingModel(String tenantId, String id) {
+        return getModelInstance(tenantId, id).getEmbeddingModel();
     }
 
     public ModelInstance getDefaultInstance(String tenantId, ModelType type) {
@@ -377,7 +469,7 @@ public class ModelService {
                     "No " + type + " model configured for tenant '"
                             + normalizeTenantId(tenantId) + "'", null);
         }
-        return getModelInstance(defaultModel.getId());
+        return getModelInstance(normalizeTenantId(tenantId), defaultModel.getId());
     }
 
     /**
@@ -386,6 +478,7 @@ public class ModelService {
      */
     public void validate(ModelRegistration registration) {
         ModelEndpoint endpoint = ModelEndpoint.builder()
+                .tenantId(normalizeTenantId(registration.getTenantId()))
                 .id("validation")
                 .providerName(registration.getProviderName())
                 .modelName(registration.getModelName())
@@ -465,8 +558,10 @@ public class ModelService {
         // caches per id so pooled ChatClients don't outlive their credentials.
         List<ModelEntity> providerModels = listByProvider(normalizedTenantId, providerName);
         for (ModelEntity model : providerModels) {
-            modelMapper.deleteById(model.getId());
-            instanceFactory.evict(model.getId());
+            modelMapper.delete(new LambdaQueryWrapper<ModelEntity>()
+                    .eq(ModelEntity::getTenantId, normalizedTenantId)
+                    .eq(ModelEntity::getId, model.getId()));
+            instanceFactory.evict(normalizedTenantId, model.getId());
         }
         // 3. Materialized (tenant-scoped) predefined catalog rows.
         if (definitionService != null) {
@@ -512,8 +607,17 @@ public class ModelService {
     public ModelEntity setEnabled(String id, boolean enabled) {
         ModelEntity entity = require(id);
         entity.setEnabled(enabled);
-        modelMapper.updateById(entity);
-        instanceFactory.evict(id);
+        updateOwned(entity);
+        instanceFactory.evict(entity.getTenantId(), id);
+        return entity;
+    }
+
+    @Transactional
+    public ModelEntity setEnabled(String tenantId, String id, boolean enabled) {
+        ModelEntity entity = require(tenantId, id);
+        entity.setEnabled(enabled);
+        updateOwned(entity);
+        instanceFactory.evict(entity.getTenantId(), id);
         return entity;
     }
 
@@ -534,16 +638,21 @@ public class ModelService {
         return connectionTester.test(entity, resolveEndpoint(entity));
     }
 
+    public Map<String, Object> testConnection(String tenantId, String id) {
+        ModelEntity entity = require(tenantId, id);
+        return connectionTester.test(entity, resolveEndpoint(entity));
+    }
+
     // --------------------------------------------------------------- helpers
 
     private Map<String, Object> decodeConfiguration(ModelEntity model) {
-        return new HashMap<>(credentialCodec.decode(model.getEncryptedConfig()));
+        return new HashMap<>(credentialCodec.decode(model.getTenantId(), model.getEncryptedConfig()));
     }
 
     private ModelEntity saveConfiguration(ModelEntity model, Map<String, Object> configuration) {
-        model.setEncryptedConfig(credentialCodec.encode(configuration));
-        modelMapper.updateById(model);
-        instanceFactory.evict(model.getId());
+        model.setEncryptedConfig(credentialCodec.encode(model.getTenantId(), configuration));
+        updateOwned(model);
+        instanceFactory.evict(model.getTenantId(), model.getId());
         return model;
     }
 
@@ -554,6 +663,12 @@ public class ModelService {
                 .eq(ModelEntity::getTenantId, tenantId)
                 .eq(ModelEntity::getModelType, type)
                 .ne(ModelEntity::getId, keepId));
+    }
+
+    private void updateOwned(ModelEntity model) {
+        modelMapper.update(model, new LambdaUpdateWrapper<ModelEntity>()
+                .eq(ModelEntity::getTenantId, normalizeTenantId(model.getTenantId()))
+                .eq(ModelEntity::getId, model.getId()));
     }
 
     private static String normalizeTenantId(String tenantId) {

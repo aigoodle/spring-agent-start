@@ -8,6 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
 
 class AppModelConfigServiceTest {
 
@@ -36,7 +37,7 @@ class AppModelConfigServiceTest {
         existing.setModelName("old-model");
         AppModelConfigEntity patch = new AppModelConfigEntity();
         patch.setModelName("new-model");
-        when(configMapper.selectById("app-1")).thenReturn(existing);
+        when(configMapper.selectOne(any())).thenReturn(existing);
 
         AppModelConfigEntity saved = service.upsert(new AppModelConfigRegistration(
                 "app-1", "tenant-1", patch));
@@ -44,6 +45,18 @@ class AppModelConfigServiceTest {
         assertThat(saved).isSameAs(existing);
         assertThat(existing.getId()).isEqualTo("app-1");
         assertThat(existing.getModelName()).isEqualTo("new-model");
-        verify(configMapper).updateById(existing);
+        verify(configMapper).update(org.mockito.ArgumentMatchers.eq(existing), any());
+    }
+
+    @Test
+    void readsAndDeletesOnlyWithinTheRequestedTenant() {
+        AppModelConfigMapper configMapper = mock(AppModelConfigMapper.class);
+        AppModelConfigService service = new AppModelConfigService(configMapper);
+
+        service.findByAppId("tenant-1", "app-1");
+        service.deleteByAppId("tenant-1", "app-1");
+
+        verify(configMapper).selectOne(any());
+        verify(configMapper).delete(any());
     }
 }

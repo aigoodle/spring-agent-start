@@ -30,25 +30,25 @@ class AppDatasetServiceTest {
     void rejectsCrossTenantDatasetsAlreadyPresentInStoredConfiguration() {
         AppEntity application = application("app-1", "tenant-a");
         AppModelConfigEntity configuration = configuration("[\"dataset-b\"]");
-        DatasetEntity foreignDataset = dataset("dataset-b", "tenant-b");
-        when(appMapper.selectById("app-1")).thenReturn(application);
-        when(modelConfigService.findByAppId("app-1")).thenReturn(configuration);
-        when(datasetService.get("dataset-b")).thenReturn(foreignDataset);
+        when(appMapper.selectOne(any())).thenReturn(application);
+        when(modelConfigService.findByAppId("tenant-a", "app-1")).thenReturn(configuration);
+        when(datasetService.require("tenant-a", "dataset-b")).thenThrow(
+                new PlatformException("dataset_not_found", "Dataset not found", null));
 
         assertThatThrownBy(() -> appDatasetService.list("app-1"))
                 .isInstanceOf(PlatformException.class)
-                .hasMessageContaining("different tenant");
+                .hasMessageContaining("Dataset not found");
     }
 
     @Test
     void appendsOnlyUniqueDatasetIdsWhilePreservingTheirOrder() {
         AppEntity application = application("app-1", "tenant-a");
         AppModelConfigEntity configuration = configuration("[\"dataset-1\"]");
-        when(appMapper.selectById("app-1")).thenReturn(application);
-        when(modelConfigService.findByAppId("app-1")).thenReturn(configuration);
-        when(datasetService.get("dataset-1"))
+        when(appMapper.selectOne(any())).thenReturn(application);
+        when(modelConfigService.findByAppId("tenant-a", "app-1")).thenReturn(configuration);
+        when(datasetService.require("tenant-a", "dataset-1"))
                 .thenReturn(dataset("dataset-1", "tenant-a"));
-        when(datasetService.get("dataset-2"))
+        when(datasetService.require("tenant-a", "dataset-2"))
                 .thenReturn(dataset("dataset-2", "tenant-a"));
         when(modelConfigService.upsert(any())).thenAnswer(invocation ->
                 invocation.<AppModelConfigRegistration>getArgument(0).configuration());
@@ -69,9 +69,9 @@ class AppDatasetServiceTest {
     void treatsBlankTenantIdsAsTheDefaultTenant() {
         AppEntity application = application("app-1", null);
         AppModelConfigEntity configuration = configuration("[\"dataset-1\"]");
-        when(appMapper.selectById("app-1")).thenReturn(application);
-        when(modelConfigService.findByAppId("app-1")).thenReturn(configuration);
-        when(datasetService.get("dataset-1"))
+        when(appMapper.selectOne(any())).thenReturn(application);
+        when(modelConfigService.findByAppId(null, "app-1")).thenReturn(configuration);
+        when(datasetService.require(null, "dataset-1"))
                 .thenReturn(dataset("dataset-1", "default"));
 
         assertThat(appDatasetService.list("app-1"))

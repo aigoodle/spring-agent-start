@@ -38,14 +38,17 @@
 
     <modules>
         <module>agent-start-common</module>
+        <module>agent-start-persistence</module>
         <module>agent-start-model</module>
         <module>agent-start-provider</module>
         <module>agent-start-knowledge</module>
         <module>agent-start-store</module>
         <module>agent-start-tools</module>
         <module>agent-start-connector</module>
+        <module>agent-start-connector-redis</module>
         <module>agent-start-connector-tools</module>
         <module>agent-start-connector-openclaw</module>
+        <module>agent-start-connector-hermes</module>
         <module>agent-start-memory</module>
         <module>agent-start-agent</module>
         <module>agent-start-workflow</module>
@@ -73,6 +76,9 @@
         <!-- springdoc-openapi 2.8.x is the family compatible with Spring Boot 3.5.
              2.6.0 targets Spring Boot 3.3 and breaks classpath resolution here. -->
         <springdoc.version>2.8.9</springdoc.version>
+        <!-- Embedded full-text engine for the knowledge keyword index (RAGFlow-style
+             term-weighted sparse retrieval). 9.x line, Java 21 compatible. -->
+        <lucene.version>9.9.2</lucene.version>
     </properties>
 
     <dependencyManagement>
@@ -114,10 +120,33 @@
                 <version>${springdoc.version}</version>
             </dependency>
 
+            <!-- Apache Lucene: embedded sparse/full-text index backing the knowledge
+                 module's term-weighted keyword retrieval (RAGFlow alignment). -->
+            <dependency>
+                <groupId>org.apache.lucene</groupId>
+                <artifactId>lucene-core</artifactId>
+                <version>${lucene.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.lucene</groupId>
+                <artifactId>lucene-queryparser</artifactId>
+                <version>${lucene.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.lucene</groupId>
+                <artifactId>lucene-analysis-common</artifactId>
+                <version>${lucene.version}</version>
+            </dependency>
+
             <!-- internal modules -->
             <dependency>
                 <groupId>io.github.aigoodle</groupId>
                 <artifactId>agent-start-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.aigoodle</groupId>
+                <artifactId>agent-start-persistence</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -172,12 +201,22 @@
             </dependency>
             <dependency>
                 <groupId>io.github.aigoodle</groupId>
+                <artifactId>agent-start-connector-redis</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.aigoodle</groupId>
                 <artifactId>agent-start-connector-tools</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.github.aigoodle</groupId>
                 <artifactId>agent-start-connector-openclaw</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.aigoodle</groupId>
+                <artifactId>agent-start-connector-hermes</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

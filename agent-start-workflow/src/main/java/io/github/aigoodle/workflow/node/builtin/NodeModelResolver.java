@@ -25,7 +25,8 @@ final class NodeModelResolver {
     private NodeModelResolver() {}
 
     static ChatClient resolve(NodeDef node, ExecutionContext context, ModelService modelService) {
-        return modelService.getChatClient(resolveEntityId(node, context, modelService));
+        String tenantId = tenantOf(context);
+        return modelService.getChatClient(tenantId, resolveEntityId(node, context, modelService));
     }
 
     /**
@@ -39,7 +40,8 @@ final class NodeModelResolver {
      * emission the LLM API actually produces.
      */
     static ChatModel resolveModel(NodeDef node, ExecutionContext context, ModelService modelService) {
-        return modelService.getChatModel(resolveEntityId(node, context, modelService));
+        String tenantId = tenantOf(context);
+        return modelService.getChatModel(tenantId, resolveEntityId(node, context, modelService));
     }
 
     /**

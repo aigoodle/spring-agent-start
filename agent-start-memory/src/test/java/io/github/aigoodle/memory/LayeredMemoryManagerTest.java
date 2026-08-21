@@ -29,6 +29,28 @@ class LayeredMemoryManagerTest {
     }
 
     @Test
+    void isolatesWorkingMemoryByTenantOwnerAndConversation() {
+        manager.remember(new MemoryWrite("tenant-a", "employee-1", "support", MemoryTier.WORKING,
+                MemoryRole.USER, "tenant-a memory", .5, null));
+        manager.remember(new MemoryWrite("tenant-b", "employee-1", "support", MemoryTier.WORKING,
+                MemoryRole.USER, "tenant-b memory", .5, null));
+        manager.remember(new MemoryWrite("tenant-a", "employee-2", "support", MemoryTier.WORKING,
+                MemoryRole.USER, "employee-2 memory", .5, null));
+
+        assertThat(working("tenant-a", "employee-1", "support"))
+                .extracting(MemoryItem::content).containsExactly("tenant-a memory");
+        assertThat(working("tenant-b", "employee-1", "support"))
+                .extracting(MemoryItem::content).containsExactly("tenant-b memory");
+        assertThat(working("tenant-a", "employee-2", "support"))
+                .extracting(MemoryItem::content).containsExactly("employee-2 memory");
+
+        manager.forgetConversation("tenant-a", "employee-1", "support");
+        assertThat(working("tenant-a", "employee-1", "support")).isEmpty();
+        assertThat(working("tenant-b", "employee-1", "support"))
+                .extracting(MemoryItem::content).containsExactly("tenant-b memory");
+    }
+
+    @Test
     void promotesImportantShortTermMemory() {
         MemoryItem item = manager.remember(new MemoryWrite("default", "a", "c",
                 MemoryTier.SHORT_TERM, MemoryRole.FACT, "User prefers concise answers", .9, null));
@@ -66,12 +88,18 @@ class LayeredMemoryManagerTest {
                 });
     }
 
+    private List<MemoryItem> working(String tenantId, String ownerId, String conversationId) {
+        return manager.recall(new MemoryQuery(tenantId, ownerId, conversationId, null,
+                Set.of(MemoryTier.WORKING), 10));
+    }
+
     private static class RecordingStore implements MemoryStore {
         private final List<MemoryItem> items = new ArrayList<>();
         private final List<String> accessedIds = new ArrayList<>();
         public void save(MemoryItem item) { items.add(item); }
         public List<MemoryItem> find(MemoryQuery query) {
             return items.stream().filter(item -> query.tiers().contains(item.tier()))
+                    .filter(item -> query.tenantId().equals(item.tenantId()))
                     .filter(item -> query.ownerId() == null || query.ownerId().equals(item.ownerId()))
                     .filter(item -> query.conversationId() == null
                             || query.conversationId().equals(item.conversationId()))

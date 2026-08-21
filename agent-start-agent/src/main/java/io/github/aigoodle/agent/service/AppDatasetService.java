@@ -3,7 +3,9 @@ package io.github.aigoodle.agent.service;
 import io.github.aigoodle.agent.entity.AppEntity;
 import io.github.aigoodle.agent.entity.AppModelConfigEntity;
 import io.github.aigoodle.agent.mapper.AppMapper;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.github.aigoodle.common.exception.PlatformException;
+import io.github.aigoodle.common.context.UserContextHolder;
 import io.github.aigoodle.common.util.JsonUtils;
 import io.github.aigoodle.knowledge.service.DatasetService;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,14 +38,28 @@ public class AppDatasetService {
     /** Return hydrated summaries for the datasets currently attached to an app. */
     public List<AttachedDatasetView> list(String appId) {
         AppEntity application = requireApplication(appId);
-        return hydrate(attachedDatasetIds(appId), application.getTenantId());
+        return hydrate(attachedDatasetIds(application), application.getTenantId());
+    }
+
+    public List<AttachedDatasetView> list(String tenantId, String appId) {
+        AppEntity application = requireApplication(tenantId, appId);
+        return hydrate(attachedDatasetIds(application), application.getTenantId());
     }
 
     /** Add datasets while retaining the existing order and removing duplicates. */
     @Transactional
     public List<AttachedDatasetView> attach(String appId, List<String> datasetIds) {
         AppEntity application = requireApplication(appId);
-        Set<String> combinedIds = new LinkedHashSet<>(attachedDatasetIds(appId));
+        Set<String> combinedIds = new LinkedHashSet<>(attachedDatasetIds(application));
+        combinedIds.addAll(validateDatasetIds(datasetIds, application.getTenantId()));
+        persistAttachedIds(application, combinedIds);
+        return hydrate(combinedIds, application.getTenantId());
+    }
+
+    @Transactional
+    public List<AttachedDatasetView> attach(String tenantId, String appId, List<String> datasetIds) {
+        AppEntity application = requireApplication(tenantId, appId);
+        Set<String> combinedIds = new LinkedHashSet<>(attachedDatasetIds(application));
         combinedIds.addAll(validateDatasetIds(datasetIds, application.getTenantId()));
         persistAttachedIds(application, combinedIds);
         return hydrate(combinedIds, application.getTenantId());
@@ -53,7 +69,16 @@ public class AppDatasetService {
     @Transactional
     public List<AttachedDatasetView> detach(String appId, String datasetId) {
         AppEntity application = requireApplication(appId);
-        Set<String> remainingIds = new LinkedHashSet<>(attachedDatasetIds(appId));
+        Set<String> remainingIds = new LinkedHashSet<>(attachedDatasetIds(application));
+        remainingIds.remove(datasetId);
+        persistAttachedIds(application, remainingIds);
+        return hydrate(remainingIds, application.getTenantId());
+    }
+
+    @Transactional
+    public List<AttachedDatasetView> detach(String tenantId, String appId, String datasetId) {
+        AppEntity application = requireApplication(tenantId, appId);
+        Set<String> remainingIds = new LinkedHashSet<>(attachedDatasetIds(application));
         remainingIds.remove(datasetId);
         persistAttachedIds(application, remainingIds);
         return hydrate(remainingIds, application.getTenantId());
@@ -65,6 +90,14 @@ public class AppDatasetService {
         AppEntity application = requireApplication(appId);
         Set<String> replacementIds = validateDatasetIds(
                 datasetIds, application.getTenantId());
+        persistAttachedIds(application, replacementIds);
+        return hydrate(replacementIds, application.getTenantId());
+    }
+
+    @Transactional
+    public List<AttachedDatasetView> replace(String tenantId, String appId, List<String> datasetIds) {
+        AppEntity application = requireApplication(tenantId, appId);
+        Set<String> replacementIds = validateDatasetIds(datasetIds, application.getTenantId());
         persistAttachedIds(application, replacementIds);
         return hydrate(replacementIds, application.getTenantId());
     }
@@ -90,8 +123,9 @@ public class AppDatasetService {
         return datasets;
     }
 
-    private List<String> attachedDatasetIds(String appId) {
-        AppModelConfigEntity configuration = modelConfigService.findByAppId(appId);
+    private List<String> attachedDatasetIds(AppEntity application) {
+        AppModelConfigEntity configuration = modelConfigService.findByAppId(
+                application.getTenantId(), application.getId());
         return configuration == null
                 ? List.of()
                 : JsonUtils.parseList(configuration.getDatasetIdsJson(), String.class);
@@ -107,9 +141,16 @@ public class AppDatasetService {
     }
 
     private AppEntity requireApplication(String appId) {
-        AppEntity application = appMapper.selectById(appId);
+        return requireApplication(UserContextHolder.currentTenantId(), appId);
+    }
+
+
+    private AppEntity requireApplication(String tenantId, String appId) {
+        AppEntity application = appMapper.selectOne(new LambdaQueryWrapper<AppEntity>()
+                .eq(AppEntity::getTenantId, tenantId == null ? "default" : tenantId)
+                .eq(AppEntity::getId, appId).last("LIMIT 1"));
         if (application == null) {
-            throw new PlatformException("app_not_found", "Application not found: " + appId, null);
+            throw new PlatformException("app_not_found", "Application not found", null);
         }
         return application;
     }

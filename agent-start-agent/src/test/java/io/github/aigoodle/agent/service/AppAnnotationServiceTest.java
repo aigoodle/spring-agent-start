@@ -39,7 +39,7 @@ class AppAnnotationServiceTest {
                 .isInstanceOf(PlatformException.class)
                 .hasMessageContaining("annotation-from-app-b");
 
-        verify(annotationMapper, never()).updateById(any(AppAnnotationEntity.class));
+        verify(annotationMapper, never()).update(any(), any());
     }
 
     @Test
@@ -61,7 +61,7 @@ class AppAnnotationServiceTest {
         assertThat(updated.getTenantId()).isEqualTo("tenant-1");
         assertThat(updated.getQuestion()).isEqualTo("Improved question");
         assertThat(updated.getContent()).isEqualTo("Improved answer");
-        verify(annotationMapper).updateById(annotation);
+        verify(annotationMapper).update(org.mockito.ArgumentMatchers.eq(annotation), any());
     }
 
     @Test
@@ -74,7 +74,25 @@ class AppAnnotationServiceTest {
         annotationService.recordHit("app-1", "annotation-1");
 
         assertThat(annotation.getHitCount()).isEqualTo(1);
-        verify(annotationMapper).updateById(annotation);
+        verify(annotationMapper).update(org.mockito.ArgumentMatchers.eq(annotation), any());
+    }
+
+    @Test
+    void scopedCreateOverridesForgedIdentityAndForeignMutationFailsClosed() {
+        AppAnnotationMapper mapper = mock(AppAnnotationMapper.class);
+        AppAnnotationService service = new AppAnnotationService(mapper);
+        AppAnnotationEntity supplied = annotation("forged-id", "foreign-app");
+        supplied.setTenantId("foreign-tenant");
+
+        AppAnnotationEntity created = service.create("tenant-a", "app-a", supplied);
+
+        assertThat(created.getId()).isNull();
+        assertThat(created.getTenantId()).isEqualTo("tenant-a");
+        assertThat(created.getAppId()).isEqualTo("app-a");
+        when(mapper.selectOne(any())).thenReturn(null);
+        assertThatThrownBy(() -> service.delete("tenant-a", "app-a", "foreign-annotation"))
+                .hasMessageContaining("Annotation not found");
+        verify(mapper, never()).delete(any());
     }
 
     private static AppAnnotationEntity annotation(String annotationId, String appId) {

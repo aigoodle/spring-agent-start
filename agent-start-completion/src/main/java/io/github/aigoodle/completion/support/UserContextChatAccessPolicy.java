@@ -38,8 +38,8 @@ public final class UserContextChatAccessPolicy implements ChatAccessPolicy {
 
     @Override
     public ChatAccessContext authorizeExternal(String appId) {
-        String resolved = resources.requireExternalApp(appId);
-        return new ChatAccessContext(resolved, null, null, ChatAccessMode.EXTERNAL_API);
+        var app = resources.requireExternalAppEntity(appId);
+        return new ChatAccessContext(app.getId(), app.getTenantId(), null, ChatAccessMode.EXTERNAL_API);
     }
 
     private static void requireUser() {

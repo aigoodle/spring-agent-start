@@ -23,14 +23,14 @@ public final class WorkflowDraftCoordinator {
     }
 
     /** Returns the existing draft or creates it for a legacy workflow-mode application. */
-    public WorkflowEntity findOrCreate(String appId) {
-        WorkflowEntity draft = workflowService.findDraft(appId);
+    public WorkflowEntity findOrCreate(String tenantId, String appId) {
+        WorkflowEntity draft = workflowService.findDraft(tenantId, appId);
         if (draft != null) {
             return draft;
         }
 
         AppService appService = appServiceProvider.getIfAvailable();
-        AppEntity application = findFlowApplication(appService, appId);
+        AppEntity application = findFlowApplication(appService, tenantId, appId);
         if (application == null) {
             return null;
         }
@@ -41,44 +41,45 @@ public final class WorkflowDraftCoordinator {
                 application.getName(),
                 application.getMode(),
                 null));
-        bindWorkflowQuietly(appService, application.getId(), createdDraft.getId());
+        bindWorkflowQuietly(appService, tenantId, application.getId(), createdDraft.getId());
         return createdDraft;
     }
 
-    public WorkflowEntity save(String appId, JsonNode graph) {
-        findOrCreate(appId);
-        return workflowService.saveDraft(appId, WorkflowDraftChanges.graphOnly(graph));
+    public WorkflowEntity save(String tenantId, String appId, JsonNode graph) {
+        findOrCreate(tenantId, appId);
+        return workflowService.saveDraft(tenantId, appId, WorkflowDraftChanges.graphOnly(graph));
     }
 
-    public WorkflowEntity publish(String appId, String markedName, String markedComment) {
-        findOrCreate(appId);
+    public WorkflowEntity publish(String tenantId, String appId, String markedName, String markedComment) {
+        findOrCreate(tenantId, appId);
         WorkflowEntity snapshot = workflowService.publishDraft(
-                appId, new WorkflowPublication(markedName, markedComment));
+                tenantId, appId, new WorkflowPublication(markedName, markedComment));
         AppService appService = appServiceProvider.getIfAvailable();
         if (appService != null) {
-            appService.bindPublishedWorkflow(appId, snapshot.getId());
+            appService.bindPublishedWorkflow(tenantId, appId, snapshot.getId());
         }
         return snapshot;
     }
 
-    private static AppEntity findFlowApplication(AppService appService, String appId) {
+    private static AppEntity findFlowApplication(AppService appService, String tenantId, String appId) {
         if (appService == null) {
             return null;
         }
         try {
-            AppEntity application = appService.require(appId);
+            AppEntity application = appService.require(tenantId, appId);
             return isFlowMode(application.getMode()) ? application : null;
         } catch (Exception ignored) {
             return null;
         }
     }
 
-    private static void bindWorkflowQuietly(AppService appService, String appId, String workflowId) {
+    private static void bindWorkflowQuietly(AppService appService, String tenantId,
+                                            String appId, String workflowId) {
         if (appService == null) {
             return;
         }
         try {
-            appService.bindWorkflowId(appId, workflowId);
+            appService.bindWorkflowId(tenantId, appId, workflowId);
         } catch (Exception ignored) {
             // The workflow is durable even if its application disappeared during the operation.
         }

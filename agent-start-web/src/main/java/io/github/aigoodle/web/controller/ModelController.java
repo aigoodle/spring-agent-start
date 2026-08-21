@@ -117,13 +117,13 @@ public class ModelController {
     @PutMapping("/model-provider-definitions/{id}")
     public ApiResponse<Void> updateDefinition(@PathVariable String id,
                                               @RequestBody Map<String, Object> patch) {
-        definitionService.updatePartial(id, patch);
+        definitionService.updatePartial(currentTenantId(), id, patch);
         return ApiResponse.ok();
     }
 
     @DeleteMapping("/model-provider-definitions/{id}")
     public ApiResponse<Void> deleteDefinition(@PathVariable String id) {
-        definitionService.delete(id);
+        definitionService.delete(currentTenantId(), id);
         return ApiResponse.ok();
     }
 
@@ -174,7 +174,7 @@ public class ModelController {
 
     @DeleteMapping("/model-providers/{name}/predefined-models/{id}")
     public ApiResponse<Void> deletePredefinedModel(@PathVariable String name, @PathVariable String id) {
-        definitionService.deletePredefined(id);
+        definitionService.deletePredefined(currentTenantId(), id);
         return ApiResponse.ok();
     }
 
@@ -201,7 +201,7 @@ public class ModelController {
         if (enabled) {
             // Persist a lightweight predefined row (tenant-scoped) so this model
             // appears in the catalog on subsequent loads without needing a refresh.
-            if (definitionService.findPredefined(name, modelName, modelType) == null) {
+            if (definitionService.findPredefined(currentTenantId(), name, modelName, modelType) == null) {
                 PredefinedModelEntity row = new PredefinedModelEntity();
                 row.setTenantId(tenantId);
                 row.setProviderName(name);
@@ -305,7 +305,7 @@ public class ModelController {
 
     @GetMapping("/models/{id}")
     public ApiResponse<ModelEntity> getModel(@PathVariable String id) {
-        return ApiResponse.ok(modelService.require(id));
+        return ApiResponse.ok(modelService.require(currentTenantId(), id));
     }
 
     @PostMapping("/models")
@@ -317,12 +317,12 @@ public class ModelController {
     @PutMapping("/models/{id}/credentials")
     public ApiResponse<ModelEntity> updateCredentials(@PathVariable String id,
                                                       @RequestBody Map<String, Object> credentials) {
-        return ApiResponse.ok(modelService.updateCredentials(id, credentials));
+        return ApiResponse.ok(modelService.updateCredentials(currentTenantId(), id, credentials));
     }
 
     @PutMapping("/models/{id}/default")
     public ApiResponse<Void> markDefault(@PathVariable String id) {
-        modelService.setDefault(id);
+        modelService.setDefault(currentTenantId(), id);
         return ApiResponse.ok();
     }
 
@@ -336,12 +336,12 @@ public class ModelController {
                                                @RequestBody Map<String, Object> body) {
         Object v = body.get("enabled");
         boolean enabled = v instanceof Boolean b ? b : Boolean.parseBoolean(String.valueOf(v));
-        return ApiResponse.ok(modelService.setEnabled(id, enabled));
+        return ApiResponse.ok(modelService.setEnabled(currentTenantId(), id, enabled));
     }
 
     @DeleteMapping("/models/{id}")
     public ApiResponse<Void> deleteModel(@PathVariable String id) {
-        modelService.delete(id);
+        modelService.delete(currentTenantId(), id);
         return ApiResponse.ok();
     }
 
@@ -360,7 +360,7 @@ public class ModelController {
      */
     @PostMapping("/models/{id}/test")
     public ApiResponse<Map<String, Object>> testConnection(@PathVariable String id) {
-        return ApiResponse.ok(modelService.testConnection(id));
+        return ApiResponse.ok(modelService.testConnection(currentTenantId(), id));
     }
 
     // -------------------------------------------------------- model parameters
@@ -373,7 +373,7 @@ public class ModelController {
      */
     @GetMapping("/models/{id}/parameters")
     public ApiResponse<ModelParametersView> getModelParameters(@PathVariable String id) {
-        return ApiResponse.ok(catalogQueries.parameters(id));
+        return ApiResponse.ok(catalogQueries.parameters(currentTenantId(), id));
     }
 
     /**
@@ -384,7 +384,7 @@ public class ModelController {
     @PutMapping("/models/{id}/parameters")
     public ApiResponse<ModelParametersView> updateModelParameters(@PathVariable String id,
                                                                    @RequestBody Map<String, Object> parameters) {
-        modelService.updateParameters(id, parameters);
+        modelService.updateParameters(currentTenantId(), id, parameters);
         return getModelParameters(id);
     }
 

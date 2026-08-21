@@ -5,7 +5,10 @@ import io.github.aigoodle.agent.entity.TagBindingEntity;
 import io.github.aigoodle.agent.entity.TagEntity;
 import io.github.aigoodle.agent.mapper.TagBindingMapper;
 import io.github.aigoodle.agent.mapper.TagMapper;
+import io.github.aigoodle.agent.mapper.AppMapper;
+import io.github.aigoodle.agent.entity.AppEntity;
 import io.github.aigoodle.common.exception.PlatformException;
+import io.github.aigoodle.common.context.UserContextHolder;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -22,10 +25,19 @@ public class TagService {
 
     private final TagMapper tagMapper;
     private final TagBindingMapper bindingMapper;
+    private final AppMapper appMapper;
+    private final DatasetOwnershipResolver datasetOwnershipResolver;
 
     public TagService(TagMapper tagMapper, TagBindingMapper bindingMapper) {
+        this(tagMapper, bindingMapper, null, null);
+    }
+
+    public TagService(TagMapper tagMapper, TagBindingMapper bindingMapper,
+                      AppMapper appMapper, DatasetOwnershipResolver datasetOwnershipResolver) {
         this.tagMapper = tagMapper;
         this.bindingMapper = bindingMapper;
+        this.appMapper = appMapper;
+        this.datasetOwnershipResolver = datasetOwnershipResolver;
     }
 
     public List<TagEntity> list(String tenantId, String type) {
@@ -36,10 +48,14 @@ public class TagService {
     }
 
     public TagEntity require(String tagId) {
-        TagEntity tag = tagMapper.selectById(tagId);
-        if (tag == null) {
-            throw new PlatformException("tag_not_found", "Tag not found: " + tagId, null);
-        }
+        return require(UserContextHolder.currentTenantId(), tagId);
+    }
+
+    public TagEntity require(String tenantId, String tagId) {
+        TagEntity tag = tagMapper.selectOne(new LambdaQueryWrapper<TagEntity>()
+                .eq(TagEntity::getTenantId, valueOrDefault(tenantId, DEFAULT_TENANT_ID))
+                .eq(TagEntity::getId, tagId).last("LIMIT 1"));
+        if (tag == null) throw new PlatformException("tag_not_found", "Tag not found", null);
         return tag;
     }
 
@@ -53,54 +69,93 @@ public class TagService {
 
     @Transactional
     public TagEntity rename(String tagId, String name) {
-        TagEntity tag = require(tagId);
+        return rename(UserContextHolder.currentTenantId(), tagId, name);
+    }
+
+    @Transactional
+    public TagEntity rename(String tenantId, String tagId, String name) {
+        TagEntity tag = require(tenantId, tagId);
         tag.setName(name);
-        tagMapper.updateById(tag);
+        tagMapper.update(tag, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<TagEntity>()
+                .eq(TagEntity::getTenantId, tag.getTenantId()).eq(TagEntity::getId, tag.getId()));
         return tag;
     }
 
     @Transactional
     public void delete(String tagId) {
+        delete(UserContextHolder.currentTenantId(), tagId);
+    }
+
+    @Transactional
+    public void delete(String tenantId, String tagId) {
+        TagEntity tag = require(tenantId, tagId);
         bindingMapper.delete(new LambdaQueryWrapper<TagBindingEntity>()
-                .eq(TagBindingEntity::getTagId, tagId));
-        tagMapper.deleteById(tagId);
+                .eq(TagBindingEntity::getTenantId, tag.getTenantId()).eq(TagBindingEntity::getTagId, tagId));
+        tagMapper.delete(new LambdaQueryWrapper<TagEntity>()
+                .eq(TagEntity::getTenantId, tag.getTenantId()).eq(TagEntity::getId, tagId));
     }
 
     // ---------------------------------------------------------------- bindings
 
     public List<TagBindingEntity> bindings(String targetId, String targetType) {
+        return bindings(UserContextHolder.currentTenantId(), targetId, targetType);
+    }
+
+    public List<TagBindingEntity> bindings(String tenantId, String targetId, String targetType) {
+        requireOwnedTarget(tenantId, targetId, targetType);
         return bindingMapper.selectList(new LambdaQueryWrapper<TagBindingEntity>()
+                .eq(TagBindingEntity::getTenantId, valueOrDefault(tenantId, DEFAULT_TENANT_ID))
                 .eq(TagBindingEntity::getTargetId, targetId)
                 .eq(targetType != null, TagBindingEntity::getTargetType, targetType));
     }
 
     @Transactional
     public void bind(String tagId, String targetId, String targetType) {
-        TagEntity tag = require(tagId);
-        String resolvedTargetType = valueOrDefault(targetType, DEFAULT_TARGET_TYPE);
-        TagBindingEntity existingBinding = bindingMapper.selectOne(
-                new LambdaQueryWrapper<TagBindingEntity>()
-                .eq(TagBindingEntity::getTagId, tagId)
-                .eq(TagBindingEntity::getTargetId, targetId)
-                .eq(TagBindingEntity::getTargetType, resolvedTargetType)
-                .last("LIMIT 1"));
-        if (existingBinding != null) {
-            return;
-        }
+        bind(UserContextHolder.currentTenantId(), tagId, targetId, targetType);
+    }
 
-        TagBindingEntity newBinding = new TagBindingEntity();
-        newBinding.setTenantId(valueOrDefault(tag.getTenantId(), DEFAULT_TENANT_ID));
-        newBinding.setTagId(tagId);
-        newBinding.setTargetId(targetId);
-        newBinding.setTargetType(resolvedTargetType);
-        bindingMapper.insert(newBinding);
+    @Transactional
+    public void bind(String tenantId, String tagId, String targetId, String targetType) {
+        TagEntity tag = require(tenantId, tagId);
+        String resolvedTargetType = valueOrDefault(targetType, DEFAULT_TARGET_TYPE);
+        requireOwnedTarget(tenantId, targetId, resolvedTargetType);
+        TagBindingEntity existing = bindingMapper.selectOne(new LambdaQueryWrapper<TagBindingEntity>()
+                .eq(TagBindingEntity::getTenantId, tag.getTenantId()).eq(TagBindingEntity::getTagId, tagId)
+                .eq(TagBindingEntity::getTargetId, targetId)
+                .eq(TagBindingEntity::getTargetType, resolvedTargetType).last("LIMIT 1"));
+        if (existing != null) return;
+        TagBindingEntity binding = new TagBindingEntity();
+        binding.setTenantId(tag.getTenantId()); binding.setTagId(tagId);
+        binding.setTargetId(targetId); binding.setTargetType(resolvedTargetType);
+        bindingMapper.insert(binding);
     }
 
     @Transactional
     public void unbind(String tagId, String targetId) {
+        unbind(UserContextHolder.currentTenantId(), tagId, targetId);
+    }
+
+    @Transactional
+    public void unbind(String tenantId, String tagId, String targetId) {
+        TagEntity tag = require(tenantId, tagId);
         bindingMapper.delete(new LambdaQueryWrapper<TagBindingEntity>()
-                .eq(TagBindingEntity::getTagId, tagId)
-                .eq(TagBindingEntity::getTargetId, targetId));
+                .eq(TagBindingEntity::getTenantId, tag.getTenantId())
+                .eq(TagBindingEntity::getTagId, tagId).eq(TagBindingEntity::getTargetId, targetId));
+    }
+
+    private void requireOwnedTarget(String tenantId, String targetId, String targetType) {
+        String resolvedTenant = valueOrDefault(tenantId, DEFAULT_TENANT_ID);
+        String resolvedType = valueOrDefault(targetType, DEFAULT_TARGET_TYPE);
+        if ("knowledge".equalsIgnoreCase(resolvedType) || "dataset".equalsIgnoreCase(resolvedType)) {
+            if (datasetOwnershipResolver != null) {
+                datasetOwnershipResolver.requireOwned(resolvedTenant, targetId);
+            }
+            return;
+        }
+        if (appMapper == null) return;
+        AppEntity app = appMapper.selectOne(new LambdaQueryWrapper<AppEntity>()
+                .eq(AppEntity::getTenantId, resolvedTenant).eq(AppEntity::getId, targetId).last("LIMIT 1"));
+        if (app == null) throw new PlatformException("tag_target_not_found", "Tag target not found", null);
     }
 
     private static String valueOrDefault(String value, String defaultValue) {

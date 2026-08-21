@@ -56,6 +56,19 @@ public class PromptTemplateService {
         return template;
     }
 
+    public PromptTemplateEntity update(String tenantId, String id, PromptTemplatePatch patch) {
+        PromptTemplateEntity template = require(tenantId, id);
+        if (patch.name() != null) template.setName(patch.name());
+        if (patch.category() != null) template.setCategory(patch.category());
+        if (patch.description() != null) template.setDescription(patch.description());
+        if (patch.content() != null) template.setContent(patch.content());
+        if (patch.tags() != null) template.setTagsJson(JsonUtils.toJson(patch.tags()));
+        mapper.update(template, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<PromptTemplateEntity>()
+                .eq(PromptTemplateEntity::getTenantId, template.getTenantId())
+                .eq(PromptTemplateEntity::getId, template.getId()));
+        return template;
+    }
+
     /** @deprecated use {@link #update(String, PromptTemplatePatch)}. */
     @Deprecated
     public PromptTemplateEntity update(String id, String name, String category,
@@ -67,10 +80,27 @@ public class PromptTemplateService {
         mapper.deleteById(id);
     }
 
+    public void delete(String tenantId, String id) {
+        require(tenantId, id);
+        mapper.delete(new LambdaQueryWrapper<PromptTemplateEntity>()
+                .eq(PromptTemplateEntity::getTenantId, defaultTenant(tenantId))
+                .eq(PromptTemplateEntity::getId, id));
+    }
+
     public PromptTemplateEntity require(String id) {
         PromptTemplateEntity template = mapper.selectById(id);
         if (template == null) {
             throw new PlatformException("prompt_template_not_found", "Prompt template not found: " + id, null);
+        }
+        return template;
+    }
+
+    public PromptTemplateEntity require(String tenantId, String id) {
+        PromptTemplateEntity template = mapper.selectOne(new LambdaQueryWrapper<PromptTemplateEntity>()
+                .eq(PromptTemplateEntity::getTenantId, defaultTenant(tenantId))
+                .eq(PromptTemplateEntity::getId, id).last("LIMIT 1"));
+        if (template == null) {
+            throw new PlatformException("prompt_template_not_found", "Prompt template not found", null);
         }
         return template;
     }

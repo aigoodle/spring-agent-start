@@ -2,6 +2,10 @@ package io.github.aigoodle.web.controller;
 
 import io.github.aigoodle.agent.entity.AppConversationEntity;
 import io.github.aigoodle.agent.service.AppConversationService;
+import io.github.aigoodle.agent.service.AppApiTokenService;
+import io.github.aigoodle.agent.service.AppService;
+import io.github.aigoodle.agent.entity.AppApiTokenEntity;
+import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.web.dto.dify.DifyConversationNameRequest;
 import io.github.aigoodle.web.dto.dify.DifyConversationVO;
 import io.github.aigoodle.web.dto.dify.DifyMessageVO;
@@ -24,6 +28,9 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+
+import static io.github.aigoodle.common.context.UserContextHolder.currentTenantId;
 
 /** Dify-compatible conversation and message-history endpoints. */
 @RestController
@@ -36,13 +43,17 @@ public class DifyChatHistoryController {
     private final AppConversationService conversationService;
     private final DifyMessageHistory messageHistory;
     private final DifyHistoryViewMapper viewMapper;
+    private final AppApiTokenService tokens;
+    private final AppService apps;
 
     public DifyChatHistoryController(AppConversationService conversationService,
                                      DifyMessageHistory messageHistory,
-                                     DifyHistoryViewMapper viewMapper) {
+                                     DifyHistoryViewMapper viewMapper,
+                                     AppApiTokenService tokens, AppService apps) {
         this.conversationService = conversationService;
         this.messageHistory = messageHistory;
         this.viewMapper = viewMapper;
+        this.tokens = tokens; this.apps = apps;
     }
 
     @GetMapping("/conversations")
@@ -54,9 +65,11 @@ public class DifyChatHistoryController {
             @RequestParam(value = "last_id", required = false) String lastConversationId,
             @RequestParam(value = "limit", required = false) Integer requestedPageSize,
             @RequestParam(value = "sort_by", required = false) String sortBy) {
-        String appId = DifyAppIdResolver.resolve(queryAppId, headerAppId, authorizationHeader);
+        Identity identity = identity(queryAppId, headerAppId, authorizationHeader);
+        String appId = identity.appId();
         int pageSize = pageSize(requestedPageSize);
-        List<AppConversationEntity> conversations = conversationService.listByApp(appId);
+        List<AppConversationEntity> conversations = new ArrayList<>(
+                conversationService.listByApp(identity.tenantId(), appId));
         conversations.sort(conversationComparator(sortBy));
 
         int pageStart = indexAfter(conversations, lastConversationId);
@@ -74,8 +87,8 @@ public class DifyChatHistoryController {
             @RequestParam(value = "appId", required = false) String queryAppId,
             @PathVariable String conversationId,
             @RequestBody(required = false) Map<String, Object> body) {
-        DifyAppIdResolver.resolve(queryAppId, headerAppId, authorizationHeader);
-        conversationService.delete(conversationId);
+        Identity identity = identity(queryAppId, headerAppId, authorizationHeader);
+        conversationService.delete(identity.tenantId(), identity.appId(), conversationId);
         return Map.of("result", "success");
     }
 
@@ -86,14 +99,14 @@ public class DifyChatHistoryController {
             @RequestParam(value = "appId", required = false) String queryAppId,
             @PathVariable String conversationId,
             @RequestBody(required = false) DifyConversationNameRequest request) {
-        DifyAppIdResolver.resolve(queryAppId, headerAppId, authorizationHeader);
+        Identity identity = identity(queryAppId, headerAppId, authorizationHeader);
         String requestedName = request == null ? null : request.requestedName();
         if (requestedName == null && request != null && request.requestsAutomaticName()) {
-            requestedName = messageHistory.suggestTitle(conversationId);
+            requestedName = messageHistory.suggestTitle(identity.tenantId(), identity.appId(), conversationId);
         }
         AppConversationEntity conversation = requestedName == null
-                ? conversationService.require(conversationId)
-                : conversationService.rename(conversationId, requestedName);
+                ? conversationService.require(identity.tenantId(), identity.appId(), conversationId)
+                : conversationService.rename(identity.tenantId(), identity.appId(), conversationId, requestedName);
         return viewMapper.toConversation(conversation);
     }
 
@@ -106,10 +119,10 @@ public class DifyChatHistoryController {
             @RequestParam("conversation_id") String conversationId,
             @RequestParam(value = "first_id", required = false) String firstMessageId,
             @RequestParam(value = "limit", required = false) Integer requestedPageSize) {
-        DifyAppIdResolver.resolve(queryAppId, headerAppId, authorizationHeader);
+        Identity identity = identity(queryAppId, headerAppId, authorizationHeader);
         int pageSize = pageSize(requestedPageSize);
         List<DifyMessageVO> messages = viewMapper.toMessages(
-                conversationId, messageHistory.findAll(conversationId));
+                conversationId, messageHistory.findAll(identity.tenantId(), identity.appId(), conversationId));
         messages.sort(Comparator.comparingLong(
                 message -> message.getCreatedAt() == null ? 0L : message.getCreatedAt()));
         messages = messagesBefore(messages, firstMessageId);
@@ -125,6 +138,37 @@ public class DifyChatHistoryController {
         }
         return Math.min(MAX_PAGE_SIZE, requestedPageSize);
     }
+
+    private Identity identity(String queryAppId, String headerAppId, String authorizationHeader) {
+        String requestedAppId = firstNonBlank(queryAppId, headerAppId);
+        String bearer = bearer(authorizationHeader);
+        if (bearer != null) {
+            AppApiTokenEntity token = tokens.findByToken(bearer);
+            if (token == null) throw new PlatformException("api_token_invalid", "Invalid API token", null);
+            if (requestedAppId != null && !Objects.equals(requestedAppId, token.getAppId())) {
+                throw new PlatformException("app_identity_conflict", "API token does not belong to requested app", null);
+            }
+            return new Identity(token.getTenantId(), token.getAppId());
+        }
+        String appId = DifyAppIdResolver.resolve(queryAppId, headerAppId, null);
+        String tenantId = currentTenantId();
+        apps.require(tenantId, appId);
+        return new Identity(tenantId, appId);
+    }
+
+    private static String bearer(String header) {
+        String value = DifyAppIdResolver.trimToNull(header);
+        if (value == null) return null;
+        return value.regionMatches(true, 0, "Bearer ", 0, 7)
+                ? DifyAppIdResolver.trimToNull(value.substring(7)) : value;
+    }
+
+    private static String firstNonBlank(String first, String second) {
+        String value = DifyAppIdResolver.trimToNull(first);
+        return value == null ? DifyAppIdResolver.trimToNull(second) : value;
+    }
+
+    private record Identity(String tenantId, String appId) {}
 
     private static int indexAfter(List<AppConversationEntity> conversations, String conversationId) {
         if (conversationId == null || conversationId.isBlank()) {

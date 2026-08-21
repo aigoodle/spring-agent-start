@@ -15,8 +15,15 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /** Lightweight store for tests and applications that deliberately opt out of JDBC. */
 public class InMemoryAgentRunStore implements AgentRunStore {
-    private final ConcurrentHashMap<String, AgentRunSnapshot> runs = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, List<AgentRunEvent>> eventStreams = new ConcurrentHashMap<>();
+    private record RunKey(String tenantId, String runId) {
+        private RunKey {
+            tenantId = normalizeTenant(tenantId);
+            if (runId == null || runId.isBlank()) throw new IllegalArgumentException("runId is required");
+        }
+    }
+
+    private final ConcurrentHashMap<RunKey, AgentRunSnapshot> runs = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<RunKey, List<AgentRunEvent>> eventStreams = new ConcurrentHashMap<>();
 
     @Override
     public AgentRunSnapshot create(String runId, AgentDefinition definition, AgentRequest request,
@@ -28,7 +35,7 @@ public class InMemoryAgentRunStore implements AgentRunStore {
                 definition.getId(), conversationId, AgentRunStatus.CREATED,
                 JsonUtils.toJson(definition), JsonUtils.toJson(request), null, null,
                 0, null, null, now, now);
-        if (runs.putIfAbsent(runId, created) != null) {
+        if (runs.putIfAbsent(new RunKey(created.tenantId(), runId), created) != null) {
             throw new PlatformException("agent_run_exists", "Agent run already exists: " + runId, null);
         }
         append(created, "RUN_CREATED", created.requestJson());
@@ -38,7 +45,19 @@ public class InMemoryAgentRunStore implements AgentRunStore {
     @Override
     public AgentRunSnapshot transition(String runId, AgentRunStatus target,
                                        AgentResponse response, String error) {
-        AgentRunSnapshot updated = runs.compute(runId, (id, current) -> {
+        return transitionOwned(null, runId, target, response, error);
+    }
+
+    @Override
+    public AgentRunSnapshot transition(String tenantId, String runId, AgentRunStatus target,
+                                       AgentResponse response, String error) {
+        return transitionOwned(normalizeTenant(tenantId), runId, target, response, error);
+    }
+
+    private AgentRunSnapshot transitionOwned(String tenantId, String runId, AgentRunStatus target,
+                                             AgentResponse response, String error) {
+        RunKey key = resolveKey(tenantId, runId);
+        AgentRunSnapshot updated = runs.compute(key, (id, current) -> {
             if (current == null) {
                 throw new PlatformException("agent_run_not_found", "Agent run not found: " + runId, null);
             }
@@ -64,14 +83,24 @@ public class InMemoryAgentRunStore implements AgentRunStore {
 
     @Override
     public Optional<AgentRunSnapshot> find(String runId) {
-        return Optional.ofNullable(runs.get(runId));
+        return uniqueRun(runId).map(entry -> entry.getValue());
+    }
+
+    @Override
+    public Optional<AgentRunSnapshot> find(String tenantId, String runId) {
+        return Optional.ofNullable(runs.get(new RunKey(tenantId, runId)));
     }
 
     @Override
     public List<AgentRunEvent> events(String runId, long afterSequence, int limit) {
+        RunKey key = resolveKey(null, runId);
+        return events(key, afterSequence, limit);
+    }
+
+    private List<AgentRunEvent> events(RunKey key, long afterSequence, int limit) {
         int pageSize = Math.max(1, limit);
-        synchronized (eventStreams.computeIfAbsent(runId, ignored -> new ArrayList<>())) {
-            return eventStreams.get(runId).stream()
+        synchronized (eventStreams.computeIfAbsent(key, ignored -> new ArrayList<>())) {
+            return eventStreams.get(key).stream()
                     .filter(event -> event.sequence() > afterSequence)
                     .limit(pageSize)
                     .toList();
@@ -79,19 +108,50 @@ public class InMemoryAgentRunStore implements AgentRunStore {
     }
 
     @Override
+    public List<AgentRunEvent> events(String tenantId, String runId, long afterSequence, int limit) {
+        if (find(tenantId, runId).isEmpty()) return List.of();
+        return events(new RunKey(tenantId, runId), afterSequence, limit);
+    }
+
+    @Override
     public void appendEvent(String runId, String type, String payloadJson) {
-        AgentRunSnapshot run = runs.get(runId);
-        if (run == null) {
-            throw new PlatformException("agent_run_not_found", "Agent run not found: " + runId, null);
-        }
+        AgentRunSnapshot run = find(runId).orElseThrow(() ->
+                new PlatformException("agent_run_not_found", "Agent run not found: " + runId, null));
+        append(run, type, payloadJson);
+    }
+
+    @Override
+    public void appendEvent(String tenantId, String runId, String type, String payloadJson) {
+        AgentRunSnapshot run = find(tenantId, runId).orElseThrow(() ->
+                new PlatformException("agent_run_not_found", "Agent run not found: " + runId, null));
         append(run, type, payloadJson);
     }
 
     private void append(AgentRunSnapshot run, String type, String payload) {
-        List<AgentRunEvent> events = eventStreams.computeIfAbsent(run.runId(), ignored -> new ArrayList<>());
+        RunKey key = new RunKey(run.tenantId(), run.runId());
+        List<AgentRunEvent> events = eventStreams.computeIfAbsent(key, ignored -> new ArrayList<>());
         synchronized (events) {
             events.add(new AgentRunEvent(UUID.randomUUID().toString(), run.runId(),
                     events.size() + 1L, type, payload, LocalDateTime.now()));
         }
+    }
+
+    private RunKey resolveKey(String tenantId, String runId) {
+        if (tenantId != null) return new RunKey(tenantId, runId);
+        return uniqueRun(runId).map(java.util.Map.Entry::getKey).orElse(new RunKey("default", runId));
+    }
+
+    private Optional<java.util.Map.Entry<RunKey, AgentRunSnapshot>> uniqueRun(String runId) {
+        List<java.util.Map.Entry<RunKey, AgentRunSnapshot>> matches = runs.entrySet().stream()
+                .filter(entry -> entry.getKey().runId().equals(runId)).limit(2).toList();
+        if (matches.size() > 1) {
+            throw new PlatformException("agent_run_tenant_required",
+                    "Tenant id is required because run id is not globally unique: " + runId, null);
+        }
+        return matches.stream().findFirst();
+    }
+
+    private static String normalizeTenant(String value) {
+        return value == null || value.isBlank() ? "default" : value.trim();
     }
 }

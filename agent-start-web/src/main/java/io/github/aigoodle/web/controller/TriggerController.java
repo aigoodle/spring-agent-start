@@ -47,7 +47,7 @@ public class TriggerController {
 
     @GetMapping("/triggers/{id}")
     public ApiResponse<TriggerEntity> get(@PathVariable String id) {
-        return ApiResponse.ok(triggerService.require(id));
+        return ApiResponse.ok(triggerService.require(currentTenantId(), id));
     }
 
     @PostMapping("/triggers")
@@ -66,13 +66,13 @@ public class TriggerController {
 
     @PutMapping("/triggers/{id}/enabled")
     public ApiResponse<Void> setEnabled(@PathVariable String id, @RequestParam boolean enabled) {
-        triggerService.setEnabled(id, enabled);
+        triggerService.setEnabled(currentTenantId(), id, enabled);
         return ApiResponse.ok();
     }
 
     @DeleteMapping("/triggers/{id}")
     public ApiResponse<Void> delete(@PathVariable String id) {
-        triggerService.delete(id);
+        triggerService.delete(currentTenantId(), id);
         return ApiResponse.ok();
     }
 
@@ -85,7 +85,7 @@ public class TriggerController {
     @PostMapping("/triggers/{id}/fire")
     public ApiResponse<DispatchResult> fire(@PathVariable String id,
                                             @RequestBody(required = false) Map<String, Object> payload) {
-        return ApiResponse.ok(triggerService.fireSynchronously(
+        return ApiResponse.ok(triggerService.fireSynchronously(currentTenantId(),
                 TriggerInvocationRequest.manual(id, payload)));
     }
 
@@ -93,16 +93,16 @@ public class TriggerController {
 
     @GetMapping("/triggers/{id}/invocations")
     public ApiResponse<List<TriggerInvocationEntity>> invocations(@PathVariable String id) {
-        return ApiResponse.ok(triggerService.invocations(id));
+        return ApiResponse.ok(triggerService.invocations(currentTenantId(), id));
     }
 
     @GetMapping("/invocations/{id}")
     public ApiResponse<TriggerInvocationEntity> invocation(@PathVariable String id) {
-        return ApiResponse.ok(triggerService.invocation(id));
+        return ApiResponse.ok(triggerService.invocation(currentTenantId(), id));
     }
 
     @PostMapping("/invocations/{id}/replay")
     public ApiResponse<TriggerInvocationEntity> replay(@PathVariable String id) {
-        return ApiResponse.ok(triggerService.replay(id));
+        return ApiResponse.ok(triggerService.replay(currentTenantId(), id));
     }
 }

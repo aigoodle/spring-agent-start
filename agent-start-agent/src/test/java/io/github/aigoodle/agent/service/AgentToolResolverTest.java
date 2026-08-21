@@ -16,6 +16,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -61,14 +62,14 @@ class AgentToolResolverTest {
         assertThatThrownBy(() -> resolver.resolve(definition, this::emptyRun))
                 .isInstanceOfSatisfying(PlatformException.class, exception ->
                         assertThat(exception.getCode()).isEqualTo("invalid_agent_delegation"));
-        verify(appMapper, never()).selectById("agent-1");
+        verify(appMapper, never()).selectOne(any());
     }
 
     @Test
     void rejectsDelegationAcrossTenantBoundaries() {
         AppMapper appMapper = mock(AppMapper.class);
         AppEntity delegate = delegate("worker-1", "tenant-b", "Worker");
-        when(appMapper.selectById("worker-1")).thenReturn(delegate);
+        when(appMapper.selectOne(any())).thenReturn(delegate);
         AgentToolResolver resolver = resolver(appMapper, emptyRegistry());
         AgentDefinition definition = definition("agent-1");
         definition.setTenantId("tenant-a");
@@ -83,7 +84,7 @@ class AgentToolResolverTest {
     void buildsAStableToolNameWhenTheDisplayNameHasNoAsciiCharacters() {
         AppMapper appMapper = mock(AppMapper.class);
         AppEntity delegate = delegate("worker-1", " ", "研究助手");
-        when(appMapper.selectById("worker-1")).thenReturn(delegate);
+        when(appMapper.selectOne(any())).thenReturn(delegate);
         AgentToolResolver resolver = resolver(appMapper, emptyRegistry());
         AgentDefinition definition = definition("agent-1");
         definition.setTenantId(null);
@@ -95,7 +96,7 @@ class AgentToolResolverTest {
         assertThat(resolved.getFirst().name()).isEqualTo("delegate_to_worker_1");
         assertThat(resolved.getFirst().description())
                 .isEqualTo("Delegate a subtask to the '研究助手' agent.");
-        verify(appMapper).selectById("worker-1");
+        verify(appMapper).selectOne(any());
     }
 
     private AgentResponse emptyRun(String agentId, AgentRequest request) {

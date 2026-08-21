@@ -6,6 +6,7 @@ import io.github.aigoodle.web.common.ApiResponse;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
+import static io.github.aigoodle.common.context.UserContextHolder.currentTenantId;
 
 @RestController
 @ConditionalOnBean(ConnectorExecutionQueryService.class)
@@ -16,11 +17,10 @@ public class ConnectorExecutionController {
 
     @GetMapping
     public ApiResponse<List<ConnectorExecutionEntity>> list(
-            @RequestParam(defaultValue = "default") String tenantId,
             @RequestParam(required = false) String provider,
             @RequestParam(required = false) String connectorId,
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "100") int limit) {
-        return ApiResponse.ok(executions.list(tenantId, provider, connectorId, status, limit));
+        return ApiResponse.ok(executions.list(currentTenantId(), provider, connectorId, status, limit));
     }
 }

@@ -30,7 +30,8 @@ class LlmMetricsIntegrationTest {
                 .modelType(ModelType.LLM).build());
 
         // a real chat call through ModelService -> the metering decorator records it
-        String reply = modelService.getChatClient(model.getId()).prompt().user("hello").call().content();
+        String reply = modelService.getModelInstance("obs", model.getId())
+                .getChatClient().prompt().user("hello").call().content();
         assertEquals("ok", reply);
 
         LlmCallRecord rec = metrics.recentCalls(50).stream()

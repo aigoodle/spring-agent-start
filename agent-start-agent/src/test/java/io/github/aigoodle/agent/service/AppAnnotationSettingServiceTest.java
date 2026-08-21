@@ -79,7 +79,22 @@ class AppAnnotationSettingServiceTest {
         assertThat(saved).isSameAs(existing);
         assertThat(saved.getScoreThreshold()).isEqualTo(0.95f);
         assertThat(saved.getEnabled()).isTrue();
-        verify(settingMapper).updateById(existing);
+        verify(settingMapper).update(org.mockito.ArgumentMatchers.eq(existing), any());
         verify(settingMapper, never()).insert(any(AppAnnotationSettingEntity.class));
+    }
+
+    @Test
+    void scopedCreateOverridesForgedTenantAndApplication() {
+        AppAnnotationSettingMapper mapper = mock(AppAnnotationSettingMapper.class);
+        AppAnnotationSettingEntity supplied = new AppAnnotationSettingEntity();
+        supplied.setId("forged-id"); supplied.setTenantId("tenant-b"); supplied.setAppId("app-b");
+
+        AppAnnotationSettingEntity saved = new AppAnnotationSettingService(mapper)
+                .save("tenant-a", "app-a", supplied);
+
+        assertThat(saved.getId()).isNull();
+        assertThat(saved.getTenantId()).isEqualTo("tenant-a");
+        assertThat(saved.getAppId()).isEqualTo("app-a");
+        verify(mapper).insert(saved);
     }
 }

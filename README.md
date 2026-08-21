@@ -22,9 +22,12 @@ ecosystem, so you can drop enterprise-grade agent capabilities into an existing 
 | Module | Coordinate | Depends on | What it gives you |
 |--------|------------|-----------|-------------------|
 | `agent-start-common` | `io.github.aigoodle:agent-start-common` | – | JSON, AES-GCM crypto, base entity |
-| `agent-start-model` | `io.github.aigoodle:agent-start-model` | common | Model providers, encrypted credentials, model instance factory, chat/embedding runtime |
+| `agent-start-persistence` | `io.github.aigoodle:agent-start-persistence` | common | Host-context-aware SQL tenant guard and explicit worker bypass |
+| `agent-start-model` | `io.github.aigoodle:agent-start-model` | common, persistence | Model providers, encrypted credentials, model instance factory, chat/embedding runtime |
 | `agent-start-knowledge` | `io.github.aigoodle:agent-start-knowledge` | model | Datasets, document ingestion, template chunking, vector + keyword hybrid retrieval |
 | `agent-start-tools` | `io.github.aigoodle:agent-start-tools` | model | Tool/connector SPI, built-in tools (calculator, time, HTTP), Spring AI `ToolCallback` adapter, **MCP client** (stdio + HTTP) |
+| `agent-start-connector` | `io.github.aigoodle:agent-start-connector` | common, persistence | Multi-tenant Connector/Channel control plane, durable Outbox and in-memory embedded quota |
+| `agent-start-connector-redis` | `io.github.aigoodle:agent-start-connector-redis` | connector, Spring Data Redis | Optional atomic cluster-wide outbound quota; automatically replaces the memory limiter when Redis is available |
 | `agent-start-memory` | `io.github.aigoodle:agent-start-memory` | common | Layered working, short-term and long-term memory with TTL, promotion and hybrid ranking |
 | `agent-start-agent` | `io.github.aigoodle:agent-start-agent` | model, tools, memory, *(knowledge optional)* | Agent runtime: strategies (ReAct, function-calling, plan-execute), multi-agent delegation, human-in-the-loop approval |
 | `agent-start-trigger` | `io.github.aigoodle:agent-start-trigger` | workflow | Triggers/automation: webhook, cron and event triggers driving workflows async, with invocation history + replay |
@@ -34,6 +37,8 @@ ecosystem, so you can drop enterprise-grade agent capabilities into an existing 
 ```
         agent-start-common
                  │
+     agent-start-persistence
+                 │
         agent-start-model ───────────────┐
             │                              │
    agent-start-knowledge ──(optional)──► agent-start-workflow
@@ -42,6 +47,11 @@ ecosystem, so you can drop enterprise-grade agent capabilities into an existing 
 Each functional module ships a Spring Boot auto-configuration, so adding the jar is all
 the wiring you need. Want only the knowledge base? Import `agent-start-knowledge`
 (it pulls `agent-start-model`). Want only orchestration? Import `agent-start-workflow`.
+
+Tenant identity remains owned by the embedding host. Set a trusted `CurrentUser` through
+`UserContextHolder` at the request boundary; `agent-start-persistence` rejects protected SQL
+whose bound `tenant_id` differs from that host context. See
+[`docs/architecture/tenant-persistence.md`](docs/architecture/tenant-persistence.md).
 
 ---
 
@@ -225,14 +235,26 @@ Integration tests use an in-memory H2 database (auto-created from each module's
 ## Persistence
 
 Each module ships portable DDL under `src/main/resources/db/*-schema.sql` (H2 + MySQL).
-Tenancy is opt-in: a blank `tenant_id` defaults to `"default"`. Configure the credential
-encryption key in production:
+Tenancy is opt-in: a blank `tenant_id` defaults to `"default"`. Model and Connector
+credentials are written with tenant-bound AES-GCM keys derived from the configured root secret;
+a ciphertext copied to another tenant cannot be decrypted. Existing legacy ciphertext remains
+readable for rolling upgrades. Embedded hosts can replace the tenant encryptor SPI with KMS/HSM
+key resolution. Configure non-default root secrets in production:
 
 ```yaml
 spring-agent:
   model:
     encryption-secret: ${AGENT_SECRET}   # change me!
+  connector:
+    encryption-secret: ${CONNECTOR_SECRET} # change me!
 ```
+
+The standalone `agent-start-server` adds a fail-fast production guard without changing the
+embedded starters' host-owned security model. Activating the `prod` or `production` profile (or
+setting `AGENT_PRODUCTION_GUARD=true`) refuses startup while demo identity/debugging, wildcard CORS,
+default database credentials, weak encryption roots, or demo OpenClaw/Hermes bridge tokens remain.
+Embedded applications continue to supply tenant/user identity and secret policy through their own
+trusted runtime context and SPI beans.
 
 ## Extension points at a glance
 

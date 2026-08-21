@@ -44,6 +44,7 @@ public class WorkflowController {
     private final WorkflowService workflowService;
     private final WorkflowExampleService workflowExampleService;
     private final WorkflowDraftCoordinator draftCoordinator;
+    private final ObjectProvider<AppService> appServiceProvider;
     private final ObjectProvider<TriggerService> triggerServiceProvider;
 
     public WorkflowController(WorkflowService workflowService,
@@ -52,6 +53,7 @@ public class WorkflowController {
                               ObjectProvider<TriggerService> triggerServiceProvider) {
         this.workflowService = workflowService;
         this.workflowExampleService = workflowExampleService;
+        this.appServiceProvider = appServiceProvider;
         this.draftCoordinator = new WorkflowDraftCoordinator(workflowService, appServiceProvider);
         this.triggerServiceProvider = triggerServiceProvider;
     }
@@ -68,6 +70,7 @@ public class WorkflowController {
                     "app_id_required",
                     "Field 'appId' is required. Every workflow save is scoped to an app.");
         }
+        requireOwnedApp(request.getAppId());
         return ApiResponse.ok(workflowService.save(new WorkflowDraftDefinition(
                 request.getAppId(),
                 currentTenantId(),
@@ -78,25 +81,26 @@ public class WorkflowController {
 
     @GetMapping("/workflows/{id}")
     public ApiResponse<WorkflowEntity> get(@PathVariable String id) {
-        return ApiResponse.ok(workflowService.require(id));
+        return ApiResponse.ok(workflowService.require(currentTenantId(), id));
     }
 
     @PutMapping("/workflows/{id}")
     public ApiResponse<WorkflowEntity> update(@PathVariable String id,
                                               @RequestBody WorkflowSaveRequest request) {
-        return ApiResponse.ok(workflowService.update(
+        return ApiResponse.ok(workflowService.update(currentTenantId(),
                 id, request.getName(), request.getMode(), request.getGraph()));
     }
 
     @DeleteMapping("/workflows/{id}")
     public ApiResponse<Void> delete(@PathVariable String id) {
-        workflowService.delete(id);
+        workflowService.delete(currentTenantId(), id);
         return ApiResponse.ok();
     }
 
     @GetMapping("/apps/{appId}/workflow/draft")
     public ApiResponse<WorkflowEntity> getDraft(@PathVariable String appId) {
-        WorkflowEntity draft = draftCoordinator.findOrCreate(appId);
+        requireOwnedApp(appId);
+        WorkflowEntity draft = draftCoordinator.findOrCreate(currentTenantId(), appId);
         return draft == null
                 ? ApiResponse.error("draft_not_found", "No draft workflow for app " + appId)
                 : ApiResponse.ok(draft);
@@ -105,16 +109,19 @@ public class WorkflowController {
     @PutMapping("/apps/{appId}/workflow/draft")
     public ApiResponse<WorkflowEntity> saveDraft(@PathVariable String appId,
                                                  @RequestBody WorkflowSaveRequest request) {
-        return ApiResponse.ok(draftCoordinator.save(appId, request.getGraph()));
+        requireOwnedApp(appId);
+        return ApiResponse.ok(draftCoordinator.save(currentTenantId(), appId, request.getGraph()));
     }
 
     @PostMapping("/apps/{appId}/workflow/publish")
     @Transactional
     public ApiResponse<WorkflowEntity> publish(@PathVariable String appId,
                                                @RequestBody(required = false) PublishRequest request) {
+        requireOwnedApp(appId);
         String markedName = request == null ? null : request.getMarkedName();
         String markedComment = request == null ? null : request.getMarkedComment();
-        WorkflowEntity published = draftCoordinator.publish(appId, markedName, markedComment);
+        WorkflowEntity published = draftCoordinator.publish(
+                currentTenantId(), appId, markedName, markedComment);
         TriggerService triggerService = triggerServiceProvider.getIfAvailable();
         if (triggerService != null) {
             triggerService.syncPublishedWorkflowSchedule(published, workflowService);
@@ -124,19 +131,22 @@ public class WorkflowController {
 
     @GetMapping("/apps/{appId}/workflows")
     public ApiResponse<List<WorkflowEntity>> listByApp(@PathVariable String appId) {
-        return ApiResponse.ok(workflowService.listByApp(appId));
+        requireOwnedApp(appId);
+        return ApiResponse.ok(workflowService.listByApp(currentTenantId(), appId));
     }
 
     @PostMapping("/apps/{appId}/workflow/restore/{snapshotId}")
     public ApiResponse<WorkflowEntity> restore(@PathVariable String appId,
                                                @PathVariable String snapshotId) {
-        return ApiResponse.ok(workflowService.restorePublishedSnapshot(appId, snapshotId));
+        requireOwnedApp(appId);
+        return ApiResponse.ok(workflowService.restorePublishedSnapshot(
+                currentTenantId(), appId, snapshotId));
     }
 
     @GetMapping("/workflows/{id}/runs")
     public ApiResponse<List<WorkflowRunEntity>> runs(@PathVariable String id,
                                                       @RequestParam(defaultValue = "20") int limit) {
-        return ApiResponse.ok(workflowService.runs(id, limit));
+        return ApiResponse.ok(workflowService.runs(currentTenantId(), id, limit));
     }
 
     @PostMapping("/workflows/{id}/run")
@@ -151,8 +161,8 @@ public class WorkflowController {
         if (request.getGraph() == null) {
             return ApiResponse.error("graph_required", "Field 'graph' is required for ad-hoc runs");
         }
-        return ApiResponse.ok(workflowService.runGraph(
-                request.getGraph(), inputsOf(request), request.getConversationId()));
+        return ApiResponse.ok(workflowService.runGraphForTenant(
+                request.getGraph(), inputsOf(request), request.getConversationId(), currentTenantId()));
     }
 
     @GetMapping("/node-types")
@@ -168,6 +178,11 @@ public class WorkflowController {
     private static Map<String, Object> inputsOf(WorkflowRunRequest request) {
         if (request.getData() != null) return request.getData();
         return request.getInputs() == null ? new HashMap<>() : request.getInputs();
+    }
+
+    private void requireOwnedApp(String appId) {
+        AppService apps = appServiceProvider.getIfAvailable();
+        if (apps != null) apps.require(currentTenantId(), appId);
     }
 
     @Data

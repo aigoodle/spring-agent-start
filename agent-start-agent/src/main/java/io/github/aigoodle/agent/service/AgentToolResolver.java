@@ -1,5 +1,6 @@
 package io.github.aigoodle.agent.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.github.aigoodle.agent.api.AgentDefinition;
 import io.github.aigoodle.agent.api.AgentRequest;
 import io.github.aigoodle.agent.api.AgentResponse;
@@ -73,13 +74,17 @@ final class AgentToolResolver {
                     null);
         }
 
-        AppEntity delegate = appMapper.selectById(delegateAgentId);
+        AppEntity delegate = appMapper.selectOne(new LambdaQueryWrapper<AppEntity>()
+                .eq(AppEntity::getTenantId, effectiveTenant(owner.getTenantId()))
+                .eq(AppEntity::getId, delegateAgentId)
+                .last("LIMIT 1"));
         if (delegate == null) {
             return null;
         }
         requireSameTenant(owner, delegate);
 
-        AppModelConfigEntity delegateConfig = modelConfigService.findByAppId(delegateAgentId);
+        AppModelConfigEntity delegateConfig = modelConfigService.findByAppId(
+                delegate.getTenantId(), delegateAgentId);
         String displayName = firstText(delegate.getName(), delegateAgentId);
         String toolName = "delegate_to_" + toolNameSegment(displayName, delegateAgentId);
         String description = delegationDescription(displayName, delegateConfig);

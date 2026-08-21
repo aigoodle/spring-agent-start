@@ -1,6 +1,8 @@
 package io.github.aigoodle.knowledge.index;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import io.github.aigoodle.common.context.UserContextHolder;
 import io.github.aigoodle.knowledge.chunk.Chunk;
 import io.github.aigoodle.knowledge.entity.DatasetEntity;
 import io.github.aigoodle.knowledge.entity.KnowledgeDocumentEntity;
@@ -53,15 +55,29 @@ public class IndexingService {
 
     /** Read paginated segments for a document — powers the frontend "chunks" tab. */
     public List<SegmentEntity> listSegments(String documentId, int page, int pageSize) {
+        return listSegments(UserContextHolder.currentTenantId(), documentId, page, pageSize);
+    }
+
+    public List<SegmentEntity> listSegments(String tenantId, String documentId, int page, int pageSize) {
         int offset = (page - 1) * pageSize;
         return segmentMapper.selectList(new LambdaQueryWrapper<SegmentEntity>()
+                .eq(SegmentEntity::getTenantId, tenantId)
                 .eq(SegmentEntity::getDocumentId, documentId)
                 .orderByAsc(SegmentEntity::getPosition)
                 .last("limit " + pageSize + " offset " + offset));
     }
 
+    public List<SegmentEntity> listSegmentsByDataset(String tenantId, String datasetId) {
+        return segmentMapper.selectList(new LambdaQueryWrapper<SegmentEntity>()
+                .eq(SegmentEntity::getTenantId, tenantId)
+                .eq(SegmentEntity::getDatasetId, datasetId)
+                .orderByAsc(SegmentEntity::getDocumentId)
+                .orderByAsc(SegmentEntity::getPosition));
+    }
+
     public void removeDocument(DatasetEntity dataset, String documentId) {
         List<SegmentEntity> segments = segmentMapper.selectList(new LambdaQueryWrapper<SegmentEntity>()
+                .eq(SegmentEntity::getTenantId, dataset.getTenantId())
                 .eq(SegmentEntity::getDocumentId, documentId));
         if (segments.isEmpty()) {
             return;
@@ -75,17 +91,18 @@ public class IndexingService {
             }
         }
         segmentMapper.delete(new LambdaQueryWrapper<SegmentEntity>()
+                .eq(SegmentEntity::getTenantId, dataset.getTenantId())
                 .eq(SegmentEntity::getDocumentId, documentId));
     }
 
     /** Edit a segment's content: re-embed and swap the vector in the store. */
     public SegmentEntity updateSegment(DatasetEntity dataset, String segmentId, String content) {
-        SegmentEntity segment = segmentMapper.selectById(segmentId);
+        SegmentEntity segment = getSegment(dataset.getTenantId(), segmentId);
         if (segment == null) {
             return null;
         }
         documentMapper.updateContent(segment, content);
-        segmentMapper.updateById(segment);
+        updateOwned(segment);
 
         if (Boolean.TRUE.equals(segment.getEnabled()) && vectorStoreManager.hasVectorIndex(dataset)) {
             try {
@@ -100,7 +117,7 @@ public class IndexingService {
 
     /** Delete a single segment (and its vector) without touching sibling segments. */
     public void deleteSegment(DatasetEntity dataset, String segmentId) {
-        SegmentEntity segment = segmentMapper.selectById(segmentId);
+        SegmentEntity segment = getSegment(dataset.getTenantId(), segmentId);
         if (segment == null) {
             return;
         }
@@ -111,7 +128,9 @@ public class IndexingService {
                 logger.warn("Failed to delete vector for segment {}: {}", segmentId, exception.getMessage());
             }
         }
-        segmentMapper.deleteById(segmentId);
+        segmentMapper.delete(new LambdaQueryWrapper<SegmentEntity>()
+                .eq(SegmentEntity::getTenantId, dataset.getTenantId())
+                .eq(SegmentEntity::getId, segmentId));
     }
 
     /**
@@ -119,7 +138,7 @@ public class IndexingService {
      * so it can no longer be retrieved; when re-enabled we re-embed and add it back.
      */
     public SegmentEntity setSegmentEnabled(DatasetEntity dataset, String segmentId, boolean enabled) {
-        SegmentEntity segment = segmentMapper.selectById(segmentId);
+        SegmentEntity segment = getSegment(dataset.getTenantId(), segmentId);
         if (segment == null) {
             return null;
         }
@@ -127,7 +146,7 @@ public class IndexingService {
             return segment;
         }
         segment.setEnabled(enabled);
-        segmentMapper.updateById(segment);
+        updateOwned(segment);
 
         if (vectorStoreManager.hasVectorIndex(dataset)) {
             try {
@@ -145,7 +164,13 @@ public class IndexingService {
     }
 
     public SegmentEntity getSegment(String segmentId) {
-        return segmentMapper.selectById(segmentId);
+        return getSegment(UserContextHolder.currentTenantId(), segmentId);
+    }
+
+    public SegmentEntity getSegment(String tenantId, String segmentId) {
+        return segmentMapper.selectOne(new LambdaQueryWrapper<SegmentEntity>()
+                .eq(SegmentEntity::getTenantId, tenantId)
+                .eq(SegmentEntity::getId, segmentId).last("LIMIT 1"));
     }
 
     /**
@@ -155,6 +180,7 @@ public class IndexingService {
      */
     public SegmentEntity appendSegment(DatasetEntity dataset, KnowledgeDocumentEntity document, String content) {
         List<SegmentEntity> existing = segmentMapper.selectList(new LambdaQueryWrapper<SegmentEntity>()
+                .eq(SegmentEntity::getTenantId, dataset.getTenantId())
                 .eq(SegmentEntity::getDocumentId, document.getId()));
         int nextPosition = existing.stream()
                 .mapToInt(segment -> segment.getPosition() == null ? 0 : segment.getPosition())
@@ -183,6 +209,7 @@ public class IndexingService {
      */
     public int reembedDocument(DatasetEntity dataset, String documentId) {
         List<SegmentEntity> segments = segmentMapper.selectList(new LambdaQueryWrapper<SegmentEntity>()
+                .eq(SegmentEntity::getTenantId, dataset.getTenantId())
                 .eq(SegmentEntity::getDocumentId, documentId));
         if (segments.isEmpty() || !vectorStoreManager.hasVectorIndex(dataset)) {
             return 0;
@@ -207,5 +234,11 @@ public class IndexingService {
             vectorStoreManager.getStore(dataset).add(vectorDocuments);
         }
         return vectorDocuments.size();
+    }
+
+    private void updateOwned(SegmentEntity segment) {
+        segmentMapper.update(segment, new LambdaUpdateWrapper<SegmentEntity>()
+                .eq(SegmentEntity::getTenantId, segment.getTenantId())
+                .eq(SegmentEntity::getId, segment.getId()));
     }
 }

@@ -30,14 +30,14 @@ public class PromptReferenceScanner {
         this.workflowService = workflowService;
     }
 
-    public List<Map<String, Object>> findUsingTemplate(String templateId) {
+    public List<Map<String, Object>> findUsingTemplate(String tenantId, String templateId) {
         if (templateId == null || templateId.isBlank()) {
             return List.of();
         }
         // Match either JSON-quoted form to avoid coincidental matches inside content strings.
         String needle = "\"systemPromptTemplateId\":\"" + templateId + "\"";
         List<Map<String, Object>> hits = new ArrayList<>();
-        for (WorkflowEntity wf : workflowService.list(null)) {
+        for (WorkflowEntity wf : workflowService.list(tenantId)) {
             // Round-trip the JsonNode through toString() for a cheap contains-check.
             String graph = wf.getGraph() == null ? null : wf.getGraph().toString();
             if (graph != null && graph.contains(needle)) {

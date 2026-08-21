@@ -16,6 +16,7 @@ import java.util.List;
 final class FunctionCallingChatExchange {
 
     String exchange(AgentRunContext context, List<ToolCallback> toolCallbacks) {
+        context.claimModelCall();
         ChatClient.ChatClientRequestSpec request = configureRequest(context, toolCallbacks);
         if (!context.isTokenStreamingEnabled()) {
             String content = request.call().content();

@@ -46,11 +46,11 @@ public final class DefaultAgentContextEngine implements AgentContextEngine {
                 budget * clamp(properties.getLongTermContextShare(), 0, 0.8)));
 
         List<AgentMessage> durable = memory.recall(new MemoryQuery(definition.getTenantId(),
-                        definition.getId(), null, request.query(), Set.of(MemoryTier.LONG_TERM),
+                        request.memoryOwnerId(), null, request.query(), Set.of(MemoryTier.LONG_TERM),
                         Math.max(1, window / 3)))
                 .stream().map(item -> AgentMessage.system("[Long-term memory] " + item.content()))
                 .toList();
-        List<AgentMessage> history = memory.history(definition.getTenantId(), definition.getId(),
+        List<AgentMessage> history = memory.history(definition.getTenantId(), request.memoryOwnerId(),
                         request.conversationId(), window)
                 .stream().map(DefaultAgentContextEngine::toMessage).toList();
 

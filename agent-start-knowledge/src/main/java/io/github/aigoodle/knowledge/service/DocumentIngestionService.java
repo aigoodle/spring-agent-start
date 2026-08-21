@@ -28,6 +28,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Base64;
+import io.github.aigoodle.common.context.UserContextHolder;
 import java.security.MessageDigest;
 
 /** Coordinates extraction, chunking, indexing and document status transitions. */
@@ -67,19 +68,32 @@ final class DocumentIngestionService {
     }
 
     KnowledgeDocumentEntity addText(String datasetId, String name, String text) {
-        return submit(datasetId, name, "text", extractor.extractText(text));
+        return addText(UserContextHolder.currentTenantId(), datasetId, name, text);
+    }
+
+    KnowledgeDocumentEntity addText(String tenantId, String datasetId, String name, String text) {
+        return submit(tenantId, datasetId, name, "text", extractor.extractText(text));
     }
 
     KnowledgeDocumentEntity addMarkdown(String datasetId, String name, String markdown) {
-        return submit(datasetId, name, "markdown", extractor.extractMarkdown(markdown, name));
+        return addMarkdown(UserContextHolder.currentTenantId(), datasetId, name, markdown);
+    }
+
+    KnowledgeDocumentEntity addMarkdown(String tenantId, String datasetId, String name, String markdown) {
+        return submit(tenantId, datasetId, name, "markdown", extractor.extractMarkdown(markdown, name));
     }
 
     KnowledgeDocumentEntity addFile(String datasetId, String filename, byte[] bytes) {
-        KnowledgeDocumentEntity document = submit(datasetId, filename, "file", extractor.parseFile(bytes, filename));
+        return addFile(UserContextHolder.currentTenantId(), datasetId, filename, bytes);
+    }
+
+    KnowledgeDocumentEntity addFile(String tenantId, String datasetId, String filename, byte[] bytes) {
+        KnowledgeDocumentEntity document = submit(
+                tenantId, datasetId, filename, "file", extractor.parseFile(bytes, filename));
         document.setSourceDataBase64(Base64.getEncoder().encodeToString(bytes == null ? new byte[0] : bytes));
         document.setFileSize(bytes == null ? 0L : (long) bytes.length);
         document.setSourceChecksum(sha256(bytes));
-        documentMapper.updateById(document);
+        updateOwned(document);
         return document;
     }
 
@@ -114,12 +128,17 @@ final class DocumentIngestionService {
 
     KnowledgeDocumentEntity ingest(String datasetId, String name,
                                     String sourceType, ParsedDocument parsedDocument) {
-        DatasetEntity dataset = datasetService.require(datasetId);
+        return ingest(UserContextHolder.currentTenantId(), datasetId, name, sourceType, parsedDocument);
+    }
+
+    KnowledgeDocumentEntity ingest(String tenantId, String datasetId, String name,
+                                    String sourceType, ParsedDocument parsedDocument) {
+        DatasetEntity dataset = datasetService.require(tenantId, datasetId);
         String extractedText = parsedDocument == null ? "" : parsedDocument.text();
         KnowledgeDocumentEntity document = createDocument(
                 dataset, name, sourceType, extractedText, DocumentStatus.PARSING);
         applyParseDiagnostics(document, parsedDocument);
-        documentMapper.updateById(document);
+        updateOwned(document);
 
         try {
             ProcessRule processRule = datasetService.processRule(dataset);
@@ -143,7 +162,7 @@ final class DocumentIngestionService {
                     name, datasetId, exception.getMessage(), exception);
             document.setStatus(DocumentStatus.FAILED);
             document.setErrorMessage(exception.getMessage());
-            documentMapper.updateById(document);
+            updateOwned(document);
         }
         return document;
     }
@@ -153,12 +172,23 @@ final class DocumentIngestionService {
         return submit(datasetId, name, sourceType, plainDocument(name, sourceType, extractedText));
     }
 
+    private KnowledgeDocumentEntity submit(String tenantId, String datasetId, String name,
+                                            String sourceType, String extractedText) {
+        return submit(tenantId, datasetId, name, sourceType,
+                plainDocument(name, sourceType, extractedText));
+    }
+
     private KnowledgeDocumentEntity submit(String datasetId, String name,
                                             String sourceType, ParsedDocument parsedDocument) {
+        return submit(UserContextHolder.currentTenantId(), datasetId, name, sourceType, parsedDocument);
+    }
+
+    private KnowledgeDocumentEntity submit(String tenantId, String datasetId, String name,
+                                            String sourceType, ParsedDocument parsedDocument) {
         if (ingestionQueue != null && queueMapper != null) {
-            return enqueue(datasetId, name, sourceType, parsedDocument);
+            return enqueue(tenantId, datasetId, name, sourceType, parsedDocument);
         }
-        return ingest(datasetId, name, sourceType, parsedDocument);
+        return ingest(tenantId, datasetId, name, sourceType, parsedDocument);
     }
 
     private KnowledgeDocumentEntity enqueue(String datasetId, String name,
@@ -168,12 +198,17 @@ final class DocumentIngestionService {
 
     private KnowledgeDocumentEntity enqueue(String datasetId, String name,
                                              String sourceType, ParsedDocument parsedDocument) {
-        DatasetEntity dataset = datasetService.require(datasetId);
+        return enqueue(UserContextHolder.currentTenantId(), datasetId, name, sourceType, parsedDocument);
+    }
+
+    private KnowledgeDocumentEntity enqueue(String tenantId, String datasetId, String name,
+                                             String sourceType, ParsedDocument parsedDocument) {
+        DatasetEntity dataset = datasetService.require(tenantId, datasetId);
         String extractedText = parsedDocument == null ? "" : parsedDocument.text();
         KnowledgeDocumentEntity document = createDocument(
                 dataset, name, sourceType, extractedText, DocumentStatus.PENDING);
         applyParseDiagnostics(document, parsedDocument);
-        documentMapper.updateById(document);
+        updateOwned(document);
 
         DocumentIngestQueueEntity queuedDocument = new DocumentIngestQueueEntity();
         queuedDocument.setDocumentId(document.getId());
@@ -189,7 +224,7 @@ final class DocumentIngestionService {
         queuedDocument.setUpdatedAt(now);
         queueMapper.insert(queuedDocument);
 
-        ingestionQueue.enqueue(new DocumentIngestionTask(document.getId(), 0));
+        ingestionQueue.enqueue(new DocumentIngestionTask(dataset.getTenantId(), document.getId(), 0));
         log.info("Queued async ingestion for document '{}' (id={}) into dataset {}",
                 name, document.getId(), datasetId);
         return document;
@@ -218,7 +253,7 @@ final class DocumentIngestionService {
 
     private void updateStatus(KnowledgeDocumentEntity document, DocumentStatus status) {
         document.setStatus(status);
-        documentMapper.updateById(document);
+        updateOwned(document);
     }
 
     private static void applyParseDiagnostics(KnowledgeDocumentEntity document, ParsedDocument parsed) {
@@ -232,8 +267,15 @@ final class DocumentIngestionService {
     }
 
     KnowledgeDocumentEntity reparse(String datasetId, String documentId, byte[] sourceBytes) {
-        DatasetEntity dataset = datasetService.require(datasetId);
-        KnowledgeDocumentEntity document = documentMapper.selectById(documentId);
+        return reparse(UserContextHolder.currentTenantId(), datasetId, documentId, sourceBytes);
+    }
+
+    KnowledgeDocumentEntity reparse(String tenantId, String datasetId, String documentId, byte[] sourceBytes) {
+        DatasetEntity dataset = datasetService.require(tenantId, datasetId);
+        KnowledgeDocumentEntity document = documentMapper.selectOne(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<KnowledgeDocumentEntity>()
+                        .eq(KnowledgeDocumentEntity::getTenantId, dataset.getTenantId())
+                        .eq(KnowledgeDocumentEntity::getId, documentId).last("LIMIT 1"));
         if (document == null) return null;
         int oldCount = document.getSegmentCount() == null ? 0 : document.getSegmentCount();
         updateStatus(document, DocumentStatus.PARSING);
@@ -247,7 +289,7 @@ final class DocumentIngestionService {
         updateStatus(document, DocumentStatus.INDEXING);
         int count = indexingService.index(dataset, document, chunks);
         document.setSegmentCount(count); document.setStatus(DocumentStatus.COMPLETED);
-        documentMapper.updateById(document);
+        updateOwned(document);
         datasetService.applyCountChange(dataset, new DatasetCountChange(0, count - oldCount));
         return document;
     }
@@ -257,5 +299,12 @@ final class DocumentIngestionService {
             return java.util.HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                     .digest(bytes == null ? new byte[0] : bytes));
         } catch (Exception e) { throw new IllegalStateException(e); }
+    }
+
+    private void updateOwned(KnowledgeDocumentEntity document) {
+        documentMapper.update(document,
+                new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<KnowledgeDocumentEntity>()
+                        .eq(KnowledgeDocumentEntity::getTenantId, document.getTenantId())
+                        .eq(KnowledgeDocumentEntity::getId, document.getId()));
     }
 }

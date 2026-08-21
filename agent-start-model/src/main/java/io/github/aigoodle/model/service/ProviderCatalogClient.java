@@ -45,8 +45,8 @@ public class ProviderCatalogClient {
                     missingCredentialMessage, null);
         }
         Map<String, Object> credentials = credentialCodec.decode(
-                credential.getEncryptedConfig());
-        return endpoint(providerName, credentials);
+                tenantId, credential.getEncryptedConfig());
+        return endpoint(tenantId, providerName, credentials);
     }
 
     public List<RemoteModel> preview(String providerName, Map<String, Object> credentials) {
@@ -54,7 +54,7 @@ public class ProviderCatalogClient {
         Map<String, Object> safeCredentials = credentials == null
                 ? Map.of()
                 : credentials;
-        return provider.listRemoteModels(endpoint(providerName, safeCredentials));
+        return provider.listRemoteModels(endpoint(DEFAULT_TENANT, providerName, safeCredentials));
     }
 
     public List<RemoteModel> list(String tenantId, String providerName) {
@@ -70,11 +70,12 @@ public class ProviderCatalogClient {
         return provider.listRemoteModels(endpoint);
     }
 
-    private ModelEndpoint endpoint(String providerName, Map<String, Object> credentials) {
+    private ModelEndpoint endpoint(String tenantId, String providerName, Map<String, Object> credentials) {
         Map<String, Object> providerProperties = new HashMap<>(credentials);
         String apiKey = removeString(providerProperties, "apiKey");
         String baseUrl = removeString(providerProperties, "baseUrl");
         return ModelEndpoint.builder()
+                .tenantId(normalizeTenantId(tenantId))
                 .providerName(providerName)
                 .apiKey(apiKey)
                 .baseUrl(baseUrl)

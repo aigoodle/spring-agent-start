@@ -14,19 +14,21 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Builds and caches {@link ModelInstance}s from {@link ModelEndpoint}s. The cache key
- * is the endpoint id; {@link #evict(String)} must be called whenever a model's
- * configuration or credentials change so a fresh instance is rebuilt on next use.
+ * is tenant + endpoint id + model type; {@link #evict(String, String)} must be called whenever a
+ * tenant model's configuration or credentials change so a fresh instance is rebuilt on next use.
  * <p>
  * Built chat models are passed through any registered {@link ChatModelDecorator}s,
  * which is how observability/metering plugs in without coupling this module to it.
  */
 public class ModelInstanceFactory {
 
+    private record CacheKey(String tenantId, String endpointId, ModelType modelType) {}
+
     private static final Logger log = LoggerFactory.getLogger(ModelInstanceFactory.class);
 
     private final ModelProviderRegistry registry;
     private final List<ChatModelDecorator> decorators;
-    private final ConcurrentHashMap<String, ModelInstance> cache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<CacheKey, ModelInstance> cache = new ConcurrentHashMap<>();
 
     public ModelInstanceFactory(ModelProviderRegistry registry) {
         this(registry, List.of());
@@ -38,7 +40,7 @@ public class ModelInstanceFactory {
     }
 
     public ModelInstance getOrCreate(ModelEndpoint endpoint) {
-        String key = cacheKey(endpoint);
+        CacheKey key = cacheKey(endpoint);
         return cache.computeIfAbsent(key, k -> build(endpoint));
     }
 
@@ -69,20 +71,38 @@ public class ModelInstanceFactory {
         return result;
     }
 
+    public void evict(String tenantId, String endpointId) {
+        if (endpointId == null) return;
+        String normalizedTenant = normalizeTenant(tenantId);
+        cache.keySet().removeIf(key -> key.tenantId().equals(normalizedTenant)
+                && key.endpointId().equals(endpointId));
+    }
+
+    /**
+     * Compatibility and deployment-maintenance operation. Business services should use
+     * {@link #evict(String, String)} so one tenant cannot invalidate another tenant's runtime.
+     */
+    @Deprecated(forRemoval = false)
     public void evict(String endpointId) {
-        if (endpointId == null) {
-            return;
-        }
-        cache.keySet().removeIf(k -> k.startsWith(endpointId + "::"));
+        evictAllTenants(endpointId);
+    }
+
+    public void evictAllTenants(String endpointId) {
+        if (endpointId == null) return;
+        cache.keySet().removeIf(key -> key.endpointId().equals(endpointId));
     }
 
     public void clear() {
         cache.clear();
     }
 
-    private String cacheKey(ModelEndpoint endpoint) {
+    private CacheKey cacheKey(ModelEndpoint endpoint) {
         String id = endpoint.getId() != null ? endpoint.getId()
                 : endpoint.getProviderName() + ":" + endpoint.getModelName();
-        return id + "::" + endpoint.getModelType();
+        return new CacheKey(normalizeTenant(endpoint.getTenantId()), id, endpoint.getModelType());
+    }
+
+    private static String normalizeTenant(String tenantId) {
+        return tenantId == null || tenantId.isBlank() ? "default" : tenantId.trim();
     }
 }

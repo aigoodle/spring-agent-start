@@ -16,6 +16,8 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 class DefaultAgentContextEngineTest {
 
@@ -60,6 +62,19 @@ class DefaultAgentContextEngineTest {
 
         assertThat(engine.assemble(new AgentContextRequest(definition, "c", "q", 100)).messages())
                 .isEmpty();
+    }
+
+    @Test
+    void usesExplicitTrustedMemoryOwnerInsteadOfSharingByAgentId() {
+        MemoryManager memory = mock(MemoryManager.class);
+        when(memory.recall(any())).thenReturn(List.of());
+        when(memory.history(anyString(), anyString(), anyString(), anyInt())).thenReturn(List.of());
+        var engine = new DefaultAgentContextEngine(memory, new AgentProperties());
+
+        engine.assemble(new AgentContextRequest(definition(), "employee-1:sender-9", "conversation-1", "hi", 100));
+
+        verify(memory).recall(argThat(query -> "employee-1:sender-9".equals(query.ownerId())));
+        verify(memory).history("default", "employee-1:sender-9", "conversation-1", 10);
     }
 
     @Test

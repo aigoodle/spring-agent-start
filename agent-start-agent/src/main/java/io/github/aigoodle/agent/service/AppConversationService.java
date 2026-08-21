@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.github.aigoodle.agent.entity.AppConversationEntity;
 import io.github.aigoodle.memory.MemoryManager;
 import io.github.aigoodle.agent.mapper.AppConversationMapper;
+import io.github.aigoodle.common.context.UserContextHolder;
 import io.github.aigoodle.common.exception.PlatformException;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,14 +30,37 @@ public class AppConversationService {
     }
 
     public List<AppConversationEntity> listByApp(String appId) {
+        return listByApp(UserContextHolder.currentTenantId(), appId);
+    }
+
+    public List<AppConversationEntity> listByApp(String tenantId, String appId) {
         return conversationMapper.selectList(new LambdaQueryWrapper<AppConversationEntity>()
+                .eq(AppConversationEntity::getTenantId, resolveTenantId(tenantId))
                 .eq(AppConversationEntity::getAppId, appId)
                 .orderByDesc(AppConversationEntity::getPinned)
                 .orderByDesc(AppConversationEntity::getUpdatedAt));
     }
 
     public AppConversationEntity require(String conversationId) {
-        AppConversationEntity conversation = conversationMapper.selectById(conversationId);
+        AppConversationEntity conversation = conversationMapper.selectOne(
+                new LambdaQueryWrapper<AppConversationEntity>()
+                        .eq(AppConversationEntity::getTenantId, UserContextHolder.currentTenantId())
+                        .eq(AppConversationEntity::getId, conversationId)
+                        .last("LIMIT 1"));
+        if (conversation == null) {
+            throw new PlatformException("conversation_not_found",
+                    "Conversation not found: " + conversationId, null);
+        }
+        return conversation;
+    }
+
+    public AppConversationEntity require(String tenantId, String appId, String conversationId) {
+        AppConversationEntity conversation = conversationMapper.selectOne(
+                new LambdaQueryWrapper<AppConversationEntity>()
+                        .eq(AppConversationEntity::getTenantId, resolveTenantId(tenantId))
+                        .eq(AppConversationEntity::getAppId, appId)
+                        .eq(AppConversationEntity::getId, conversationId)
+                        .last("LIMIT 1"));
         if (conversation == null) {
             throw new PlatformException("conversation_not_found",
                     "Conversation not found: " + conversationId, null);
@@ -51,8 +75,18 @@ public class AppConversationService {
     @Transactional
     public AppConversationEntity ensure(String conversationId, String appId,
                                      String tenantId, String firstMessage) {
-        AppConversationEntity existingConversation = conversationMapper.selectById(conversationId);
+        String tenant = resolveTenantId(tenantId);
+        AppConversationEntity existingConversation = conversationMapper.selectOne(
+                new LambdaQueryWrapper<AppConversationEntity>()
+                        .eq(AppConversationEntity::getTenantId, tenant)
+                        .eq(AppConversationEntity::getId, conversationId)
+                        .last("LIMIT 1"));
         if (existingConversation != null) {
+            if (!tenant.equals(existingConversation.getTenantId())
+                    || !appId.equals(existingConversation.getAppId())) {
+                throw new PlatformException("conversation_id_conflict",
+                        "Conversation id is already owned by another tenant or application", null);
+            }
             return existingConversation;
         }
 
@@ -72,7 +106,15 @@ public class AppConversationService {
     public AppConversationEntity rename(String conversationId, String name) {
         AppConversationEntity conversation = require(conversationId);
         conversation.setName(name);
-        conversationMapper.updateById(conversation);
+        conversationMapper.update(conversation, owned(conversation));
+        return conversation;
+    }
+
+    @Transactional
+    public AppConversationEntity rename(String tenantId, String appId, String conversationId, String name) {
+        AppConversationEntity conversation = require(tenantId, appId, conversationId);
+        conversation.setName(name);
+        conversationMapper.update(conversation, owned(conversation));
         return conversation;
     }
 
@@ -80,7 +122,15 @@ public class AppConversationService {
     public AppConversationEntity togglePinned(String conversationId, boolean pinned) {
         AppConversationEntity conversation = require(conversationId);
         conversation.setPinned(pinned);
-        conversationMapper.updateById(conversation);
+        conversationMapper.update(conversation, owned(conversation));
+        return conversation;
+    }
+
+    @Transactional
+    public AppConversationEntity togglePinned(String tenantId, String appId, String conversationId, boolean pinned) {
+        AppConversationEntity conversation = require(tenantId, appId, conversationId);
+        conversation.setPinned(pinned);
+        conversationMapper.update(conversation, owned(conversation));
         return conversation;
     }
 
@@ -91,8 +141,30 @@ public class AppConversationService {
     @Transactional
     public void delete(String conversationId) {
         AppConversationEntity conversation = require(conversationId);
-        conversationMapper.deleteById(conversationId);
+        conversationMapper.delete(ownedQuery(conversation));
         memoryManager.forgetConversation(conversation.getTenantId(), conversation.getAppId(), conversationId);
+    }
+
+    @Transactional
+    public void delete(String tenantId, String appId, String conversationId) {
+        AppConversationEntity conversation = require(tenantId, appId, conversationId);
+        conversationMapper.delete(ownedQuery(conversation));
+        memoryManager.forgetConversation(conversation.getTenantId(), conversation.getAppId(), conversationId);
+    }
+
+    private static com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<AppConversationEntity> owned(
+            AppConversationEntity conversation) {
+        return new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<AppConversationEntity>()
+                .eq(AppConversationEntity::getTenantId, conversation.getTenantId())
+                .eq(AppConversationEntity::getAppId, conversation.getAppId())
+                .eq(AppConversationEntity::getId, conversation.getId());
+    }
+
+    private static LambdaQueryWrapper<AppConversationEntity> ownedQuery(AppConversationEntity conversation) {
+        return new LambdaQueryWrapper<AppConversationEntity>()
+                .eq(AppConversationEntity::getTenantId, conversation.getTenantId())
+                .eq(AppConversationEntity::getAppId, conversation.getAppId())
+                .eq(AppConversationEntity::getId, conversation.getId());
     }
 
     private static String resolveTenantId(String tenantId) {

@@ -52,7 +52,7 @@ class OllamaEndToEndTest {
                 .credentials(Map.of("baseUrl", baseUrl))
                 .build());
 
-        ChatClient client = modelService.getChatClient(model.getId());
+        ChatClient client = modelService.getModelInstance("e2e", model.getId()).getChatClient();
         String answer = client.prompt()
                 .user("Reply with exactly one word: hello")
                 .call()

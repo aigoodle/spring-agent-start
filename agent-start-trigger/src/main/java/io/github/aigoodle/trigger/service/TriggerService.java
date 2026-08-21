@@ -1,8 +1,10 @@
 package io.github.aigoodle.trigger.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.common.context.UserContextHolder;
+import io.github.aigoodle.persistence.TenantSqlScope;
 import io.github.aigoodle.common.util.JsonUtils;
 import io.github.aigoodle.trigger.api.TriggerType;
 import io.github.aigoodle.trigger.cron.TriggerSchedule;
@@ -68,7 +70,7 @@ public class TriggerService {
             trigger.setLockOwner(null);
             trigger.setLockUntil(null);
         }
-        triggerMapper.updateById(trigger);
+        updateOwned(trigger);
         if (enabled) {
             notifySaved(trigger);
         } else {
@@ -77,16 +79,44 @@ public class TriggerService {
     }
 
     @Transactional
+    public void setEnabled(String tenantId, String triggerId, boolean enabled) {
+        TriggerEntity trigger = require(tenantId, triggerId);
+        trigger.setEnabled(enabled);
+        if (trigger.getType() == TriggerType.CRON) {
+            trigger.setNextFireAt(enabled
+                    ? TriggerSchedule.from(config(trigger)).firstFireAt(LocalDateTime.now()) : null);
+            trigger.setLockOwner(null); trigger.setLockUntil(null);
+        }
+        triggerMapper.update(trigger, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<TriggerEntity>()
+                .eq(TriggerEntity::getTenantId, trigger.getTenantId()).eq(TriggerEntity::getId, trigger.getId()));
+        if (enabled) notifySaved(trigger);
+        else changeListeners.forEach(listener -> listener.onRemoved(triggerId));
+    }
+
+    @Transactional
     public void delete(String triggerId) {
-        triggerMapper.deleteById(triggerId);
+        TriggerEntity trigger = require(triggerId);
+        deleteOwned(trigger);
+        changeListeners.forEach(listener -> listener.onRemoved(triggerId));
+    }
+
+    @Transactional
+    public void delete(String tenantId, String triggerId) {
+        TriggerEntity trigger = require(tenantId, triggerId);
+        triggerMapper.delete(new LambdaQueryWrapper<TriggerEntity>()
+                .eq(TriggerEntity::getTenantId, trigger.getTenantId()).eq(TriggerEntity::getId, triggerId));
         changeListeners.forEach(listener -> listener.onRemoved(triggerId));
     }
 
     public TriggerEntity require(String triggerId) {
-        TriggerEntity trigger = triggerMapper.selectById(triggerId);
-        if (trigger == null) {
-            throw new PlatformException("trigger_not_found", "Trigger not found: " + triggerId, null);
-        }
+        return require(UserContextHolder.currentTenantId(), triggerId);
+    }
+
+    public TriggerEntity require(String tenantId, String triggerId) {
+        TriggerEntity trigger = triggerMapper.selectOne(new LambdaQueryWrapper<TriggerEntity>()
+                .eq(TriggerEntity::getTenantId, tenantId == null ? "default" : tenantId)
+                .eq(TriggerEntity::getId, triggerId).last("LIMIT 1"));
+        if (trigger == null) throw new PlatformException("trigger_not_found", "Trigger not found", null);
         return trigger;
     }
 
@@ -97,6 +127,7 @@ public class TriggerService {
 
     public List<TriggerEntity> listEnabledByType(TriggerType type) {
         return triggerMapper.selectList(new LambdaQueryWrapper<TriggerEntity>()
+                .eq(TriggerEntity::getTenantId, UserContextHolder.currentTenantId())
                 .eq(TriggerEntity::getType, type)
                 .eq(TriggerEntity::getEnabled, true));
     }
@@ -108,7 +139,9 @@ public class TriggerService {
 
     /** Find an enabled webhook trigger by its configured {@code path}. */
     public java.util.Optional<TriggerEntity> findWebhook(String path) {
-        return listEnabledByType(TriggerType.WEBHOOK).stream()
+        return TenantSqlScope.bypass(() -> triggerMapper.selectList(new LambdaQueryWrapper<TriggerEntity>()
+                        .eq(TriggerEntity::getType, TriggerType.WEBHOOK)
+                        .eq(TriggerEntity::getEnabled, true))).stream()
                 .filter(trigger -> path != null
                         && path.equals(String.valueOf(config(trigger).get("path"))))
                 .findFirst();
@@ -119,6 +152,13 @@ public class TriggerService {
     /** Fire synchronously and return the dispatch result. */
     public DispatchResult fireSynchronously(TriggerInvocationRequest request) {
         TriggerEntity trigger = requireEnabled(request.triggerId());
+        TriggerInvocationEntity invocation = invocationRunner.open(
+                InvocationDraft.initial(request), trigger.getTenantId());
+        return invocationRunner.execute(trigger, invocation, request.payload());
+    }
+
+    public DispatchResult fireSynchronously(String tenantId, TriggerInvocationRequest request) {
+        TriggerEntity trigger = requireEnabled(tenantId, request.triggerId());
         TriggerInvocationEntity invocation = invocationRunner.open(
                 InvocationDraft.initial(request), trigger.getTenantId());
         return invocationRunner.execute(trigger, invocation, request.payload());
@@ -153,7 +193,7 @@ public class TriggerService {
                 .eq(TriggerEntity::getTargetType, "workflow"));
         List<TriggerEntity> deleted = new ArrayList<>();
         owned.forEach(trigger -> {
-            if (triggerMapper.deleteById(trigger.getId()) == 1) {
+            if (deleteOwned(trigger) == 1) {
                 deleted.add(trigger);
                 changeListeners.forEach(listener -> listener.onRemoved(trigger.getId()));
             }
@@ -172,7 +212,7 @@ public class TriggerService {
                     ? TriggerSchedule.from(config(trigger)).firstFireAt(LocalDateTime.now()) : null);
             trigger.setLockOwner(null);
             trigger.setLockUntil(null);
-            triggerMapper.updateById(trigger);
+            updateOwned(trigger);
             if (enabled) notifySaved(trigger);
             else changeListeners.forEach(listener -> listener.onRemoved(trigger.getId()));
         });
@@ -192,8 +232,8 @@ public class TriggerService {
                             ? map.entrySet().stream().collect(java.util.stream.Collectors.toMap(
                             entry -> String.valueOf(entry.getKey()), Map.Entry::getValue)) : Map.of();
                     String conversationId = text(triggerConfig.get("conversationId"));
-                    String invocationId = fireAsynchronously(TriggerInvocationRequest.scheduled(
-                            trigger.getId(), data, conversationId));
+                    String invocationId = fireAsynchronously(trigger.getTenantId(),
+                            TriggerInvocationRequest.scheduled(trigger.getId(), data, conversationId));
                     started.put(trigger, invocationId);
                 });
         return Map.copyOf(started);
@@ -246,7 +286,7 @@ public class TriggerService {
         trigger.setNextFireAt(TriggerSchedule.from(normalizedConfig).firstFireAt(LocalDateTime.now()));
         trigger.setLockOwner(null);
         trigger.setLockUntil(null);
-        triggerMapper.updateById(trigger);
+        updateOwned(trigger);
         notifySaved(trigger);
         return trigger;
     }
@@ -258,7 +298,7 @@ public class TriggerService {
         String sourceKey = workflow.getAppId() == null ? workflow.getId() : workflow.getAppId();
         list(workflow.getTenantId()).stream()
                 .filter(existing -> sourceKey.equals(config(existing).get("sourceWorkflowKey")))
-                .forEach(existing -> delete(existing.getId()));
+                .forEach(existing -> delete(existing.getTenantId(), existing.getId()));
         NodeDef start;
         try {
             start = workflowService.graphOf(workflow).getNodes().stream()
@@ -301,18 +341,19 @@ public class TriggerService {
     @Transactional
     public List<TriggerEntity> claimDueSchedules(String owner, Duration lease, int limit) {
         LocalDateTime now = LocalDateTime.now();
-        List<TriggerEntity> due = triggerMapper.selectList(
+        List<TriggerEntity> due = TenantSqlScope.bypass(() -> triggerMapper.selectList(
                 new LambdaQueryWrapper<TriggerEntity>()
                         .eq(TriggerEntity::getType, TriggerType.CRON)
                         .eq(TriggerEntity::getEnabled, true)
                         .isNotNull(TriggerEntity::getNextFireAt)
                         .le(TriggerEntity::getNextFireAt, now)
                         .orderByAsc(TriggerEntity::getNextFireAt)
-                        .last("LIMIT " + Math.max(1, Math.min(limit, 200))));
+                        .last("LIMIT " + Math.max(1, Math.min(limit, 200)))));
         List<TriggerEntity> claimed = new ArrayList<>();
         for (TriggerEntity candidate : due) {
-            if (triggerMapper.tryClaim(candidate.getId(), owner, now, now.plus(lease)) != 1) continue;
-            TriggerEntity trigger = require(candidate.getId());
+            if (triggerMapper.tryClaim(candidate.getTenantId(), candidate.getId(), owner,
+                    now, now.plus(lease)) != 1) continue;
+            TriggerEntity trigger = require(candidate.getTenantId(), candidate.getId());
             TriggerSchedule schedule = TriggerSchedule.from(config(trigger));
             trigger.setLastFireAt(trigger.getNextFireAt());
             trigger.setFireCount((trigger.getFireCount() == null ? 0L : trigger.getFireCount()) + 1L);
@@ -321,7 +362,7 @@ public class TriggerService {
             // The cursor is advanced before dispatch, so an expired lease cannot duplicate this occurrence.
             trigger.setLockOwner(null);
             trigger.setLockUntil(null);
-            triggerMapper.updateById(trigger);
+            updateOwned(trigger);
             claimed.add(trigger);
         }
         return claimed;
@@ -329,7 +370,11 @@ public class TriggerService {
 
     /** Fire asynchronously; returns the invocation id immediately. */
     public String fireAsynchronously(TriggerInvocationRequest request) {
-        TriggerEntity trigger = requireEnabled(request.triggerId());
+        return fireAsynchronously(UserContextHolder.currentTenantId(), request);
+    }
+
+    public String fireAsynchronously(String tenantId, TriggerInvocationRequest request) {
+        TriggerEntity trigger = requireEnabled(tenantId, request.triggerId());
         TriggerInvocationEntity invocation = invocationRunner.open(
                 InvocationDraft.initial(request), trigger.getTenantId());
         executor.execute(() -> {
@@ -385,21 +430,53 @@ public class TriggerService {
         TriggerInvocationEntity replay = invocationRunner.open(
                 InvocationDraft.replay(original, payload), trigger.getTenantId());
         invocationRunner.execute(trigger, replay, payload);
-        return invocationRunner.find(replay.getId());
+        return invocationRunner.find(trigger.getTenantId(), replay.getId());
+    }
+
+    public TriggerInvocationEntity replay(String tenantId, String invocationId) {
+        TriggerInvocationEntity original = invocation(tenantId, invocationId);
+        TriggerEntity trigger = require(tenantId, original.getTriggerId());
+        Map<String, Object> payload = JsonUtils.parseMap(original.getPayloadJson());
+        TriggerInvocationEntity replay = invocationRunner.open(
+                InvocationDraft.replay(original, payload), trigger.getTenantId());
+        invocationRunner.execute(trigger, replay, payload);
+        return invocationRunner.find(tenantId == null ? "default" : tenantId, replay.getId());
     }
 
     public TriggerInvocationEntity invocation(String id) {
         return invocationRunner.find(id);
     }
 
+    public TriggerInvocationEntity invocation(String tenantId, String id) {
+        TriggerInvocationEntity invocation = invocationRunner.find(
+                tenantId == null ? "default" : tenantId, id);
+        if (invocation == null) {
+            throw new PlatformException("invocation_not_found", "Invocation not found", null);
+        }
+        return invocation;
+    }
+
     public List<TriggerInvocationEntity> invocations(String triggerId) {
         return invocationRunner.listForTrigger(triggerId);
+    }
+
+    public List<TriggerInvocationEntity> invocations(String tenantId, String triggerId) {
+        require(tenantId, triggerId);
+        return invocationRunner.listForTrigger(tenantId == null ? "default" : tenantId, triggerId);
     }
 
     private TriggerEntity requireEnabled(String triggerId) {
         TriggerEntity trigger = require(triggerId);
         if (!Boolean.TRUE.equals(trigger.getEnabled())) {
             throw new PlatformException("trigger_disabled", "Trigger is disabled: " + triggerId, null);
+        }
+        return trigger;
+    }
+
+    private TriggerEntity requireEnabled(String tenantId, String triggerId) {
+        TriggerEntity trigger = require(tenantId, triggerId);
+        if (!Boolean.TRUE.equals(trigger.getEnabled())) {
+            throw new PlatformException("trigger_disabled", "Trigger is disabled", null);
         }
         return trigger;
     }
@@ -412,7 +489,8 @@ public class TriggerService {
 
     private TriggerEntity newTrigger(CreateTriggerRequest request) {
         TriggerEntity trigger = new TriggerEntity();
-        trigger.setTenantId(request.getTenantId());
+        trigger.setTenantId(request.getTenantId() == null || request.getTenantId().isBlank()
+                ? UserContextHolder.currentTenantId() : request.getTenantId());
         trigger.setUserId(request.getUserId() == null
                 ? UserContextHolder.currentUserId() : request.getUserId());
         trigger.setName(request.getName());
@@ -435,5 +513,17 @@ public class TriggerService {
 
     private static String text(Object value) {
         return value == null || String.valueOf(value).isBlank() ? null : String.valueOf(value);
+    }
+
+    private void updateOwned(TriggerEntity trigger) {
+        triggerMapper.update(trigger, new LambdaUpdateWrapper<TriggerEntity>()
+                .eq(TriggerEntity::getTenantId, trigger.getTenantId())
+                .eq(TriggerEntity::getId, trigger.getId()));
+    }
+
+    private int deleteOwned(TriggerEntity trigger) {
+        return triggerMapper.delete(new LambdaQueryWrapper<TriggerEntity>()
+                .eq(TriggerEntity::getTenantId, trigger.getTenantId())
+                .eq(TriggerEntity::getId, trigger.getId()));
     }
 }

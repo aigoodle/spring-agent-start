@@ -2,6 +2,7 @@ package io.github.aigoodle.web.controller;
 
 import io.github.aigoodle.agent.entity.AppApiTokenEntity;
 import io.github.aigoodle.agent.service.AppApiTokenService;
+import io.github.aigoodle.agent.service.AppService;
 import io.github.aigoodle.web.common.ApiResponse;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.Map;
+import java.time.LocalDateTime;
 
 import static io.github.aigoodle.common.context.UserContextHolder.currentTenantId;
 
@@ -28,34 +30,52 @@ import static io.github.aigoodle.common.context.UserContextHolder.currentTenantI
 @RequestMapping("/apps/{appId}/api-tokens")
 public class AppApiTokenController {
 
-    private final AppApiTokenService service;
+    public record TokenView(String id, String appId, String name, String type, String token,
+                            LocalDateTime createdAt, LocalDateTime lastUsedAt) {
+        static TokenView of(AppApiTokenEntity row, boolean reveal) {
+            String value = row.getToken();
+            String visible = reveal ? value : value == null ? null
+                    : "app-..." + AppApiTokenService.tokenHint(value);
+            return new TokenView(row.getId(), row.getAppId(), row.getName(), row.getType(), visible,
+                    row.getCreatedAt(), row.getLastUsedAt());
+        }
+    }
 
-    public AppApiTokenController(AppApiTokenService service) {
-        this.service = service;
+    private final AppApiTokenService service;
+    private final AppService apps;
+
+    public AppApiTokenController(AppApiTokenService service, AppService apps) {
+        this.service = service; this.apps = apps;
     }
 
     @GetMapping
-    public ApiResponse<List<AppApiTokenEntity>> list(@PathVariable String appId) {
-        return ApiResponse.ok(service.listByApp(appId));
+    public ApiResponse<List<TokenView>> list(@PathVariable String appId) {
+        apps.require(currentTenantId(), appId);
+        return ApiResponse.ok(service.listByApp(currentTenantId(), appId).stream()
+                .map(row -> TokenView.of(row, false)).toList());
     }
 
     @PostMapping
-    public ApiResponse<AppApiTokenEntity> create(@PathVariable String appId,
+    public ApiResponse<TokenView> create(@PathVariable String appId,
                                               @RequestBody(required = false) Map<String, String> body) {
         String name = body == null ? null : body.get("name");
         String type = body == null ? null : body.get("type");
-        return ApiResponse.ok(service.create(appId, currentTenantId(), name, type));
+        apps.require(currentTenantId(), appId);
+        return ApiResponse.ok(TokenView.of(service.create(appId, currentTenantId(), name, type), true));
     }
 
     @PostMapping("/{id}/rename")
-    public ApiResponse<AppApiTokenEntity> rename(@PathVariable String appId, @PathVariable String id,
+    public ApiResponse<TokenView> rename(@PathVariable String appId, @PathVariable String id,
                                               @RequestBody Map<String, String> body) {
-        return ApiResponse.ok(service.rename(id, body.get("name")));
+        apps.require(currentTenantId(), appId);
+        return ApiResponse.ok(TokenView.of(
+                service.rename(currentTenantId(), appId, id, body.get("name")), false));
     }
 
     @DeleteMapping("/{id}")
     public ApiResponse<Void> delete(@PathVariable String appId, @PathVariable String id) {
-        service.delete(id);
+        apps.require(currentTenantId(), appId);
+        service.delete(currentTenantId(), appId, id);
         return ApiResponse.ok();
     }
 }

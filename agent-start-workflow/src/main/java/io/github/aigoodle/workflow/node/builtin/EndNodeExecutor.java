@@ -7,12 +7,13 @@ import io.github.aigoodle.workflow.node.NodeExecutor;
 import io.github.aigoodle.workflow.node.NodeResult;
 import io.github.aigoodle.workflow.variable.VariableResolver;
 
+import java.util.List;
 import java.util.Map;
 
 /**
- * Produces the workflow's final outputs. Config {@code outputs} is a map of output
- * name to a template (e.g. {@code {"answer":"{{#llm.text#}}"}}). With no config, the
- * END node simply exposes whatever is referenced, defaulting to an empty result.
+ * Produces the workflow's final outputs. Supports both the engine's legacy
+ * {@code outputs} map and the visual designer's {@code output} list containing
+ * {@code name} and {@code variableSelector} fields.
  */
 public class EndNodeExecutor implements NodeExecutor {
 
@@ -33,6 +34,32 @@ public class EndNodeExecutor implements NodeExecutor {
                         outputName, VariableResolver.render(outputTemplate, context.getPool()));
             }
         }
+        for (Map<String, Object> output : node.getMapList("output")) {
+            Object configuredName = output.get("name");
+            if (configuredName == null || String.valueOf(configuredName).isBlank()) {
+                continue;
+            }
+            Object value = resolveDesignerOutput(output, context);
+            result.output(String.valueOf(configuredName), value);
+        }
         return result;
+    }
+
+    private static Object resolveDesignerOutput(Map<String, Object> output, ExecutionContext context) {
+        Object selector = output.get("variableSelector");
+        if (selector == null) {
+            selector = output.get("variable_selector");
+        }
+        if (selector instanceof List<?> parts && !parts.isEmpty()) {
+            String path = parts.stream()
+                    .map(String::valueOf)
+                    .reduce((left, right) -> left + "." + right)
+                    .orElse("");
+            return context.getPool().get(path);
+        }
+        Object configuredValue = output.get("value");
+        return configuredValue instanceof String template
+                ? VariableResolver.render(template, context.getPool())
+                : configuredValue;
     }
 }

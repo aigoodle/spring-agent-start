@@ -27,6 +27,7 @@
             <groupId>io.github.aigoodle</groupId>
             <artifactId>agent-start-connector-openclaw</artifactId>
         </dependency>
+        <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-connector-hermes</artifactId></dependency>
         <!-- the full stack: workflow + knowledge + agent + tools + triggers + observability.
              spring-boot-starter-webflux comes in transitively via agent-start-web. -->
         <dependency>

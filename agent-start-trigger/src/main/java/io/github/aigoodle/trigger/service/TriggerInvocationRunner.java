@@ -1,6 +1,7 @@
 package io.github.aigoodle.trigger.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import io.github.aigoodle.common.util.JsonUtils;
 import io.github.aigoodle.common.context.CurrentUser;
 import io.github.aigoodle.common.context.UserContextHolder;
@@ -69,11 +70,22 @@ public final class TriggerInvocationRunner {
     }
 
     TriggerInvocationEntity find(String invocationId) {
-        return invocationMapper.selectById(invocationId);
+        return find(UserContextHolder.currentTenantId(), invocationId);
+    }
+
+    TriggerInvocationEntity find(String tenantId, String invocationId) {
+        return invocationMapper.selectOne(new LambdaQueryWrapper<TriggerInvocationEntity>()
+                .eq(TriggerInvocationEntity::getTenantId, tenantId)
+                .eq(TriggerInvocationEntity::getId, invocationId).last("LIMIT 1"));
     }
 
     List<TriggerInvocationEntity> listForTrigger(String triggerId) {
+        return listForTrigger(UserContextHolder.currentTenantId(), triggerId);
+    }
+
+    List<TriggerInvocationEntity> listForTrigger(String tenantId, String triggerId) {
         return invocationMapper.selectList(new LambdaQueryWrapper<TriggerInvocationEntity>()
+                .eq(TriggerInvocationEntity::getTenantId, tenantId)
                 .eq(TriggerInvocationEntity::getTriggerId, triggerId)
                 .orderByDesc(TriggerInvocationEntity::getCreatedAt));
     }
@@ -97,6 +109,8 @@ public final class TriggerInvocationRunner {
     }
 
     private void save(TriggerInvocationEntity invocation) {
-        invocationMapper.updateById(invocation);
+        invocationMapper.update(invocation, new LambdaUpdateWrapper<TriggerInvocationEntity>()
+                .eq(TriggerInvocationEntity::getTenantId, invocation.getTenantId())
+                .eq(TriggerInvocationEntity::getId, invocation.getId()));
     }
 }

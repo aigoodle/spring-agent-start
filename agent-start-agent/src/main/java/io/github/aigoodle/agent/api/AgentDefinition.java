@@ -26,6 +26,13 @@ public class AgentDefinition {
     private String tenantId;
     private String name;
 
+    /** NATIVE or an explicit host-provided runtime type. */
+    @Builder.Default
+    private String runtimeType = "NATIVE";
+
+    /** Host-owned runtime resource/bean reference; interpreted only by the selected extension. */
+    private String runtimeRef;
+
     /** System prompt / persona. May reference {@code {{variable}}} placeholders. */
     private String instructions;
 
@@ -52,6 +59,14 @@ public class AgentDefinition {
 
     @Builder.Default
     private int maxIterations = DEFAULT_MAX_ITERATIONS;
+
+    /** Maximum model request boundaries per run; zero means no additional budget. */
+    @Builder.Default
+    private int maxModelCalls = 0;
+
+    /** Maximum tool executions per run; zero means no additional budget. */
+    @Builder.Default
+    private int maxToolCalls = 0;
 
     @Builder.Default
     private boolean memoryEnabled = true;

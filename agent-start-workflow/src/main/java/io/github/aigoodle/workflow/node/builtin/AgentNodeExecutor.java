@@ -2,6 +2,8 @@ package io.github.aigoodle.workflow.node.builtin;
 
 import io.github.aigoodle.agent.api.*;
 import io.github.aigoodle.agent.runtime.AgentRuntime;
+import io.github.aigoodle.model.entity.ModelEntity;
+import io.github.aigoodle.model.service.ModelService;
 import io.github.aigoodle.workflow.graph.NodeDef;
 import io.github.aigoodle.workflow.graph.NodeType;
 import io.github.aigoodle.workflow.node.ExecutionContext;
@@ -15,9 +17,15 @@ import java.util.Locale;
 /** Workflow adapter for the complete agent runtime (strategy, tools, HITL and memory). */
 public class AgentNodeExecutor implements NodeExecutor {
     private final AgentRuntime agentRuntime;
+    private final ModelService modelService;
 
     public AgentNodeExecutor(AgentRuntime agentRuntime) {
+        this(agentRuntime, null);
+    }
+
+    public AgentNodeExecutor(AgentRuntime agentRuntime, ModelService modelService) {
         this.agentRuntime = agentRuntime;
+        this.modelService = modelService;
     }
 
     @Override
@@ -27,6 +35,15 @@ public class AgentNodeExecutor implements NodeExecutor {
     public NodeResult execute(NodeDef node, ExecutionContext context) {
         String provider = firstNonBlank(node.getString("modelProvider"), node.getString("provider"));
         String model = firstNonBlank(node.getString("modelName"), node.getString("model"));
+        if ((provider == null || model == null) && modelService != null) {
+            String modelId = node.getString("modelId");
+            if (modelId != null && !modelId.isBlank()) {
+                String runTenant = firstNonBlank(context.getTenantId(), "default");
+                ModelEntity entity = modelService.require(runTenant, modelId);
+                provider = entity.getProviderName();
+                model = entity.getModelName();
+            }
+        }
         if (provider == null || model == null) {
             return NodeResult.failure("Agent node requires modelProvider + modelName");
         }

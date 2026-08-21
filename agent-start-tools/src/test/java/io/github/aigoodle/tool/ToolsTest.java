@@ -5,6 +5,8 @@ import io.github.aigoodle.tool.adapter.ToolDefinitionCallback;
 import io.github.aigoodle.tool.builtin.CalculatorTool;
 import io.github.aigoodle.tool.builtin.CurrentTimeTool;
 import io.github.aigoodle.tool.builtin.HttpGetTool;
+import io.github.aigoodle.tool.execution.ToolExecutionContext;
+import io.github.aigoodle.tool.execution.ToolExecutionGateway;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.tool.ToolCallback;
 
@@ -12,6 +14,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -97,5 +100,24 @@ class ToolsTest {
         assertNotNull(cb.getToolDefinition().inputSchema());
         // Spring AI hands the tool a JSON arguments string
         assertEquals("42", cb.call("{\"expression\":\"6*7\"}"));
+    }
+
+    @Test
+    void registryCallbacksUseGovernedGatewayAndTrustedContext() {
+        AtomicReference<ToolExecutionContext> capturedContext = new AtomicReference<>();
+        ToolExecutionGateway gateway = (tool, arguments, context) -> {
+            capturedContext.set(context);
+            return ToolExecutionGateway.invoke(tool, arguments, context);
+        };
+        ToolExecutionContext trusted = new ToolExecutionContext(
+                "run-1", "tenant-a", "employee-7", "conversation-9", Map.of("scope", "tool:call"));
+        ToolRegistry registry = new ToolRegistry(List.of(new CalculatorTool()), List.of(),
+                gateway, () -> trusted);
+
+        String result = registry.toolCallbacks(List.of("calculator")).getFirst()
+                .call("{\"expression\":\"1+2\"}");
+
+        assertEquals("3", result);
+        assertEquals(trusted, capturedContext.get());
     }
 }

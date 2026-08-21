@@ -34,12 +34,7 @@ public class ChatAccessService {
     }
 
     public String requireOwnedApp(String appId, String tenantId) {
-        AppEntity app = appService.require(appId);
-        if (!Objects.equals(app.getTenantId(), tenantId)) {
-            // Deliberately hide whether an app in another tenant exists.
-            throw new PlatformException("app_not_found", "应用不存在或无权访问", null);
-        }
-        return app.getId();
+        return appService.require(tenantId, appId).getId();
     }
 
     public String requireOwnedWorkflow(String appId, String tenantId, String workflowId) {
@@ -61,12 +56,17 @@ public class ChatAccessService {
 
     /** Enforces publication switches after an API key has resolved its app. */
     public String requireExternalApp(String appId) {
+        return requireExternalAppEntity(appId).getId();
+    }
+
+    /** Resolves both identity and owning tenant for a trusted external token. */
+    public AppEntity requireExternalAppEntity(String appId) {
         AppEntity app = appService.require(appId);
         if (!Boolean.TRUE.equals(app.getEnableApi())
                 || !Boolean.TRUE.equals(app.getPublished())
                 || "disabled".equalsIgnoreCase(app.getStatus())) {
             throw new PlatformException("app_api_unavailable", "应用 API 未启用或尚未发布", null);
         }
-        return app.getId();
+        return app;
     }
 }

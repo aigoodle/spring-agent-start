@@ -29,6 +29,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -57,7 +59,7 @@ class LlmNodeMemoryTest {
         when(call.content()).thenReturn("assistant reply");
 
         ModelService modelService = mock(ModelService.class);
-        when(modelService.getChatClient("m1")).thenReturn(client);
+        when(modelService.getChatClient(anyString(), eq("m1"))).thenReturn(client);
 
         // A tiny in-memory implementation of the SPI — no agent-module dependency.
         MemoryManager memory = mock(MemoryManager.class);
@@ -119,7 +121,7 @@ class LlmNodeMemoryTest {
         when(call.content()).thenReturn("ok");
 
         ModelService modelService = mock(ModelService.class);
-        when(modelService.getChatClient("m1")).thenReturn(client);
+        when(modelService.getChatClient(anyString(), eq("m1"))).thenReturn(client);
 
         // If the executor asks memory anyway, this throws — the assertion is
         // therefore "we never got here" via a normal successful run.
@@ -160,7 +162,7 @@ class LlmNodeMemoryTest {
         when(call.content()).thenReturn("ok");
 
         ModelService modelService = mock(ModelService.class);
-        when(modelService.getChatClient("m1")).thenReturn(client);
+        when(modelService.getChatClient(anyString(), eq("m1"))).thenReturn(client);
 
         MemoryManager memory = mock(MemoryManager.class);
 

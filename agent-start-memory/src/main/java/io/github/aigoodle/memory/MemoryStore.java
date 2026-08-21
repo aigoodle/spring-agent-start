@@ -11,5 +11,10 @@ public interface MemoryStore {
     default void delete(String tenantId, String ownerId, String conversationId) { }
     default void purgeExpired(Instant now) { }
     /** Records successful recall so stores can reinforce frequently useful memories. */
+    default void recordAccess(String tenantId, Collection<String> memoryIds, Instant accessedAt) {
+        recordAccess(memoryIds, accessedAt);
+    }
+    /** @deprecated Implement the tenant-aware overload. */
+    @Deprecated(forRemoval = false)
     default void recordAccess(Collection<String> memoryIds, Instant accessedAt) { }
 }

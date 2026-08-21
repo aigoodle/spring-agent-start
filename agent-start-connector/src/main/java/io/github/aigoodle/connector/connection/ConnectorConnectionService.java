@@ -1,6 +1,7 @@
 package io.github.aigoodle.connector.connection;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import io.github.aigoodle.connector.ConnectorException;
 import io.github.aigoodle.connector.persistence.ConnectorConnectionEntity;
 import io.github.aigoodle.connector.persistence.ConnectorConnectionMapper;
@@ -23,15 +24,16 @@ public class ConnectorConnectionService {
     }
 
     public ConnectionView save(SaveConnectionRequest request) {
+        String tenantId = tenant(request.tenantId());
         ConnectorConnectionEntity entity = request.id() == null ? new ConnectorConnectionEntity()
-                : requireOwned(request.id(), tenant(request.tenantId()));
-        entity.setTenantId(tenant(request.tenantId()));
+                : requireOwned(request.id(), tenantId);
+        entity.setTenantId(tenantId);
         entity.setInstallationId(required(request.installationId(), "installationId"));
         entity.setName(required(request.name(), "name"));
-        if (request.credentials() != null) entity.setEncryptedCredentials(codec.encode(request.credentials()));
-        if (request.config() != null) entity.setEncryptedConfig(codec.encode(request.config()));
+        if (request.credentials() != null) entity.setEncryptedCredentials(codec.encode(tenantId, request.credentials()));
+        if (request.config() != null) entity.setEncryptedConfig(codec.encode(tenantId, request.config()));
         if (entity.getStatus() == null) entity.setStatus("CONFIGURED");
-        if (entity.getId() == null) mapper.insert(entity); else mapper.updateById(entity);
+        if (entity.getId() == null) mapper.insert(entity); else updateOwned(entity);
         return view(entity);
     }
 
@@ -42,37 +44,50 @@ public class ConnectorConnectionService {
     }
 
     public Map<String, Object> credentials(String id, String tenantId) {
-        return codec.decode(requireOwned(id, tenant(tenantId)).getEncryptedCredentials());
+        ConnectorConnectionEntity entity = requireOwned(id, tenant(tenantId));
+        return codec.decode(entity.getTenantId(), entity.getEncryptedCredentials());
     }
 
     /** Validates ownership and decryptability without leaking any secret value. */
     public ConnectionTestResult test(String id, String tenantId) {
         ConnectorConnectionEntity entity = requireOwned(id, tenant(tenantId));
         try {
-            codec.decode(entity.getEncryptedCredentials());
-            codec.decode(entity.getEncryptedConfig());
+            codec.decode(entity.getTenantId(), entity.getEncryptedCredentials());
+            codec.decode(entity.getTenantId(), entity.getEncryptedConfig());
             entity.setStatus("CONFIGURED");
             entity.setLastTestedAt(LocalDateTime.now());
-            mapper.updateById(entity);
+            updateOwned(entity);
             return new ConnectionTestResult(true, "configuration_valid", "连接配置可读取；外部连通性由具体 Action 测试确认");
         } catch (RuntimeException ex) {
             entity.setStatus("INVALID");
             entity.setLastTestedAt(LocalDateTime.now());
-            mapper.updateById(entity);
+            updateOwned(entity);
             return new ConnectionTestResult(false, "configuration_invalid", "连接凭证无法解密");
         }
     }
 
     public record ConnectionTestResult(boolean success, String code, String message) {}
 
-    public void delete(String id, String tenantId) { mapper.deleteById(requireOwned(id, tenant(tenantId))); }
+    public void delete(String id, String tenantId) {
+        ConnectorConnectionEntity entity = requireOwned(id, tenant(tenantId));
+        mapper.delete(new LambdaQueryWrapper<ConnectorConnectionEntity>()
+                .eq(ConnectorConnectionEntity::getTenantId, entity.getTenantId())
+                .eq(ConnectorConnectionEntity::getId, entity.getId()));
+    }
 
     private ConnectorConnectionEntity requireOwned(String id, String tenantId) {
-        ConnectorConnectionEntity entity = mapper.selectById(id);
-        if (entity == null || !tenantId.equals(entity.getTenantId())) {
+        ConnectorConnectionEntity entity = mapper.selectOne(new LambdaQueryWrapper<ConnectorConnectionEntity>()
+                .eq(ConnectorConnectionEntity::getTenantId, tenantId)
+                .eq(ConnectorConnectionEntity::getId, id).last("LIMIT 1"));
+        if (entity == null) {
             throw new ConnectorException("connector_connection_not_found", "Connector connection not found");
         }
         return entity;
+    }
+    private void updateOwned(ConnectorConnectionEntity entity) {
+        mapper.update(entity, new LambdaUpdateWrapper<ConnectorConnectionEntity>()
+                .eq(ConnectorConnectionEntity::getTenantId, entity.getTenantId())
+                .eq(ConnectorConnectionEntity::getId, entity.getId()));
     }
     private static ConnectionView view(ConnectorConnectionEntity entity) {
         return new ConnectionView(entity.getId(), entity.getTenantId(), entity.getInstallationId(),

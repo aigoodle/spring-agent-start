@@ -1,6 +1,12 @@
 package io.github.aigoodle.web.config;
 
 import io.github.aigoodle.web.common.GlobalExceptionHandler;
+import io.github.aigoodle.web.support.ChannelAdministrationPolicy;
+import io.github.aigoodle.web.support.DefaultChannelAdministrationPolicy;
+import io.github.aigoodle.web.support.ChannelOwnershipPolicy;
+import io.github.aigoodle.web.support.DefaultChannelOwnershipPolicy;
+import io.github.aigoodle.web.support.ChannelRuntimeAdministrationPolicy;
+import io.github.aigoodle.web.support.DefaultChannelRuntimeAdministrationPolicy;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -57,6 +63,24 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
         "io.github.aigoodle.web.support"
 })
 public class GoodleWebAutoConfiguration {
+
+    @Bean
+    @ConditionalOnMissingBean(ChannelAdministrationPolicy.class)
+    public ChannelAdministrationPolicy channelAdministrationPolicy() {
+        return new DefaultChannelAdministrationPolicy();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(ChannelOwnershipPolicy.class)
+    public ChannelOwnershipPolicy channelOwnershipPolicy() {
+        return new DefaultChannelOwnershipPolicy();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(ChannelRuntimeAdministrationPolicy.class)
+    public ChannelRuntimeAdministrationPolicy channelRuntimeAdministrationPolicy() {
+        return new DefaultChannelRuntimeAdministrationPolicy();
+    }
 
     /**
      * Fixed URL prefix stamped in front of every controller under

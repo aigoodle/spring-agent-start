@@ -3,7 +3,7 @@ package io.github.aigoodle.completion.service;
 import io.github.aigoodle.agent.api.AgentRequest;
 import io.github.aigoodle.agent.api.AgentResponse;
 import io.github.aigoodle.agent.entity.AppEntity;
-import io.github.aigoodle.agent.service.AgentService;
+import io.github.aigoodle.agent.service.AgentExecutionService;
 import io.github.aigoodle.completion.common.SseBridge;
 import io.github.aigoodle.completion.dto.openai.OpenAIChatRequest;
 import io.github.aigoodle.completion.dto.openai.OpenAIChatResponse;
@@ -25,15 +25,16 @@ public class AgentChatGenerator {
 
     private static final Logger logger = LoggerFactory.getLogger(AgentChatGenerator.class);
 
-    private final AgentService agentService;
+    private final AgentExecutionService executions;
 
-    public AgentChatGenerator(AgentService agentService) {
-        this.agentService = agentService;
+    public AgentChatGenerator(AgentExecutionService executions) {
+        this.executions = executions;
     }
 
     public OpenAIChatResponse generateBlocking(AppEntity application, OpenAIChatRequest request) {
-        AgentResponse response = agentService.runDefinition(
-                agentService.toDefinition(application), toAgentRequest(request));
+        AgentResponse response = executions.runPublished(
+                application.getTenantId(), application.getId(), null,
+                toAgentRequest(request), null, null);
         return OpenAIChatResponse.completion(request.getModel(), response.getText());
     }
 
@@ -53,7 +54,8 @@ public class AgentChatGenerator {
         AtomicBoolean contentWasStreamed = new AtomicBoolean(false);
         AgentResponse response;
         try {
-            response = agentService.runDefinition(agentService.toDefinition(application), agentRequest,
+            response = executions.runPublished(
+                    application.getTenantId(), application.getId(), null, agentRequest,
                     step -> emitter.event("step", AppStreamEventPayloads.step(taskId, step)),
                     delta -> {
                         if (delta == null || delta.isEmpty()) {

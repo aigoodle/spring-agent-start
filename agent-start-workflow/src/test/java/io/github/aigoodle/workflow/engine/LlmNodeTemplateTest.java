@@ -25,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -62,7 +63,7 @@ class LlmNodeTemplateTest {
 
         // Wire a ModelService whose getChatClient returns our mock.
         ModelService modelService = mock(ModelService.class);
-        when(modelService.getChatClient("m1")).thenReturn(client);
+        when(modelService.getChatClient(anyString(), eq("m1"))).thenReturn(client);
 
         // A tiny PromptTemplateService that returns our fixture template by id.
         PromptTemplateService prompts = mock(PromptTemplateService.class);

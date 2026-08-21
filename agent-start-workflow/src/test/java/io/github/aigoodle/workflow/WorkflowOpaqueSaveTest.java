@@ -4,12 +4,16 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.aigoodle.workflow.entity.WorkflowEntity;
 import io.github.aigoodle.workflow.service.WorkflowService;
+import io.github.aigoodle.common.context.CurrentUser;
+import io.github.aigoodle.common.context.UserContextHolder;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 /**
  * Regression test that guards the exact save path the frontend hits: POST
@@ -62,7 +66,7 @@ class WorkflowOpaqueSaveTest {
 
         // Read back from the mapper — proves the row is actually in the DB with
         // the graph column populated, not just carried on the returned object.
-        WorkflowEntity fetched = workflowService.require(saved.getId());
+        WorkflowEntity fetched = workflowService.require("wf-opaque", saved.getId());
         JsonNode fetchedGraph = fetched.getGraph();
         assertNotNull(fetchedGraph, "graph column must not be empty after DB read");
         assertEquals(3, fetchedGraph.get("nodes").size());
@@ -71,5 +75,27 @@ class WorkflowOpaqueSaveTest {
         assertEquals(0.75, fetchedGraph.get("viewport").get("zoom").asDouble(), 1e-9,
                 "viewport zoom must survive DB round-trip");
         assertEquals(12, fetchedGraph.get("viewport").get("x").asInt());
+    }
+
+    @Test
+    void persistenceGuardRejectsCrossTenantWorkflowAccess() {
+        UserContextHolder.set(CurrentUser.builder().userId("workflow-test").tenantId("wf-a").build());
+        try {
+            String appId = "guarded-workflow-" + java.util.UUID.randomUUID();
+            WorkflowEntity saved = workflowService.save(
+                    appId, "wf-a", "guarded", "workflow", (JsonNode) null);
+            assertTenantMismatch(() -> workflowService.require("wf-b", saved.getId()));
+            assertTenantMismatch(() -> workflowService.save(
+                    appId + "-forged", "wf-b", "forged", "workflow", (JsonNode) null));
+        } finally {
+            UserContextHolder.clear();
+        }
+    }
+
+    private static void assertTenantMismatch(org.junit.jupiter.api.function.Executable executable) {
+        Throwable failure = assertThrows(RuntimeException.class, executable);
+        Throwable root = failure;
+        while (root.getCause() != null) root = root.getCause();
+        assertInstanceOf(SecurityException.class, root);
     }
 }

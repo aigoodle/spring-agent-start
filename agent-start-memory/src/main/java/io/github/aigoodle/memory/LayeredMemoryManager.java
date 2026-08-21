@@ -11,9 +11,17 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /** Bounded working memory plus persisted short/long-term memory with hybrid ranking. */
 public class LayeredMemoryManager implements MemoryManager {
+    private record WorkingKey(String tenantId, String ownerId, String conversationId) {
+        private WorkingKey {
+            tenantId = normalized(tenantId, "default");
+            ownerId = normalized(ownerId, "anonymous");
+            conversationId = normalized(conversationId, null);
+            if (conversationId == null) throw new IllegalArgumentException("conversationId is required");
+        }
+    }
     private final MemoryStore store;
     private final MemoryProperties properties;
-    private final Map<String, Deque<MemoryItem>> working = new ConcurrentHashMap<>();
+    private final Map<WorkingKey, Deque<MemoryItem>> working = new ConcurrentHashMap<>();
     private final List<MemoryExtractor> extractors;
 
     public LayeredMemoryManager(MemoryStore store, MemoryProperties properties) {
@@ -81,7 +89,8 @@ public class LayeredMemoryManager implements MemoryManager {
         Instant now = Instant.now();
         List<MemoryItem> candidates = new ArrayList<>();
         if (query.tiers().contains(MemoryTier.WORKING) && query.conversationId() != null) {
-            Deque<MemoryItem> window = working.get(query.conversationId());
+            Deque<MemoryItem> window = working.get(workingKey(query.tenantId(), query.ownerId(),
+                    query.conversationId()));
             if (window != null) {
                 synchronized (window) {
                     candidates.addAll(window);
@@ -106,7 +115,7 @@ public class LayeredMemoryManager implements MemoryManager {
                 .sorted(Comparator.comparingDouble((MemoryItem item) -> score(item, query.query(), now)).reversed()
                         .thenComparing(MemoryItem::createdAt, Comparator.reverseOrder()))
                 .limit(query.limit()).toList();
-        store.recordAccess(result.stream().filter(item -> item.tier() != MemoryTier.WORKING)
+        store.recordAccess(query.tenantId(), result.stream().filter(item -> item.tier() != MemoryTier.WORKING)
                 .map(MemoryItem::id).filter(Objects::nonNull).toList(), now);
         return result;
     }
@@ -124,12 +133,21 @@ public class LayeredMemoryManager implements MemoryManager {
 
     @Override
     public void clearWorkingMemory(String conversationId) {
-        if (conversationId != null) working.remove(conversationId);
+        if (conversationId == null || conversationId.isBlank()) return;
+        String selected = conversationId.trim();
+        working.keySet().removeIf(key -> selected.equals(key.conversationId()));
+    }
+
+    @Override
+    public void clearWorkingMemory(String tenantId, String ownerId, String conversationId) {
+        if (conversationId != null && !conversationId.isBlank()) {
+            working.remove(workingKey(tenantId, ownerId, conversationId));
+        }
     }
 
     @Override
     public void forgetConversation(String tenantId, String ownerId, String conversationId) {
-        clearWorkingMemory(conversationId);
+        clearWorkingMemory(tenantId, ownerId, conversationId);
         if (conversationId != null && !conversationId.isBlank()) {
             store.delete(tenantId == null || tenantId.isBlank() ? "default" : tenantId,
                     ownerId, conversationId);
@@ -138,7 +156,8 @@ public class LayeredMemoryManager implements MemoryManager {
 
     private void rememberWorking(MemoryItem item) {
         if (item.conversationId() == null || item.conversationId().isBlank()) return;
-        Deque<MemoryItem> window = working.computeIfAbsent(item.conversationId(), key -> new ArrayDeque<>());
+        Deque<MemoryItem> window = working.computeIfAbsent(workingKey(item.tenantId(), item.ownerId(),
+                item.conversationId()), key -> new ArrayDeque<>());
         synchronized (window) {
             window.addLast(item);
             while (window.size() > Math.max(1, properties.getWorkingCapacity())) window.removeFirst();
@@ -168,5 +187,13 @@ public class LayeredMemoryManager implements MemoryManager {
     private static String normalize(String content) {
         return content == null ? "" : content.strip().replaceAll("\\s+", " ")
                 .toLowerCase(Locale.ROOT);
+    }
+
+    private static WorkingKey workingKey(String tenantId, String ownerId, String conversationId) {
+        return new WorkingKey(tenantId, ownerId, conversationId);
+    }
+
+    private static String normalized(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value.trim();
     }
 }

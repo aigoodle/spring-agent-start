@@ -52,7 +52,7 @@ class JdbcVectorStoreTest {
                 .tenantId("jdbc").name("kb").embeddingModelId(emb.getId())
                 .indexingTechnique(IndexingTechnique.HIGH_QUALITY).build());
 
-        knowledgeService.addText(ds.getId(), "animals.txt",
+        knowledgeService.addText(ds.getTenantId(), ds.getId(), "animals.txt",
                 "Dogs are loyal animals that love playing fetch.\n"
                         + "Python is a popular programming language for data science.");
 
@@ -63,7 +63,8 @@ class JdbcVectorStoreTest {
         assertTrue(rows > 0, "embeddings should be persisted in goodle_embeddings table");
 
         // retrieval works through the persisted store
-        List<RetrievedSegment> hits = knowledgeService.retrieve(ds.getId(), "dogs playing fetch");
+        List<RetrievedSegment> hits = knowledgeService.retrieve(
+                ds.getTenantId(), ds.getId(), "dogs playing fetch");
         assertFalse(hits.isEmpty());
         assertTrue(hits.get(0).getContent().toLowerCase().contains("dog"));
         assertTrue(hits.get(0).getVectorScore() > 0, "vector score should come from the JDBC store");

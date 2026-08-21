@@ -1,9 +1,18 @@
 package io.github.aigoodle.knowledge.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.github.aigoodle.knowledge.KnowledgeTestApplication;
+import io.github.aigoodle.knowledge.async.DocumentIngestQueueEntity;
 import io.github.aigoodle.knowledge.config.ProcessRule;
 import io.github.aigoodle.knowledge.config.RetrievalConfig;
 import io.github.aigoodle.knowledge.entity.DatasetEntity;
+import io.github.aigoodle.knowledge.entity.HitTestingLogEntity;
+import io.github.aigoodle.knowledge.entity.KnowledgeDocumentEntity;
+import io.github.aigoodle.knowledge.entity.SegmentEntity;
+import io.github.aigoodle.knowledge.mapper.DocumentIngestQueueMapper;
+import io.github.aigoodle.knowledge.mapper.HitTestingLogMapper;
+import io.github.aigoodle.knowledge.mapper.KnowledgeDocumentMapper;
+import io.github.aigoodle.knowledge.mapper.SegmentMapper;
 import io.github.aigoodle.knowledge.enums.ChunkingTemplate;
 import io.github.aigoodle.knowledge.enums.IndexingTechnique;
 import io.github.aigoodle.knowledge.enums.RetrievalMethod;
@@ -13,6 +22,8 @@ import io.github.aigoodle.model.entity.ModelEntity;
 import io.github.aigoodle.model.enums.ModelType;
 import io.github.aigoodle.model.service.ModelRegistration;
 import io.github.aigoodle.model.service.ModelService;
+import io.github.aigoodle.common.context.CurrentUser;
+import io.github.aigoodle.common.context.UserContextHolder;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -31,6 +42,10 @@ class KnowledgeServiceIntegrationTest {
     private DatasetService datasetService;
     @Autowired
     private KnowledgeService knowledgeService;
+    @Autowired private KnowledgeDocumentMapper documentMapper;
+    @Autowired private SegmentMapper segmentMapper;
+    @Autowired private DocumentIngestQueueMapper queueMapper;
+    @Autowired private HitTestingLogMapper hitTestingLogMapper;
 
     private static final String DOC = String.join("\n",
             "Cats are independent pets that enjoy sleeping all day.",
@@ -64,16 +79,16 @@ class KnowledgeServiceIntegrationTest {
     @Test
     void ingestAndHybridRetrieve() {
         DatasetEntity ds = highQualityDataset(ChunkingTemplate.NAIVE);
-        var doc = knowledgeService.addText(ds.getId(), "animals.txt", DOC);
+        var doc = knowledgeService.addText(ds.getTenantId(), ds.getId(), "animals.txt", DOC);
         assertEquals("COMPLETED", doc.getStatus().name());
         assertTrue(doc.getSegmentCount() > 0);
 
-        List<RetrievedSegment> dogs = knowledgeService.retrieve(ds.getId(), "dogs loyal fetch");
+        List<RetrievedSegment> dogs = knowledgeService.retrieve(ds.getTenantId(), ds.getId(), "dogs loyal fetch");
         assertFalse(dogs.isEmpty(), "should retrieve something for 'dogs'");
         assertTrue(dogs.get(0).getContent().toLowerCase().contains("dog"),
                 "top hit should be the dogs chunk, was: " + dogs.get(0).getContent());
 
-        List<RetrievedSegment> py = knowledgeService.retrieve(ds.getId(), "python programming language");
+        List<RetrievedSegment> py = knowledgeService.retrieve(ds.getTenantId(), ds.getId(), "python programming language");
         assertTrue(py.get(0).getContent().toLowerCase().contains("python"),
                 "top hit should be the python chunk, was: " + py.get(0).getContent());
 
@@ -83,15 +98,51 @@ class KnowledgeServiceIntegrationTest {
     }
 
     @Test
+    void persistenceGuardRejectsCrossTenantDatasetAccess() {
+        UserContextHolder.set(CurrentUser.builder().userId("knowledge-test").tenantId("kb-a").build());
+        try {
+            DatasetEntity owned = datasetService.create(CreateDatasetRequest.builder()
+                    .tenantId("kb-a").name("guarded-kb")
+                    .indexingTechnique(IndexingTechnique.ECONOMY).build());
+            assertTenantMismatch(() -> datasetService.require("kb-b", owned.getId()));
+            assertTenantMismatch(() -> datasetService.create(CreateDatasetRequest.builder()
+                    .tenantId("kb-b").name("forged-kb")
+                    .indexingTechnique(IndexingTechnique.ECONOMY).build()));
+            assertTenantMismatch(() -> documentMapper.selectList(
+                    new LambdaQueryWrapper<KnowledgeDocumentEntity>()
+                            .eq(KnowledgeDocumentEntity::getTenantId, "kb-b")));
+            assertTenantMismatch(() -> segmentMapper.selectList(
+                    new LambdaQueryWrapper<SegmentEntity>()
+                            .eq(SegmentEntity::getTenantId, "kb-b")));
+            assertTenantMismatch(() -> queueMapper.selectList(
+                    new LambdaQueryWrapper<DocumentIngestQueueEntity>()
+                            .eq(DocumentIngestQueueEntity::getTenantId, "kb-b")));
+            assertTenantMismatch(() -> hitTestingLogMapper.selectList(
+                    new LambdaQueryWrapper<HitTestingLogEntity>()
+                            .eq(HitTestingLogEntity::getTenantId, "kb-b")));
+            assertTenantMismatch(() -> documentMapper.selectById("unguarded-id"));
+        } finally {
+            UserContextHolder.clear();
+        }
+    }
+
+    private static void assertTenantMismatch(org.junit.jupiter.api.function.Executable executable) {
+        Throwable failure = assertThrows(RuntimeException.class, executable);
+        Throwable root = failure;
+        while (root.getCause() != null) root = root.getCause();
+        assertInstanceOf(SecurityException.class, root);
+    }
+
+    @Test
     void vectorOnlyAndKeywordOnlyBothWork() {
         DatasetEntity ds = highQualityDataset(ChunkingTemplate.NAIVE);
-        knowledgeService.addText(ds.getId(), "animals.txt", DOC);
+        knowledgeService.addText(ds.getTenantId(), ds.getId(), "animals.txt", DOC);
 
-        var vec = knowledgeService.retrieve(ds.getId(), RetrievalRequest.builder()
+        var vec = knowledgeService.retrieve(ds.getTenantId(), ds.getId(), RetrievalRequest.builder()
                 .query("capital of France Paris").method(RetrievalMethod.VECTOR).build());
         assertTrue(vec.get(0).getContent().toLowerCase().contains("paris"));
 
-        var kw = knowledgeService.retrieve(ds.getId(), RetrievalRequest.builder()
+        var kw = knowledgeService.retrieve(ds.getTenantId(), ds.getId(), RetrievalRequest.builder()
                 .query("capital of France Paris").method(RetrievalMethod.FULL_TEXT).build());
         assertTrue(kw.get(0).getContent().toLowerCase().contains("paris"));
         assertTrue(kw.get(0).getKeywordScore() > 0);
@@ -104,9 +155,9 @@ class KnowledgeServiceIntegrationTest {
                 .indexingTechnique(IndexingTechnique.ECONOMY)
                 .processRule(new ProcessRule())
                 .build());
-        knowledgeService.addText(ds.getId(), "animals.txt", DOC);
+        knowledgeService.addText(ds.getTenantId(), ds.getId(), "animals.txt", DOC);
 
-        var res = knowledgeService.retrieve(ds.getId(), "python data science");
+        var res = knowledgeService.retrieve(ds.getTenantId(), ds.getId(), "python data science");
         assertFalse(res.isEmpty());
         assertTrue(res.get(0).getContent().toLowerCase().contains("python"));
     }
@@ -114,9 +165,9 @@ class KnowledgeServiceIntegrationTest {
     @Test
     void parentChildRetrievalReturnsParentContext() {
         DatasetEntity ds = highQualityDataset(ChunkingTemplate.PARENT_CHILD);
-        knowledgeService.addText(ds.getId(), "animals.txt", DOC.repeat(2));
+        knowledgeService.addText(ds.getTenantId(), ds.getId(), "animals.txt", DOC.repeat(2));
 
-        var res = knowledgeService.retrieve(ds.getId(), "dogs loyal fetch");
+        var res = knowledgeService.retrieve(ds.getTenantId(), ds.getId(), "dogs loyal fetch");
         assertFalse(res.isEmpty());
         RetrievedSegment top = res.get(0);
         assertNotNull(top.getParentContent(), "parent-child chunks must carry parent context");
@@ -126,10 +177,10 @@ class KnowledgeServiceIntegrationTest {
     @Test
     void metadataFilterRestrictsResults() {
         DatasetEntity ds = highQualityDataset(ChunkingTemplate.NAIVE);
-        knowledgeService.addText(ds.getId(), "animals.txt", DOC);
-        knowledgeService.addText(ds.getId(), "other.txt", "Dogs also appear in this second document.");
+        knowledgeService.addText(ds.getTenantId(), ds.getId(), "animals.txt", DOC);
+        knowledgeService.addText(ds.getTenantId(), ds.getId(), "other.txt", "Dogs also appear in this second document.");
 
-        var filtered = knowledgeService.retrieve(ds.getId(), RetrievalRequest.builder()
+        var filtered = knowledgeService.retrieve(ds.getTenantId(), ds.getId(), RetrievalRequest.builder()
                 .query("dogs")
                 .metadataFilter(Map.of("documentName", "other.txt"))
                 .build());
@@ -140,11 +191,11 @@ class KnowledgeServiceIntegrationTest {
     @Test
     void deleteDocumentRemovesSegments() {
         DatasetEntity ds = highQualityDataset(ChunkingTemplate.NAIVE);
-        var doc = knowledgeService.addText(ds.getId(), "animals.txt", DOC);
-        assertFalse(knowledgeService.retrieve(ds.getId(), "python").isEmpty());
+        var doc = knowledgeService.addText(ds.getTenantId(), ds.getId(), "animals.txt", DOC);
+        assertFalse(knowledgeService.retrieve(ds.getTenantId(), ds.getId(), "python").isEmpty());
 
-        knowledgeService.deleteDocument(doc.getId());
-        assertTrue(knowledgeService.retrieve(ds.getId(), "python").isEmpty(),
+        knowledgeService.deleteDocument(ds.getTenantId(), ds.getId(), doc.getId());
+        assertTrue(knowledgeService.retrieve(ds.getTenantId(), ds.getId(), "python").isEmpty(),
                 "after deletion nothing should be retrievable");
     }
 
@@ -155,11 +206,31 @@ class KnowledgeServiceIntegrationTest {
         config.setNeighborWindow(1);
         UpdateDatasetRequest patch = new UpdateDatasetRequest();
         patch.setRetrievalConfig(config);
-        datasetService.update(ds.getId(), patch);
-        knowledgeService.addText(ds.getId(), "animals.txt", DOC);
+        datasetService.update(ds.getTenantId(), ds.getId(), patch);
+        knowledgeService.addText(ds.getTenantId(), ds.getId(), "animals.txt", DOC);
 
-        RetrievedSegment hit = knowledgeService.retrieve(ds.getId(), "dogs loyal fetch").get(0);
+        RetrievedSegment hit = knowledgeService.retrieve(ds.getTenantId(), ds.getId(), "dogs loyal fetch").get(0);
         assertNotNull(hit.getExpandedContext());
         assertTrue(hit.contextText().length() >= hit.getContent().length());
+    }
+
+    @Test
+    void knowledgeGraphIncludesTraceableSemanticEntities() {
+        DatasetEntity ds = highQualityDataset(ChunkingTemplate.NAIVE);
+        knowledgeService.addText(ds.getTenantId(), ds.getId(), "spring-ai.txt",
+                "Spring AI connects retrieval pipelines. Spring AI also connects vector stores.");
+
+        KnowledgeService.KnowledgeGraph graph = knowledgeService.buildKnowledgeGraph(
+                ds.getTenantId(), ds.getId());
+        KnowledgeService.KnowledgeGraphNode spring = graph.nodes().stream()
+                .filter(node -> "entity".equals(node.type()))
+                .filter(node -> "spring".equalsIgnoreCase(node.label()))
+                .findFirst().orElseThrow();
+
+        assertTrue(spring.weight() >= 1);
+        assertFalse(spring.evidenceSegmentIds().isEmpty());
+        assertTrue(graph.edges().stream().anyMatch(edge ->
+                "mentions".equals(edge.relation()) && edge.target().equals(spring.id())
+                        && !edge.evidenceSegmentIds().isEmpty()));
     }
 }

@@ -49,7 +49,7 @@ public class PromptTemplateController {
 
     @GetMapping("/{id}")
     public ApiResponse<PromptTemplateEntity> get(@PathVariable String id) {
-        return ApiResponse.ok(promptTemplateService.require(id));
+        return ApiResponse.ok(promptTemplateService.require(currentTenantId(), id));
     }
 
     @PostMapping
@@ -62,14 +62,14 @@ public class PromptTemplateController {
     @PutMapping("/{id}")
     public ApiResponse<PromptTemplateEntity> update(@PathVariable String id,
                                                      @RequestBody PromptTemplateRequest request) {
-        return ApiResponse.ok(promptTemplateService.update(id, new PromptTemplatePatch(
+        return ApiResponse.ok(promptTemplateService.update(currentTenantId(), id, new PromptTemplatePatch(
                 request.getName(), request.getCategory(), request.getDescription(),
                 request.getContent(), request.getTags())));
     }
 
     @DeleteMapping("/{id}")
     public ApiResponse<Void> delete(@PathVariable String id) {
-        promptTemplateService.delete(id);
+        promptTemplateService.delete(currentTenantId(), id);
         return ApiResponse.ok();
     }
 
@@ -77,7 +77,7 @@ public class PromptTemplateController {
     @GetMapping("/{id}/variables")
     public ApiResponse<List<String>> variables(@PathVariable String id) {
         return ApiResponse.ok(promptTemplateService.variablesOf(
-                promptTemplateService.require(id).getContent()));
+                promptTemplateService.require(currentTenantId(), id).getContent()));
     }
 
     /** Render a template against a supplied variable map — for a "preview" button. */
@@ -85,7 +85,7 @@ public class PromptTemplateController {
     public ApiResponse<Map<String, Object>> render(@PathVariable String id,
                                                     @RequestBody(required = false) Map<String, Object> variables) {
         String rendered = promptTemplateService.render(
-                promptTemplateService.require(id).getContent(),
+                promptTemplateService.require(currentTenantId(), id).getContent(),
                 variables == null ? Map.of() : variables);
         return ApiResponse.ok(Map.of("rendered", rendered));
     }
@@ -98,7 +98,8 @@ public class PromptTemplateController {
      */
     @GetMapping("/{id}/references")
     public ApiResponse<List<Map<String, Object>>> references(@PathVariable String id) {
-        promptTemplateService.require(id); // 404 if template gone
-        return ApiResponse.ok(referenceScanner == null ? List.of() : referenceScanner.findUsingTemplate(id));
+        promptTemplateService.require(currentTenantId(), id); // 404 if template gone
+        return ApiResponse.ok(referenceScanner == null ? List.of()
+                : referenceScanner.findUsingTemplate(currentTenantId(), id));
     }
 }

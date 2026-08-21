@@ -82,13 +82,12 @@ public class AppController {
 
     @GetMapping("/{id}")
     public ApiResponse<AppEntity> get(@PathVariable String id) {
-        return ApiResponse.ok(applicationCoordinator.get(id));
+        return ApiResponse.ok(applicationCoordinator.get(currentTenantId(), id));
     }
 
     @GetMapping("/{id}/model-config")
     public ApiResponse<AppModelConfigEntity> modelConfig(@PathVariable String id) {
-        appService.require(id);
-        return ApiResponse.ok(appService.getModelConfig(id));
+        return ApiResponse.ok(appService.getModelConfig(currentTenantId(), id));
     }
 
     @PostMapping
@@ -101,17 +100,17 @@ public class AppController {
     public ApiResponse<AppEntity> update(@PathVariable String id,
                                            @RequestBody SaveAppRequest request) {
         request.setTenantId(currentTenantId());
-        return ApiResponse.ok(applicationCoordinator.update(id, request));
+        return ApiResponse.ok(applicationCoordinator.update(currentTenantId(), id, request));
     }
 
     @DeleteMapping("/{id}")
     public ApiResponse<Void> delete(@PathVariable String id) {
-        appService.delete(id);
+        appService.delete(currentTenantId(), id);
         return ApiResponse.ok();
     }
 
     @GetMapping("/{id}/tools")
     public ApiResponse<List<Map<String, Object>>> tools(@PathVariable String id) {
-        return ApiResponse.ok(toolViewMapper.toolsOf(id));
+        return ApiResponse.ok(toolViewMapper.toolsOf(currentTenantId(), id));
     }
 }

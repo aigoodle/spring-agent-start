@@ -145,15 +145,8 @@ public class ChatController {
                 workflowIdHeader, workflowIdParameter);
         String resolvedAppId = appAccessResolver.enforcePathApp(
                 appId, authorizationHeader, isDebugRun(request));
-        if (request.streaming()) {
-            Flux<ServerSentEvent<Object>> stream =
-                    appGenerateService.generateStream(resolvedAppId, request);
-            return eventStream(stream);
-        }
-        Mono<OpenAIChatResponse> response = Mono.fromCallable(
-                        () -> appGenerateService.generateBlocking(resolvedAppId, request))
-                .subscribeOn(BLOCKING_SCHEDULER);
-        return json(response);
+        ChatAccessContext access = chatAccessPolicy.authorizeExternal(resolvedAppId);
+        return generateOpenAI(access, request);
     }
 
     @PostMapping(
@@ -171,8 +164,6 @@ public class ChatController {
             @RequestParam(value = "debug", required = false) String debugParameter,
             @RequestParam(value = "workflowId", required = false) String workflowIdParameter,
             @RequestBody DifyChatMessagesRequest request) {
-        String appId = appAccessResolver.resolveDifyApp(
-                appIdParameter, appIdHeader, authorizationHeader, request);
         OpenAIChatRequest internalRequest = DifyChatAdapter.toInternalRequest(request);
         mergeDebugParameters(internalRequest,
                 AppAccessResolver.firstNonBlank(debugHeader,
@@ -180,15 +171,29 @@ public class ChatController {
                 debugParameter,
                 AppAccessResolver.firstNonBlank(workflowIdHeader, request.getWorkflowId()),
                 workflowIdParameter);
+        ChatAccessContext access;
+        if (isDebugRun(internalRequest)) {
+            String appId = appAccessResolver.resolveDifyApp(
+                    appIdParameter, appIdHeader, authorizationHeader, request);
+            access = chatAccessPolicy.authorizeDebug(appId, internalRequest.getWorkflowId());
+        } else {
+            String appId = appAccessResolver.requireTokenApp(authorizationHeader);
+            access = chatAccessPolicy.authorizeExternal(appId);
+            internalRequest.setDebug(null);
+            internalRequest.setWorkflowId(null);
+            internalRequest.setAppId(null);
+        }
 
         if (request.streaming()) {
             Flux<ServerSentEvent<Object>> stream =
-                    appGenerateService.generateDifyStream(appId, internalRequest);
+                    appGenerateService.generateDifyStream(access.appId(), access.tenantId(),
+                            access.userId(), internalRequest);
             return eventStream(stream);
         }
         Mono<Map<String, Object>> response = Mono.fromCallable(() -> {
                     OpenAIChatResponse generated =
-                            appGenerateService.generateBlocking(appId, internalRequest);
+                            appGenerateService.generateBlocking(access.appId(), access.tenantId(),
+                                    access.userId(), internalRequest);
                     return DifyChatAdapter.toBlockingResponse(
                             generated, internalRequest.getConversationId());
                 })
@@ -204,7 +209,9 @@ public class ChatController {
             @PathVariable String appId,
             @RequestBody(required = false) HistoryQuery query) {
         int limit = resolveLimit(query, 100, 500);
-        return ApiResponse.ok(conversationHistoryService.conversations(appId, limit));
+        ChatAccessContext access = chatAccessPolicy.authorizeInternal(appId);
+        return ApiResponse.ok(conversationHistoryService.conversations(
+                access.tenantId(), access.appId(), limit));
     }
 
     @PostMapping(
@@ -216,8 +223,9 @@ public class ChatController {
             @PathVariable String conversationId,
             @RequestBody(required = false) HistoryQuery query) {
         int limit = resolveLimit(query, 500, 500);
+        ChatAccessContext access = chatAccessPolicy.authorizeInternal(appId);
         return ApiResponse.ok(conversationHistoryService.messages(
-                appId, conversationId, limit));
+                access.tenantId(), access.appId(), conversationId, limit));
     }
 
     /**
@@ -231,8 +239,9 @@ public class ChatController {
     public ApiResponse<List<Map<String, Object>>> listConversationsJson(
             @RequestBody HistoryQuery query) {
         String appId = requiredHistoryValue(query == null ? null : query.appId, "appId");
+        ChatAccessContext access = chatAccessPolicy.authorizeInternal(appId);
         return ApiResponse.ok(conversationHistoryService.conversations(
-                appId, resolveLimit(query, 100, 500)));
+                access.tenantId(), access.appId(), resolveLimit(query, 100, 500)));
     }
 
     @PostMapping(
@@ -244,22 +253,14 @@ public class ChatController {
         String appId = requiredHistoryValue(query == null ? null : query.appId, "appId");
         String conversationId = requiredHistoryValue(
                 query == null ? null : query.conversationId, "conversationId");
+        ChatAccessContext access = chatAccessPolicy.authorizeInternal(appId);
         return ApiResponse.ok(conversationHistoryService.messages(
-                appId, conversationId, resolveLimit(query, 500, 500)));
+                access.tenantId(), access.appId(), conversationId,
+                resolveLimit(query, 500, 500)));
     }
 
     private static ResponseEntity<?> eventStream(Flux<ServerSentEvent<Object>> stream) {
         return ResponseEntity.ok().contentType(MediaType.TEXT_EVENT_STREAM).body(stream);
-    }
-
-    private ResponseEntity<?> generateOpenAI(String appId, OpenAIChatRequest request) {
-        if (request.streaming()) {
-            return eventStream(appGenerateService.generateStream(appId, request));
-        }
-        Mono<OpenAIChatResponse> response = Mono.fromCallable(
-                        () -> appGenerateService.generateBlocking(appId, request))
-                .subscribeOn(BLOCKING_SCHEDULER);
-        return json(response);
     }
 
     private ResponseEntity<?> generateOpenAI(ChatAccessContext access, OpenAIChatRequest request) {

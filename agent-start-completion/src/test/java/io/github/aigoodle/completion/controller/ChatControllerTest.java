@@ -8,13 +8,14 @@ import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.completion.service.AppGenerateService;
 import io.github.aigoodle.completion.service.ConversationHistoryService;
 import io.github.aigoodle.completion.support.ChatAccessPolicy;
+import io.github.aigoodle.completion.support.ChatAccessContext;
+import io.github.aigoodle.completion.support.ChatAccessMode;
 import io.github.aigoodle.completion.support.AppAccessResolver;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 class ChatControllerTest {
 
@@ -48,17 +49,42 @@ class ChatControllerTest {
     }
 
     @Test
+    void difyProductionEndpointRejectsBodySuppliedApplicationWithoutApiKey() {
+        ChatController controller = new ChatController(
+                mock(AppGenerateService.class),
+                new AppAccessResolver(emptyProvider()),
+                mock(ChatAccessPolicy.class),
+                mock(ConversationHistoryService.class));
+        io.github.aigoodle.completion.dto.dify.DifyChatMessagesRequest request =
+                new io.github.aigoodle.completion.dto.dify.DifyChatMessagesRequest();
+        request.setAppId("victim-app");
+        request.setQuery("hello");
+        request.setResponseMode("blocking");
+
+        assertThatThrownBy(() -> controller.chatMessages(
+                null, null, null, null, null, null, null, request))
+                .isInstanceOf(PlatformException.class)
+                .hasMessageContaining("API Key");
+    }
+
+    @Test
     void rejectsConversationOwnedByAnotherApplication() {
         AppConversationService conversationService = mock(AppConversationService.class);
         AppConversationEntity conversation = new AppConversationEntity();
         conversation.setId("conversation-1");
         conversation.setAppId("app-b");
         when(conversationService.require(conversation.getId())).thenReturn(conversation);
+        when(conversationService.require("tenant-a", "app-a", conversation.getId()))
+                .thenThrow(new PlatformException("conversation_not_found",
+                        "Conversation not found: " + conversation.getId(), null));
+        ChatAccessPolicy accessPolicy = mock(ChatAccessPolicy.class);
+        when(accessPolicy.authorizeInternal("app-a")).thenReturn(
+                new ChatAccessContext("app-a", "tenant-a", "user-a", ChatAccessMode.INTERNAL));
 
         ChatController controller = new ChatController(
                 mock(AppGenerateService.class),
                 new AppAccessResolver(emptyProvider()),
-                mock(ChatAccessPolicy.class),
+                accessPolicy,
                 new ConversationHistoryService(providerOf(conversationService), emptyProvider()));
 
         assertThatThrownBy(() -> controller.conversationMessages(

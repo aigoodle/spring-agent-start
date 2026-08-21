@@ -48,7 +48,7 @@ public class TriggerWebhookController {
 
         TriggerInvocationRequest invocationRequest = TriggerInvocationRequest.webhook(
                 trigger.getId(), payload == null ? Map.of() : payload);
-        String invocationId = triggerService.fireAsynchronously(invocationRequest);
+        String invocationId = triggerService.fireAsynchronously(trigger.getTenantId(), invocationRequest);
         return ResponseEntity.accepted().body(Map.of("invocationId", invocationId, "triggerId", trigger.getId()));
     }
 }

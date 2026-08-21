@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 import java.time.Instant;
 import java.util.function.BooleanSupplier;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /** All resolved collaborators and inputs required to execute one agent turn. */
 @Data
@@ -29,7 +30,15 @@ public class AgentRunContext {
     private String query;
     private String conversationId;
     private String runId;
+    @Builder.Default
+    private Map<String, Object> requestVariables = Map.of();
     private Instant deadline;
+
+    @Builder.Default
+    private AtomicInteger modelCalls = new AtomicInteger();
+
+    @Builder.Default
+    private AtomicInteger toolCalls = new AtomicInteger();
 
     @Builder.Default
     private BooleanSupplier active = () -> true;
@@ -76,12 +85,44 @@ public class AgentRunContext {
     /** Executes through the shared governance boundary with run identity attached. */
     public Object executeTool(ToolDefinition tool, Map<String, Object> arguments) {
         checkActive();
+        claimToolCall();
         AgentDefinition agent = getDefinition();
         return getToolExecutionGateway().execute(tool, arguments,
                 new ToolExecutionContext(runId,
                         agent == null ? null : agent.getTenantId(),
-                        agent == null ? null : agent.getId(), conversationId, Map.of()));
+                        requestVariables.get("enterpriseUserId") == null ? (agent == null ? null : agent.getId())
+                                : String.valueOf(requestVariables.get("enterpriseUserId")),
+                        conversationId, requestVariables));
     }
+
+    /** Claims one model boundary before invoking the provider. */
+    public int claimModelCall() {
+        checkActive();
+        int limit = definition == null ? 0 : definition.getMaxModelCalls();
+        return claim(modelCalls, limit, true);
+    }
+
+    private void claimToolCall() {
+        int limit = definition == null ? 0 : definition.getMaxToolCalls();
+        claim(toolCalls, limit, false);
+    }
+
+    private static int claim(AtomicInteger counter, int limit, boolean model) {
+        AtomicInteger effective = counter == null ? new AtomicInteger() : counter;
+        while (true) {
+            int current = effective.get();
+            if (limit > 0 && current >= limit) {
+                throw model
+                        ? AgentExecutionBudgetExceededException.modelCalls(limit)
+                        : AgentExecutionBudgetExceededException.toolCalls(limit);
+            }
+            if (effective.compareAndSet(current, current + 1)) return current + 1;
+        }
+    }
+
+    public int modelCallCount() { return modelCalls == null ? 0 : modelCalls.get(); }
+
+    public int toolCallCount() { return toolCalls == null ? 0 : toolCalls.get(); }
 
     /** Cooperative guard used before model and tool boundaries. */
     public void checkActive() {

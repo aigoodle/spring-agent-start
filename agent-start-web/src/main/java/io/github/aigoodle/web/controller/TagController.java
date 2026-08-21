@@ -47,12 +47,12 @@ public class TagController {
 
     @PostMapping("/{id}/rename")
     public ApiResponse<TagEntity> rename(@PathVariable String id, @RequestBody Map<String, String> body) {
-        return ApiResponse.ok(service.rename(id, body.get("name")));
+        return ApiResponse.ok(service.rename(currentTenantId(), id, body.get("name")));
     }
 
     @DeleteMapping("/{id}")
     public ApiResponse<Void> delete(@PathVariable String id) {
-        service.delete(id);
+        service.delete(currentTenantId(), id);
         return ApiResponse.ok();
     }
 
@@ -60,18 +60,19 @@ public class TagController {
     @GetMapping("/bindings")
     public ApiResponse<List<TagBindingEntity>> bindings(@RequestParam String targetId,
                                                         @RequestParam(required = false) String targetType) {
-        return ApiResponse.ok(service.bindings(targetId, targetType));
+        return ApiResponse.ok(service.bindings(currentTenantId(), targetId, targetType));
     }
 
     @PostMapping("/bindings")
     public ApiResponse<Void> bind(@RequestBody Map<String, String> body) {
-        service.bind(body.get("tagId"), body.get("targetId"), body.getOrDefault("targetType", "app"));
+        service.bind(currentTenantId(), body.get("tagId"), body.get("targetId"),
+                body.getOrDefault("targetType", "app"));
         return ApiResponse.ok();
     }
 
     @DeleteMapping("/bindings")
     public ApiResponse<Void> unbind(@RequestParam String tagId, @RequestParam String targetId) {
-        service.unbind(tagId, targetId);
+        service.unbind(currentTenantId(), tagId, targetId);
         return ApiResponse.ok();
     }
 }

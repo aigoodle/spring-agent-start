@@ -1,6 +1,7 @@
 package io.github.aigoodle.agent.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import io.github.aigoodle.agent.api.AgentDefinition;
 import io.github.aigoodle.agent.api.AgentMessage;
 import io.github.aigoodle.agent.api.AgentRequest;
@@ -29,6 +30,7 @@ import io.github.aigoodle.agent.strategy.AgentStrategyRegistry;
 import io.github.aigoodle.agent.strategy.ResumableAgentStrategy;
 import io.github.aigoodle.agent.strategy.AgentRunInterruptedException;
 import io.github.aigoodle.common.exception.PlatformException;
+import io.github.aigoodle.common.context.UserContextHolder;
 import io.github.aigoodle.common.util.JsonUtils;
 import io.github.aigoodle.model.service.ModelService;
 import io.github.aigoodle.memory.MemoryItem;
@@ -42,6 +44,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.ArrayList;
 import java.util.Optional;
 import java.util.UUID;
@@ -70,7 +73,8 @@ public class AgentService implements AgentRuntime {
     private final ToolExecutionGateway toolExecutionGateway;
     private final AgentContextEngine contextEngine;
     private final List<AgentRunObserver> runObservers;
-    private final ConcurrentHashMap<String, Thread> activeRuns = new ConcurrentHashMap<>();
+    private record ActiveRunKey(String tenantId, String runId) {}
+    private final ConcurrentHashMap<ActiveRunKey, Thread> activeRuns = new ConcurrentHashMap<>();
 
     public AgentService(AppMapper appMapper, AppModelConfigService modelConfigService,
                         ModelService modelService, ToolRegistry toolRegistry,
@@ -142,10 +146,14 @@ public class AgentService implements AgentRuntime {
     }
 
     public AppEntity require(String agentId) {
-        AppEntity agent = appMapper.selectById(agentId);
-        if (agent == null) {
-            throw new PlatformException("app_not_found", "Application not found: " + agentId, null);
-        }
+        return require(UserContextHolder.currentTenantId(), agentId);
+    }
+
+    public AppEntity require(String tenantId, String agentId) {
+        AppEntity agent = appMapper.selectOne(new LambdaQueryWrapper<AppEntity>()
+                .eq(AppEntity::getTenantId, valueOrDefault(tenantId, DEFAULT_TENANT_ID))
+                .eq(AppEntity::getId, agentId).last("LIMIT 1"));
+        if (agent == null) throw new PlatformException("app_not_found", "Application not found", null);
         return agent;
     }
 
@@ -208,21 +216,40 @@ public class AgentService implements AgentRuntime {
 
     @Transactional
     public AppEntity update(String agentId, SaveAppRequest request) {
-        AppEntity agent = require(agentId);
+        return update(UserContextHolder.currentTenantId(), agentId, request);
+    }
+
+    @Transactional
+    public AppEntity update(String tenantId, String agentId, SaveAppRequest request) {
+        AppEntity agent = require(tenantId, agentId);
+        request.setTenantId(agent.getTenantId());
         catalogUpdater.applyRequest(request, agent);
-        appMapper.updateById(agent);
+        appMapper.update(agent, new LambdaUpdateWrapper<AppEntity>()
+                .eq(AppEntity::getTenantId, agent.getTenantId()).eq(AppEntity::getId, agent.getId()));
         saveModelConfig(agent, request);
         return agent;
     }
 
     @Transactional
     public void delete(String agentId) {
-        modelConfigService.deleteByAppId(agentId);
-        appMapper.deleteById(agentId);
+        delete(UserContextHolder.currentTenantId(), agentId);
+    }
+
+    @Transactional
+    public void delete(String tenantId, String agentId) {
+        AppEntity owned = require(tenantId, agentId);
+        modelConfigService.deleteByAppId(owned.getTenantId(), owned.getId());
+        appMapper.delete(new LambdaQueryWrapper<AppEntity>()
+                .eq(AppEntity::getTenantId, owned.getTenantId()).eq(AppEntity::getId, owned.getId()));
     }
 
     public AppModelConfigEntity getModelConfig(String appId) {
-        return modelConfigService.findByAppId(appId);
+        return getModelConfig(UserContextHolder.currentTenantId(), appId);
+    }
+
+    public AppModelConfigEntity getModelConfig(String tenantId, String appId) {
+        AppEntity owned = require(tenantId, appId);
+        return modelConfigService.findByAppId(owned.getTenantId(), owned.getId());
     }
 
     public AppEntity enrich(AppEntity agent) {
@@ -231,18 +258,30 @@ public class AgentService implements AgentRuntime {
 
     @Transactional
     public AppEntity bindWorkflowId(String appId, String workflowId) {
-        AppEntity agent = require(appId);
+        return bindWorkflowId(UserContextHolder.currentTenantId(), appId, workflowId);
+    }
+
+    @Transactional
+    public AppEntity bindWorkflowId(String tenantId, String appId, String workflowId) {
+        AppEntity agent = require(tenantId, appId);
         agent.setWorkflowId(workflowId);
-        appMapper.updateById(agent);
+        appMapper.update(agent, new LambdaUpdateWrapper<AppEntity>()
+                .eq(AppEntity::getTenantId, agent.getTenantId()).eq(AppEntity::getId, agent.getId()));
         return agent;
     }
 
     @Transactional
     public AppEntity bindPublishedWorkflow(String appId, String workflowId) {
-        AppEntity agent = require(appId);
+        return bindPublishedWorkflow(UserContextHolder.currentTenantId(), appId, workflowId);
+    }
+
+    @Transactional
+    public AppEntity bindPublishedWorkflow(String tenantId, String appId, String workflowId) {
+        AppEntity agent = require(tenantId, appId);
         agent.setWorkflowId(workflowId);
         agent.setPublished(true);
-        appMapper.updateById(agent);
+        appMapper.update(agent, new LambdaUpdateWrapper<AppEntity>()
+                .eq(AppEntity::getTenantId, agent.getTenantId()).eq(AppEntity::getId, agent.getId()));
         return agent;
     }
 
@@ -251,12 +290,31 @@ public class AgentService implements AgentRuntime {
         return toAgentMessages(memory.history(DEFAULT_TENANT_ID, null, conversationId, historySize));
     }
 
+    public List<AgentMessage> history(String tenantId, String appId, String conversationId, int requestedSize) {
+        int historySize = Math.min(MAX_HISTORY_SIZE, Math.max(1, requestedSize));
+        require(tenantId, appId);
+        return toAgentMessages(memory.history(valueOrDefault(tenantId, DEFAULT_TENANT_ID), appId,
+                conversationId, historySize));
+    }
+
     public AgentDefinition toDefinition(AppEntity agent) {
         return definitionFactory.create(agent);
     }
 
     public AgentResponse run(String agentId, AgentRequest request) {
         return run(agentId, request, null, null);
+    }
+
+    /** Execute an Agent owned by the explicitly supplied trusted tenant. */
+    public AgentResponse run(String tenantId, String agentId, AgentRequest request) {
+        AppEntity application = require(tenantId, agentId);
+        if (!AppMode.from(application.getMode()).isAgent()) {
+            throw new PlatformException(
+                    "app_mode_mismatch",
+                    "Only an application with mode 'agent' can use the Agent runtime.",
+                    null);
+        }
+        return runDefinition(toDefinition(application), request, null, null);
     }
 
     public AgentResponse run(String agentId, AgentRequest request, Consumer<AgentStep> stepListener) {
@@ -293,16 +351,19 @@ public class AgentService implements AgentRuntime {
     @Override
     public AgentResponse run(AgentDefinition definition, AgentRequest request,
                              Consumer<AgentStep> stepListener, Consumer<String> tokenListener) {
+        String tenantId = valueOrDefault(definition.getTenantId(), DEFAULT_TENANT_ID);
         String conversationId = conversationIdOf(request);
         String runId = UUID.randomUUID().toString();
         runStore.create(runId, definition, request, conversationId);
-        runStore.transition(runId, AgentRunStatus.RUNNING, null, null);
+        runStore.transition(tenantId, runId, AgentRunStatus.RUNNING, null, null);
         Instant observationStartedAt = Instant.now();
         notifyStarted(definition, conversationId, runId, false, observationStartedAt);
-        activeRuns.put(runId, Thread.currentThread());
+        ActiveRunKey activeRunKey = new ActiveRunKey(tenantId, runId);
+        activeRuns.put(activeRunKey, Thread.currentThread());
         try {
             AgentRunContext runContext = createRunContext(
-                    definition, request, conversationId, runId, stepListener, tokenListener);
+                    definition, request, conversationId, runId,
+                    durableStepListener(tenantId, runId, stepListener), tokenListener);
 
             log.info("Running agent '{}' run={} (strategy={}, tools={}) conversation={}",
                     definition.getName(), runId, definition.getStrategy(),
@@ -311,35 +372,36 @@ public class AgentService implements AgentRuntime {
             response.setRunId(runId);
             response.setConversationId(conversationId);
             rememberCompletedExchange(definition, request, response, conversationId);
-            runStore.transition(runId, statusOf(response), response, response.getError());
+            runStore.transition(tenantId, runId, statusOf(response), response, response.getError());
             notifyFinished(definition, conversationId, runId, false, observationStartedAt,
                     statusOf(response), response.getError());
             return response;
         } catch (RuntimeException exception) {
-            terminateRun(runId, exception);
-            AgentRunStatus status = runStore.find(runId).map(AgentRunSnapshot::status)
+            terminateRun(tenantId, runId, exception);
+            AgentRunStatus status = runStore.find(tenantId, runId).map(AgentRunSnapshot::status)
                     .orElse(AgentRunStatus.FAILED);
             notifyFinished(definition, conversationId, runId, false, observationStartedAt,
                     status, exception.getMessage());
             throw exception;
         } finally {
-            activeRuns.remove(runId);
+            activeRuns.remove(activeRunKey);
         }
     }
 
     @Override
     public Optional<AgentRunSnapshot> findRun(String runId) {
-        return runStore.find(runId);
+        return runStore.find(UserContextHolder.currentTenantId(), runId);
     }
 
     @Override
     public List<AgentRunEvent> runEvents(String runId, long afterSequence, int limit) {
-        return runStore.events(runId, afterSequence, limit);
+        return runStore.events(UserContextHolder.currentTenantId(), runId, afterSequence, limit);
     }
 
     @Override
     public AgentResponse resume(String runId, AgentResumeCommand command) {
-        AgentRunSnapshot pausedRun = runStore.find(runId).orElseThrow(() ->
+        String tenantId = UserContextHolder.currentTenantId();
+        AgentRunSnapshot pausedRun = runStore.find(tenantId, runId).orElseThrow(() ->
                 new PlatformException("agent_run_not_found", "Agent run not found: " + runId, null));
         if (pausedRun.status() != AgentRunStatus.WAITING_APPROVAL) {
             throw new PlatformException("agent_run_not_paused",
@@ -354,56 +416,59 @@ public class AgentService implements AgentRuntime {
                     "Agent strategy " + definition.getStrategy() + " does not support checkpoints", null);
         }
 
-        runStore.transition(runId, AgentRunStatus.RUNNING, null, null);
+        runStore.transition(tenantId, runId, AgentRunStatus.RUNNING, null, null);
         Instant observationStartedAt = Instant.now();
         notifyStarted(definition, pausedRun.conversationId(), runId, true, observationStartedAt);
-        activeRuns.put(runId, Thread.currentThread());
+        ActiveRunKey activeRunKey = new ActiveRunKey(tenantId, runId);
+        activeRuns.put(activeRunKey, Thread.currentThread());
         try {
             AgentRunContext context = createRunContext(definition, request,
-                    pausedRun.conversationId(), runId, null, null);
+                    pausedRun.conversationId(), runId,
+                    durableStepListener(tenantId, runId, null), null);
             AgentResponse response = resumable.resume(context, paused, command);
             response.setRunId(runId);
             response.setConversationId(pausedRun.conversationId());
             rememberCompletedExchange(definition, request, response, pausedRun.conversationId());
-            runStore.transition(runId, statusOf(response), response, response.getError());
+            runStore.transition(tenantId, runId, statusOf(response), response, response.getError());
             notifyFinished(definition, pausedRun.conversationId(), runId, true,
                     observationStartedAt, statusOf(response), response.getError());
             return response;
         } catch (RuntimeException exception) {
-            terminateRun(runId, exception);
-            AgentRunStatus status = runStore.find(runId).map(AgentRunSnapshot::status)
+            terminateRun(tenantId, runId, exception);
+            AgentRunStatus status = runStore.find(tenantId, runId).map(AgentRunSnapshot::status)
                     .orElse(AgentRunStatus.FAILED);
             notifyFinished(definition, pausedRun.conversationId(), runId, true,
                     observationStartedAt, status, exception.getMessage());
             throw exception;
         } finally {
-            activeRuns.remove(runId);
+            activeRuns.remove(activeRunKey);
         }
     }
 
     @Override
     public AgentRunSnapshot cancel(String runId) {
-        AgentRunSnapshot run = runStore.find(runId).orElseThrow(() ->
+        String tenantId = UserContextHolder.currentTenantId();
+        AgentRunSnapshot run = runStore.find(tenantId, runId).orElseThrow(() ->
                 new PlatformException("agent_run_not_found", "Agent run not found: " + runId, null));
         if (run.status().isTerminal()) {
             return run;
         }
-        AgentRunSnapshot cancelled = runStore.transition(runId, AgentRunStatus.CANCELLED, null,
+        AgentRunSnapshot cancelled = runStore.transition(tenantId, runId, AgentRunStatus.CANCELLED, null,
                 "Cancelled by caller");
-        Thread executionThread = activeRuns.get(runId);
+        Thread executionThread = activeRuns.get(new ActiveRunKey(tenantId, runId));
         if (executionThread != null && executionThread != Thread.currentThread()) {
             executionThread.interrupt();
         }
         return cancelled;
     }
 
-    private void terminateRun(String runId, RuntimeException exception) {
-        AgentRunSnapshot current = runStore.find(runId).orElse(null);
+    private void terminateRun(String tenantId, String runId, RuntimeException exception) {
+        AgentRunSnapshot current = runStore.find(tenantId, runId).orElse(null);
         if (current != null && !current.status().isTerminal()) {
             AgentRunStatus target = exception instanceof AgentRunInterruptedException interrupted
                     ? (interrupted.isTimedOut() ? AgentRunStatus.TIMED_OUT : AgentRunStatus.CANCELLED)
                     : AgentRunStatus.FAILED;
-            runStore.transition(runId, target, null, exception.getMessage());
+            runStore.transition(tenantId, runId, target, null, exception.getMessage());
         }
     }
 
@@ -421,24 +486,43 @@ public class AgentService implements AgentRuntime {
                                              Consumer<AgentStep> stepListener,
                                              Consumer<String> tokenListener) {
         List<AgentMessage> conversationHistory = contextEngine.assemble(
-                new AgentContextRequest(definition, conversationId, request.getQuery(), 0)).messages();
+                new AgentContextRequest(definition, memoryOwnerId(definition, request),
+                        conversationId, request.getQuery(), 0)).messages();
         return AgentRunContext.builder()
                 .definition(definition)
                 .query(request.getQuery())
                 .conversationId(conversationId)
                 .runId(runId)
+                .requestVariables(request.getVariables() == null ? Map.of() : Map.copyOf(request.getVariables()))
                 .deadline(deadlineOf(request))
-                .active(() -> runStore.find(runId)
+                .active(() -> runStore.find(valueOrDefault(definition.getTenantId(), DEFAULT_TENANT_ID), runId)
                         .map(snapshot -> !snapshot.status().isTerminal())
                         .orElse(false))
                 .history(conversationHistory)
                 .chatClient(resolveChatClient(definition))
-                .tools(toolResolver.resolve(definition, this::run))
+                .tools(toolResolver.resolve(definition,
+                        (agentId, delegatedRequest) -> run(
+                                definition.getTenantId(), agentId, delegatedRequest)))
                 .approvalGate(approvalGate)
                 .toolExecutionGateway(toolExecutionGateway)
                 .stepListener(stepListener)
                 .tokenListener(tokenListener)
                 .build();
+    }
+
+    /** Persist first, then fan out to the best-effort caller stream. */
+    private Consumer<AgentStep> durableStepListener(String tenantId, String runId,
+                                                    Consumer<AgentStep> caller) {
+        return step -> {
+            if (step == null) return;
+            try {
+                runStore.appendEvent(tenantId, runId, "STEP_" +
+                                (step.getKind() == null ? "UNKNOWN" : step.getKind().name()),
+                        JsonUtils.toJson(step));
+            } finally {
+                if (caller != null) caller.accept(step);
+            }
+        };
     }
 
     private static Instant deadlineOf(AgentRequest request) {
@@ -491,8 +575,14 @@ public class AgentService implements AgentRuntime {
         if (!definition.isMemoryEnabled() || response.getStatus() != AgentResponse.Status.COMPLETED) {
             return;
         }
-        memory.rememberExchange(definition.getTenantId(), definition.getId(), conversationId,
+        memory.rememberExchange(definition.getTenantId(), memoryOwnerId(definition, request), conversationId,
                 request.getQuery(), response.getText());
+    }
+
+    private static String memoryOwnerId(AgentDefinition definition, AgentRequest request) {
+        Object configured = request.getVariables() == null ? null : request.getVariables().get("memoryOwnerId");
+        String value = configured == null ? null : String.valueOf(configured).trim();
+        return value == null || value.isBlank() ? definition.getId() : value;
     }
 
     private static List<AgentMessage> toAgentMessages(List<MemoryItem> items) {

@@ -30,13 +30,13 @@ public class DocumentIngestionListener {
 
     @RabbitListener(queues = KnowledgeQueueNames.QUEUE)
     public void onMessage(DocumentIngestionTask task) {
-        if (task == null || task.getDocumentId() == null) {
+        if (task == null || task.getTenantId() == null || task.getDocumentId() == null) {
             log.warn("Received malformed ingest task; dropping");
             return;
         }
         boolean ok;
         try {
-            ok = runner.run(task.getDocumentId());
+            ok = runner.run(task.getTenantId(), task.getDocumentId());
         } catch (Throwable t) {
             log.error("Unexpected error running ingestion task {}", task.getDocumentId(), t);
             ok = false;

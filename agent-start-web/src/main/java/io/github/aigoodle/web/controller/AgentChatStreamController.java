@@ -1,10 +1,11 @@
 package io.github.aigoodle.web.controller;
 
 import io.github.aigoodle.agent.api.AgentResponse;
-import io.github.aigoodle.agent.service.AgentService;
+import io.github.aigoodle.agent.service.AgentExecutionService;
 import io.github.aigoodle.web.common.SseEmitterBridge;
 import io.github.aigoodle.web.dto.ChatRequest;
 import io.github.aigoodle.web.support.AgentRequestMapper;
+import io.github.aigoodle.web.support.ChannelAdministrationPolicy;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.http.MediaType;
@@ -32,24 +33,39 @@ import java.util.Map;
  */
 @RestController
 @ConditionalOnClass(SseEmitter.class)
-@ConditionalOnBean(AgentService.class)
+@ConditionalOnBean(AgentExecutionService.class)
 @RequestMapping("/agents")
 public class AgentChatStreamController {
 
-    private final AgentService agentService;
+    private final AgentExecutionService executions;
+    private final ChannelAdministrationPolicy administration;
 
-    public AgentChatStreamController(AgentService agentService) {
-        this.agentService = agentService;
+    public AgentChatStreamController(AgentExecutionService executions, ChannelAdministrationPolicy administration) {
+        this.executions = executions; this.administration = administration;
     }
 
     @PostMapping(value = "/{id}/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter chatStream(@PathVariable String id, @RequestBody ChatRequest request) {
+        String tenantId = io.github.aigoodle.common.context.UserContextHolder.currentTenantId();
         return SseEmitterBridge.stream(emitter -> {
             emitter.event("chat-start", Map.of("agentId", id));
-            AgentResponse response = agentService.run(
-                    id,
-                    AgentRequestMapper.from(request),
-                    step -> emitter.event("step", step));
+            AgentResponse response = executions.runPublished(
+                    tenantId, id, null,
+                    AgentRequestMapper.from(request), step -> emitter.event("step", step), null);
+            emitter.event("result", response);
+        });
+    }
+
+    @PostMapping(value = "/{id}/chat/preview/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter previewStream(@PathVariable String id, @RequestBody ChatRequest request) {
+        administration.requireAdministrator();
+        String tenantId = io.github.aigoodle.common.context.UserContextHolder.currentTenantId();
+        return SseEmitterBridge.stream(emitter -> {
+            emitter.event("chat-start", Map.of("agentId", id, "preview", true));
+            AgentResponse response = executions.previewDraft(
+                    tenantId, id,
+                    AgentRequestMapper.from(request), step -> emitter.event("step", step),
+                    token -> emitter.event("token", token));
             emitter.event("result", response);
         });
     }

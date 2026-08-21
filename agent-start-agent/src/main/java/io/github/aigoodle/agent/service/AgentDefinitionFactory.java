@@ -30,7 +30,8 @@ final class AgentDefinitionFactory {
         if (agent == null || agent.getId() == null) {
             return agent;
         }
-        AppModelConfigEntity modelConfig = modelConfigService.findByAppId(agent.getId());
+        AppModelConfigEntity modelConfig = modelConfigService.findByAppId(
+                agent.getTenantId(), agent.getId());
         if (modelConfig == null) {
             return agent;
         }
@@ -41,11 +42,15 @@ final class AgentDefinitionFactory {
         agent.setDatasetIdsJson(modelConfig.getDatasetIdsJson());
         agent.setRetrievalConfigJson(modelConfig.getDatasetConfigsJson());
         agent.setModelSettingsJson(modelConfig.getConfigs());
+        agent.setRuntimeType(firstText(modelConfig.getRuntimeType(), "NATIVE"));
+        agent.setRuntimeRef(modelConfig.getRuntimeRef());
         agent.setStrategy(modelConfig.getStrategy());
         agent.setToolNamesJson(modelConfig.getToolNamesJson());
         agent.setApprovalToolsJson(modelConfig.getApprovalToolsJson());
         agent.setDelegateAgentIdsJson(modelConfig.getDelegateAgentIdsJson());
         agent.setMaxIterations(modelConfig.getMaxIterations());
+        agent.setMaxModelCalls(modelConfig.getMaxModelCalls());
+        agent.setMaxToolCalls(modelConfig.getMaxToolCalls());
         agent.setMemoryEnabled(modelConfig.getMemoryEnabled());
         agent.setMemoryWindow(modelConfig.getMemoryWindow());
         agent.setModelName(firstText(modelConfig.getModelName(), agent.getModelName()));
@@ -54,11 +59,14 @@ final class AgentDefinitionFactory {
     }
 
     AgentDefinition create(AppEntity agent) {
-        AppModelConfigEntity modelConfig = modelConfigService.findByAppId(agent.getId());
+        AppModelConfigEntity modelConfig = modelConfigService.findByAppId(
+                agent.getTenantId(), agent.getId());
         return AgentDefinition.builder()
                 .id(agent.getId())
                 .tenantId(agent.getTenantId())
                 .name(agent.getName())
+                .runtimeType(firstText(configuredValue(modelConfig, AppModelConfigEntity::getRuntimeType), "NATIVE"))
+                .runtimeRef(configuredValue(modelConfig, AppModelConfigEntity::getRuntimeRef))
                 .instructions(configuredValue(modelConfig, AppModelConfigEntity::getPrePrompt))
                 .modelName(firstText(
                         configuredValue(modelConfig, AppModelConfigEntity::getModelName),
@@ -76,6 +84,10 @@ final class AgentDefinitionFactory {
                 .maxIterations(valueOrDefault(
                         configuredValue(modelConfig, AppModelConfigEntity::getMaxIterations),
                         DEFAULT_MAX_ITERATIONS))
+                .maxModelCalls(valueOrDefault(
+                        configuredValue(modelConfig, AppModelConfigEntity::getMaxModelCalls), 0))
+                .maxToolCalls(valueOrDefault(
+                        configuredValue(modelConfig, AppModelConfigEntity::getMaxToolCalls), 0))
                 .memoryEnabled(!Boolean.FALSE.equals(
                         configuredValue(modelConfig, AppModelConfigEntity::getMemoryEnabled)))
                 .memoryWindow(valueOrDefault(

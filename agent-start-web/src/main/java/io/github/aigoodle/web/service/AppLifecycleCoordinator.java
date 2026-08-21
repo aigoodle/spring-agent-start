@@ -28,8 +28,8 @@ public final class AppLifecycleCoordinator {
         return applications;
     }
 
-    public AppEntity get(String appId) {
-        return appService.enrich(appService.require(appId));
+    public AppEntity get(String tenantId, String appId) {
+        return appService.enrich(appService.require(tenantId, appId));
     }
 
     public AppEntity create(SaveAppRequest request) {
@@ -38,8 +38,8 @@ public final class AppLifecycleCoordinator {
         return appService.enrich(application);
     }
 
-    public AppEntity update(String appId, SaveAppRequest request) {
-        return appService.enrich(appService.update(appId, request));
+    public AppEntity update(String tenantId, String appId, SaveAppRequest request) {
+        return appService.enrich(appService.update(tenantId, appId, request));
     }
 
     private void createWorkflowDraftIfNeeded(AppEntity application) {

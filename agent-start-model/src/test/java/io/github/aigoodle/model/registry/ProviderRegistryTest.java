@@ -68,6 +68,38 @@ class ProviderRegistryTest {
     }
 
     @Test
+    void modelInstanceCacheIsIsolatedByTenantEvenWhenEndpointIdsMatch() {
+        ModelInstanceFactory factory = new ModelInstanceFactory(registry());
+        ModelEndpoint tenantA = ModelEndpoint.builder().tenantId("tenant-a")
+                .id("local-model-1").providerName("openai").modelName("gpt-4o-mini")
+                .modelType(ModelType.LLM).apiKey("sk-tenant-a").build();
+        ModelEndpoint tenantB = ModelEndpoint.builder().tenantId("tenant-b")
+                .id("local-model-1").providerName("openai").modelName("gpt-4o-mini")
+                .modelType(ModelType.LLM).apiKey("sk-tenant-b").build();
+
+        assertNotSame(factory.getOrCreate(tenantA), factory.getOrCreate(tenantB));
+        assertSame(factory.getOrCreate(tenantA), factory.getOrCreate(tenantA));
+    }
+
+    @Test
+    void tenantScopedEvictionDoesNotInvalidateAnotherTenantsMatchingEndpointId() {
+        ModelInstanceFactory factory = new ModelInstanceFactory(registry());
+        ModelEndpoint tenantA = ModelEndpoint.builder().tenantId("tenant-a")
+                .id("shared-local-id").providerName("openai").modelName("gpt-4o-mini")
+                .modelType(ModelType.LLM).apiKey("sk-tenant-a").build();
+        ModelEndpoint tenantB = ModelEndpoint.builder().tenantId("tenant-b")
+                .id("shared-local-id").providerName("openai").modelName("gpt-4o-mini")
+                .modelType(ModelType.LLM).apiKey("sk-tenant-b").build();
+        ModelInstance beforeA = factory.getOrCreate(tenantA);
+        ModelInstance beforeB = factory.getOrCreate(tenantB);
+
+        factory.evict("tenant-a", "shared-local-id");
+
+        assertNotSame(beforeA, factory.getOrCreate(tenantA));
+        assertSame(beforeB, factory.getOrCreate(tenantB));
+    }
+
+    @Test
     void deepseekUsesItsDefaultBaseUrlWithoutError() {
         ModelInstanceFactory factory = new ModelInstanceFactory(registry());
         ModelEndpoint endpoint = ModelEndpoint.builder()

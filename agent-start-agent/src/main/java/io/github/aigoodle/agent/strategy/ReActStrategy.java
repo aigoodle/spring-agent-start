@@ -175,6 +175,7 @@ public class ReActStrategy implements ResumableAgentStrategy {
                                               ChatOptions chatOptions,
                                               boolean hideThought) {
         context.checkActive();
+        context.claimModelCall();
         var request = context.getChatClient().prompt().messages(messages);
         if (chatOptions != null) {
             request = request.options(chatOptions);

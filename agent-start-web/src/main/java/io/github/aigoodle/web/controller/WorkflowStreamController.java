@@ -19,6 +19,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import static io.github.aigoodle.common.context.UserContextHolder.currentTenantId;
+
 /**
  * SSE streaming run endpoints for workflows (servlet/MVC hosts).
  * <p>
@@ -51,11 +53,13 @@ public class WorkflowStreamController {
             String runId = newRunId();
             emitter.event("workflow_started", startedPayload(runId, request.getConversationId()));
             WorkflowRunResult result = request.getGraph() != null
-                    ? workflowService.runGraph(
+                    ? workflowService.runGraphForTenant(
                             request.getGraph(), inputsOf(request), request.getConversationId(),
+                            currentTenantId(),
                             step -> emitter.event("node_finished", nodePayload(runId, step)))
-                    : workflowService.run(
+                    : workflowService.runForTenant(
                             request.getWorkflowId(), inputsOf(request), request.getConversationId(),
+                            currentTenantId(),
                             step -> emitter.event("node_finished", nodePayload(runId, step)));
             emitter.event("workflow_finished", result);
         });
@@ -66,8 +70,9 @@ public class WorkflowStreamController {
         return SseEmitterBridge.stream(emitter -> {
             String runId = newRunId();
             emitter.event("workflow_started", startedPayload(runId, request.getConversationId()));
-            WorkflowRunResult result = workflowService.run(
+            WorkflowRunResult result = workflowService.runForTenant(
                     id, inputsOf(request), request.getConversationId(),
+                    currentTenantId(),
                     step -> emitter.event("node_finished", nodePayload(runId, step)));
             emitter.event("workflow_finished", result);
         });

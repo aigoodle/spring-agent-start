@@ -13,8 +13,6 @@ import java.util.Map;
 @Data
 public class ProviderCredentialRequest {
 
-    private String tenantId;
-
     /** Field name -> raw value; matches the provider's credential schema. */
     private Map<String, Object> credentials = new HashMap<>();
 }

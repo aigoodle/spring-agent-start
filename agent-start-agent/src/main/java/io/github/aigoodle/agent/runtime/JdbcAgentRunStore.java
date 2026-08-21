@@ -9,6 +9,7 @@ import io.github.aigoodle.agent.entity.AgentRunEntity;
 import io.github.aigoodle.agent.entity.AgentRunEventEntity;
 import io.github.aigoodle.agent.mapper.AgentRunEventMapper;
 import io.github.aigoodle.agent.mapper.AgentRunMapper;
+import io.github.aigoodle.common.context.UserContextHolder;
 import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.common.util.JsonUtils;
 import org.springframework.transaction.annotation.Transactional;
@@ -56,7 +57,15 @@ public class JdbcAgentRunStore implements AgentRunStore {
     @Transactional
     public AgentRunSnapshot transition(String runId, AgentRunStatus target,
                                        AgentResponse response, String error) {
-        AgentRunEntity current = require(runId);
+        return transition(UserContextHolder.currentTenantId(), runId, target, response, error);
+    }
+
+    @Override
+    @Transactional
+    public AgentRunSnapshot transition(String tenantId, String runId, AgentRunStatus target,
+                                       AgentResponse response, String error) {
+        String tenant = blankToDefault(tenantId);
+        AgentRunEntity current = require(tenant, runId);
         AgentRunStatus source = AgentRunStatus.valueOf(current.getStatus());
         if (!source.canTransitionTo(target)) {
             throw new PlatformException("invalid_run_transition",
@@ -66,6 +75,7 @@ public class JdbcAgentRunStore implements AgentRunStore {
         LocalDateTime now = LocalDateTime.now();
         String responseJson = response == null ? null : JsonUtils.toJson(response);
         LambdaUpdateWrapper<AgentRunEntity> update = new LambdaUpdateWrapper<AgentRunEntity>()
+                .eq(AgentRunEntity::getTenantId, tenant)
                 .eq(AgentRunEntity::getId, runId)
                 .eq(AgentRunEntity::getStatus, source.name())
                 .eq(AgentRunEntity::getVersion, version)
@@ -88,20 +98,35 @@ public class JdbcAgentRunStore implements AgentRunStore {
             throw new PlatformException("run_concurrent_update",
                     "Agent run " + runId + " was modified concurrently", null);
         }
-        AgentRunEntity updated = require(runId);
+        AgentRunEntity updated = require(tenant, runId);
         append(updated, "RUN_" + target.name(), responseJson != null ? responseJson : error);
         return snapshot(updated);
     }
 
     @Override
     public Optional<AgentRunSnapshot> find(String runId) {
-        return Optional.ofNullable(runMapper.selectById(runId)).map(JdbcAgentRunStore::snapshot);
+        return find(UserContextHolder.currentTenantId(), runId);
+    }
+
+    @Override
+    public Optional<AgentRunSnapshot> find(String tenantId, String runId) {
+        return Optional.ofNullable(runMapper.selectOne(new LambdaQueryWrapper<AgentRunEntity>()
+                        .eq(AgentRunEntity::getTenantId, blankToDefault(tenantId))
+                        .eq(AgentRunEntity::getId, runId)
+                        .last("LIMIT 1")))
+                .map(JdbcAgentRunStore::snapshot);
     }
 
     @Override
     public List<AgentRunEvent> events(String runId, long afterSequence, int limit) {
+        return events(UserContextHolder.currentTenantId(), runId, afterSequence, limit);
+    }
+
+    @Override
+    public List<AgentRunEvent> events(String tenantId, String runId, long afterSequence, int limit) {
         int pageSize = Math.min(MAX_EVENT_PAGE, Math.max(1, limit));
         return eventMapper.selectList(new LambdaQueryWrapper<AgentRunEventEntity>()
+                        .eq(AgentRunEventEntity::getTenantId, blankToDefault(tenantId))
                         .eq(AgentRunEventEntity::getRunId, runId)
                         .gt(AgentRunEventEntity::getSequenceNo, Math.max(0, afterSequence))
                         .orderByAsc(AgentRunEventEntity::getSequenceNo)
@@ -113,11 +138,20 @@ public class JdbcAgentRunStore implements AgentRunStore {
     @Override
     @Transactional
     public void appendEvent(String runId, String type, String payloadJson) {
-        append(require(runId), type, payloadJson);
+        appendEvent(UserContextHolder.currentTenantId(), runId, type, payloadJson);
     }
 
-    private AgentRunEntity require(String runId) {
-        AgentRunEntity run = runMapper.selectById(runId);
+    @Override
+    @Transactional
+    public void appendEvent(String tenantId, String runId, String type, String payloadJson) {
+        append(require(blankToDefault(tenantId), runId), type, payloadJson);
+    }
+
+    private AgentRunEntity require(String tenantId, String runId) {
+        AgentRunEntity run = runMapper.selectOne(new LambdaQueryWrapper<AgentRunEntity>()
+                .eq(AgentRunEntity::getTenantId, tenantId)
+                .eq(AgentRunEntity::getId, runId)
+                .last("LIMIT 1"));
         if (run == null) {
             throw new PlatformException("agent_run_not_found", "Agent run not found: " + runId, null);
         }
@@ -125,7 +159,7 @@ public class JdbcAgentRunStore implements AgentRunStore {
     }
 
     private void append(AgentRunEntity run, String type, String payload) {
-        long sequence = reserveEventSequence(run.getId());
+        long sequence = reserveEventSequence(run.getTenantId(), run.getId());
         AgentRunEventEntity event = new AgentRunEventEntity();
         event.setTenantId(run.getTenantId());
         event.setRunId(run.getId());
@@ -135,11 +169,12 @@ public class JdbcAgentRunStore implements AgentRunStore {
         eventMapper.insert(event);
     }
 
-    private long reserveEventSequence(String runId) {
+    private long reserveEventSequence(String tenantId, String runId) {
         for (int attempt = 0; attempt < 20; attempt++) {
-            AgentRunEntity current = require(runId);
+            AgentRunEntity current = require(tenantId, runId);
             long sequence = current.getEventSequence() == null ? 0L : current.getEventSequence();
             int updated = runMapper.update(null, new LambdaUpdateWrapper<AgentRunEntity>()
+                    .eq(AgentRunEntity::getTenantId, tenantId)
                     .eq(AgentRunEntity::getId, runId)
                     .eq(AgentRunEntity::getEventSequence, sequence)
                     .set(AgentRunEntity::getEventSequence, sequence + 1));

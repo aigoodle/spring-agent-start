@@ -7,7 +7,9 @@ services:
     environment:
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-demo-openclaw-gateway-token-change-me}
       AGENT_START_BRIDGE_TOKEN: ${OPENCLAW_SERVICE_TOKEN:-demo-openclaw-bridge-token-change-me}
+      AGENT_START_RUNTIME_NODE_ID: ${OPENCLAW_RUNTIME_NODE_ID:-openclaw-default}
       OPENCLAW_ALLOW_INSTALL: ${OPENCLAW_ALLOW_INSTALL:-false}
+      AGENT_START_EVENT_SINK_URL: ${AGENT_START_EVENT_SINK_URL:-http://backend:18090/agent-start/channel-events/openclaw}
     volumes:
       - ./volumes/openclaw:/var/lib/openclaw
     ports:
@@ -27,4 +29,3 @@ services:
       OPENCLAW_ENABLED: "true"
       OPENCLAW_BASE_URL: http://openclaw:18789
       OPENCLAW_SERVICE_TOKEN: ${OPENCLAW_SERVICE_TOKEN:-demo-openclaw-bridge-token-change-me}
-

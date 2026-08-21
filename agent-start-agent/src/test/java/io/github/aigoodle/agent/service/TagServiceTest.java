@@ -4,11 +4,13 @@ import io.github.aigoodle.agent.entity.TagBindingEntity;
 import io.github.aigoodle.agent.entity.TagEntity;
 import io.github.aigoodle.agent.mapper.TagBindingMapper;
 import io.github.aigoodle.agent.mapper.TagMapper;
+import io.github.aigoodle.agent.mapper.AppMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -39,7 +41,7 @@ class TagServiceTest {
         TagMapper tagMapper = mock(TagMapper.class);
         TagBindingMapper bindingMapper = mock(TagBindingMapper.class);
         TagEntity tag = tag("tag-1", "tenant-1");
-        when(tagMapper.selectById(tag.getId())).thenReturn(tag);
+        when(tagMapper.selectOne(any())).thenReturn(tag);
         TagService tagService = new TagService(tagMapper, bindingMapper);
 
         tagService.bind(tag.getId(), "target-1", " ");
@@ -56,7 +58,7 @@ class TagServiceTest {
         TagMapper tagMapper = mock(TagMapper.class);
         TagBindingMapper bindingMapper = mock(TagBindingMapper.class);
         TagEntity tag = tag("tag-1", "tenant-1");
-        when(tagMapper.selectById(tag.getId())).thenReturn(tag);
+        when(tagMapper.selectOne(any())).thenReturn(tag);
         when(bindingMapper.selectOne(any())).thenReturn(new TagBindingEntity());
         TagService tagService = new TagService(tagMapper, bindingMapper);
 
@@ -69,13 +71,49 @@ class TagServiceTest {
     void deletesBindingsBeforeTheirTag() {
         TagMapper tagMapper = mock(TagMapper.class);
         TagBindingMapper bindingMapper = mock(TagBindingMapper.class);
+        when(tagMapper.selectOne(any())).thenReturn(tag("tag-1", "default"));
         TagService tagService = new TagService(tagMapper, bindingMapper);
 
         tagService.delete("tag-1");
 
         InOrder deletionOrder = inOrder(bindingMapper, tagMapper);
         deletionOrder.verify(bindingMapper).delete(any());
-        deletionOrder.verify(tagMapper).deleteById("tag-1");
+        deletionOrder.verify(tagMapper).delete(any());
+    }
+
+    @Test
+    void tenantScopedMutationCannotTouchForeignTagOrBindings() {
+        TagMapper tagMapper = mock(TagMapper.class);
+        TagBindingMapper bindingMapper = mock(TagBindingMapper.class);
+        when(tagMapper.selectOne(any())).thenReturn(null);
+        TagService service = new TagService(tagMapper, bindingMapper);
+
+        assertThatThrownBy(() -> service.rename("tenant-a", "tag-b", "stolen"))
+                .hasMessageContaining("Tag not found");
+        assertThatThrownBy(() -> service.bind("tenant-a", "tag-b", "app-1", "app"))
+                .hasMessageContaining("Tag not found");
+        assertThatThrownBy(() -> service.delete("tenant-a", "tag-b"))
+                .hasMessageContaining("Tag not found");
+
+        verify(tagMapper, never()).update(any(), any());
+        verify(tagMapper, never()).delete(any());
+        verify(bindingMapper, never()).insert(any(TagBindingEntity.class));
+        verify(bindingMapper, never()).delete(any());
+    }
+
+    @Test
+    void bindingCannotReferenceApplicationOutsideTenant() {
+        TagMapper tagMapper = mock(TagMapper.class);
+        TagBindingMapper bindingMapper = mock(TagBindingMapper.class);
+        AppMapper appMapper = mock(AppMapper.class);
+        when(tagMapper.selectOne(any())).thenReturn(tag("tag-1", "tenant-a"));
+        when(appMapper.selectOne(any())).thenReturn(null);
+        TagService service = new TagService(tagMapper, bindingMapper, appMapper, null);
+
+        assertThatThrownBy(() -> service.bind("tenant-a", "tag-1", "foreign-app", "app"))
+                .hasMessageContaining("Tag target not found");
+
+        verify(bindingMapper, never()).insert(any(TagBindingEntity.class));
     }
 
     private static TagEntity tag(String tagId, String tenantId) {

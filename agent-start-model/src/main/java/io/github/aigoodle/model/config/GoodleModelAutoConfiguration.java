@@ -16,6 +16,8 @@ import io.github.aigoodle.model.provider.builtin.OllamaModelProvider;
 import io.github.aigoodle.model.registry.ModelProviderRegistry;
 import io.github.aigoodle.model.runtime.ModelInstanceFactory;
 import io.github.aigoodle.model.service.CredentialCodec;
+import io.github.aigoodle.model.service.DerivedTenantCredentialEncryptor;
+import io.github.aigoodle.model.service.TenantCredentialEncryptor;
 import io.github.aigoodle.model.service.ModelService;
 import io.github.aigoodle.model.service.ModelConnectionTester;
 import io.github.aigoodle.model.service.PromptTemplateService;
@@ -56,8 +58,12 @@ public class GoodleModelAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public CredentialCodec credentialCodec(TextEncryptor encryptor) {
-        return new CredentialCodec(encryptor);
+    public CredentialCodec credentialCodec(TextEncryptor encryptor,
+            ObjectProvider<TenantCredentialEncryptor> tenantEncryptors,
+            GoodleModelProperties properties) {
+        TenantCredentialEncryptor tenantEncryptor = tenantEncryptors.getIfAvailable(
+                () -> new DerivedTenantCredentialEncryptor(properties.getEncryptionSecret()));
+        return new CredentialCodec(encryptor, tenantEncryptor);
     }
 
     @Bean

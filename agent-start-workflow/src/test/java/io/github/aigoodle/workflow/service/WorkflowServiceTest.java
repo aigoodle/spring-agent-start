@@ -8,7 +8,10 @@ import io.github.aigoodle.workflow.mapper.WorkflowRunMapper;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -42,10 +45,12 @@ class WorkflowServiceTest {
     void updatesOnlyDesignerStateExplicitlyIncludedInTheChangeSet() {
         WorkflowEntity draft = new WorkflowEntity();
         draft.setId("app-1");
+        draft.setTenantId("default");
+        draft.setVersion("draft");
         draft.setFeatures("old-features");
         draft.setEnvironmentVariables("old-environment");
         draft.setConversationVariables("old-conversation");
-        when(workflowMapper.selectById("app-1")).thenReturn(draft);
+        when(workflowMapper.selectOne(any())).thenReturn(draft);
 
         WorkflowDraftChanges changes = new WorkflowDraftChanges(
                 new ObjectMapper().createObjectNode(),
@@ -58,6 +63,20 @@ class WorkflowServiceTest {
         assertThat(saved.getFeatures()).isEqualTo("new-features");
         assertThat(saved.getEnvironmentVariables()).isEqualTo("old-environment");
         assertThat(saved.getConversationVariables()).isEqualTo("new-conversation");
-        verify(workflowMapper).updateById(draft);
+        verify(workflowMapper).update(org.mockito.ArgumentMatchers.eq(draft), any());
+    }
+
+    @Test
+    void tenantScopedMutationCannotTouchForeignWorkflow() {
+        when(workflowMapper.selectOne(any())).thenReturn(null);
+
+        assertThatThrownBy(() -> workflowService.update(
+                "tenant-a", "workflow-b", "stolen", "workflow", null))
+                .hasMessageContaining("Workflow not found");
+        assertThatThrownBy(() -> workflowService.delete("tenant-a", "workflow-b"))
+                .hasMessageContaining("Workflow not found");
+
+        verify(workflowMapper, never()).update(any(), any());
+        verify(workflowMapper, never()).delete(any());
     }
 }

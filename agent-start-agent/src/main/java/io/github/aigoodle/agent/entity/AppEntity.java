@@ -125,6 +125,14 @@ public class AppEntity extends BaseEntity {
     @TableField(exist = false)
     private String modelSettingsJson;
 
+    /** Mirror of the explicit Agent execution backend. */
+    @TableField(exist = false)
+    private String runtimeType;
+
+    /** Mirror of the host-owned runtime resource reference. */
+    @TableField(exist = false)
+    private String runtimeRef;
+
     /** Mirror of {@link AppModelConfigEntity#getStrategy()}. */
     @TableField(exist = false)
     private String strategy;
@@ -144,6 +152,14 @@ public class AppEntity extends BaseEntity {
     /** Mirror of {@link AppModelConfigEntity#getMaxIterations()}. */
     @TableField(exist = false)
     private Integer maxIterations;
+
+    /** Mirror of the per-run model request budget. */
+    @TableField(exist = false)
+    private Integer maxModelCalls;
+
+    /** Mirror of the per-run tool execution budget. */
+    @TableField(exist = false)
+    private Integer maxToolCalls;
 
     /** Mirror of {@link AppModelConfigEntity#getMemoryEnabled()}. */
     @TableField(exist = false)

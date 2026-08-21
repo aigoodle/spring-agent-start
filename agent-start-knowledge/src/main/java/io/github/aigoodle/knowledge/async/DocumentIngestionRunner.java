@@ -15,6 +15,8 @@ import io.github.aigoodle.knowledge.mapper.KnowledgeDocumentMapper;
 import io.github.aigoodle.knowledge.service.DatasetCountChange;
 import io.github.aigoodle.knowledge.service.DatasetService;
 import io.github.aigoodle.knowledge.reader.model.ParsedDocument;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,25 +68,31 @@ public class DocumentIngestionRunner {
      *         {@code false} on failure. Never throws — the queue layer needs
      *         a clean boolean to make its retry/DLQ decision.
      */
-    public boolean run(String documentId) {
-        DocumentIngestQueueEntity task = queueMapper.selectById(documentId);
+    public boolean run(String tenantId, String documentId) {
+        DocumentIngestQueueEntity task = queueMapper.selectOne(
+                new LambdaQueryWrapper<DocumentIngestQueueEntity>()
+                        .eq(DocumentIngestQueueEntity::getTenantId, tenantId)
+                        .eq(DocumentIngestQueueEntity::getDocumentId, documentId).last("LIMIT 1"));
         if (task == null) {
             log.warn("Ingest task {} not found in queue table — probably already processed", documentId);
             return true;
         }
-        KnowledgeDocumentEntity doc = documentMapper.selectById(documentId);
+        KnowledgeDocumentEntity doc = documentMapper.selectOne(
+                new LambdaQueryWrapper<KnowledgeDocumentEntity>()
+                        .eq(KnowledgeDocumentEntity::getTenantId, tenantId)
+                        .eq(KnowledgeDocumentEntity::getId, documentId).last("LIMIT 1"));
         if (doc == null) {
             log.warn("Document {} referenced by ingest task no longer exists; dropping task", documentId);
-            queueMapper.deleteById(documentId);
+            deleteTask(tenantId, documentId);
             return true;
         }
         DatasetEntity dataset;
         try {
-            dataset = datasetService.require(doc.getDatasetId());
+            dataset = datasetService.require(task.getTenantId(), doc.getDatasetId());
         } catch (Exception e) {
             log.error("Dataset {} for document {} not found; marking FAILED", doc.getDatasetId(), documentId);
             markFailed(doc, "dataset not found: " + e.getMessage());
-            queueMapper.deleteById(documentId);
+            deleteTask(tenantId, documentId);
             return false;
         }
 
@@ -92,7 +100,7 @@ public class DocumentIngestionRunner {
             ProcessRule rule = datasetService.processRule(dataset);
 
             doc.setStatus(DocumentStatus.CHUNKING);
-            documentMapper.updateById(doc);
+            updateOwned(doc);
 
             Map<String, Object> baseMetadata = new HashMap<>();
             baseMetadata.put("documentName", doc.getName());
@@ -104,17 +112,17 @@ public class DocumentIngestionRunner {
                     : structuredChunker.chunk(parsed, rule, baseMetadata);
 
             doc.setStatus(DocumentStatus.INDEXING);
-            documentMapper.updateById(doc);
+            updateOwned(doc);
 
             int count = indexingService.index(dataset, doc, chunks);
 
             doc.setSegmentCount(count);
             doc.setStatus(DocumentStatus.COMPLETED);
-            documentMapper.updateById(doc);
+            updateOwned(doc);
 
             datasetService.applyCountChange(
                     dataset, DatasetCountChange.documentAdded(count));
-            queueMapper.deleteById(documentId);
+            deleteTask(tenantId, documentId);
             log.info("Async-ingested document '{}' into dataset {} as {} segments",
                     doc.getName(), doc.getDatasetId(), count);
             return true;
@@ -129,6 +137,18 @@ public class DocumentIngestionRunner {
     private void markFailed(KnowledgeDocumentEntity doc, String msg) {
         doc.setStatus(DocumentStatus.FAILED);
         doc.setErrorMessage(msg);
-        documentMapper.updateById(doc);
+        updateOwned(doc);
+    }
+
+    private void updateOwned(KnowledgeDocumentEntity document) {
+        documentMapper.update(document, new LambdaUpdateWrapper<KnowledgeDocumentEntity>()
+                .eq(KnowledgeDocumentEntity::getTenantId, document.getTenantId())
+                .eq(KnowledgeDocumentEntity::getId, document.getId()));
+    }
+
+    private void deleteTask(String tenantId, String documentId) {
+        queueMapper.delete(new LambdaQueryWrapper<DocumentIngestQueueEntity>()
+                .eq(DocumentIngestQueueEntity::getTenantId, tenantId)
+                .eq(DocumentIngestQueueEntity::getDocumentId, documentId));
     }
 }

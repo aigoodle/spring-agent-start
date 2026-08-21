@@ -23,8 +23,8 @@ class ConnectorManagementServiceTest {
         ConnectorConnectionEntity entity = new ConnectorConnectionEntity();
         entity.setId("connection-1"); entity.setTenantId("acme");
         entity.setEncryptedCredentials("ciphertext"); entity.setEncryptedConfig("config-ciphertext");
-        when(mapper.selectById("connection-1")).thenReturn(entity);
-        when(codec.decode(any())).thenReturn(Map.of("token", "secret"));
+        when(mapper.selectOne(any())).thenReturn(entity);
+        when(codec.decode(eq("acme"), any())).thenReturn(Map.of("token", "secret"));
 
         var result = new ConnectorConnectionService(mapper, codec).test("connection-1", "acme");
 
@@ -32,7 +32,7 @@ class ConnectorManagementServiceTest {
         assertThat(result.message()).doesNotContain("secret");
         assertThat(entity.getStatus()).isEqualTo("CONFIGURED");
         assertThat(entity.getLastTestedAt()).isNotNull();
-        verify(mapper).updateById(entity);
+        verify(mapper).update(eq(entity), any());
     }
 
     @Test

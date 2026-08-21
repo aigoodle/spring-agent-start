@@ -10,6 +10,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 
 class ProviderCredentialServiceTest {
 
@@ -39,7 +41,7 @@ class ProviderCredentialServiceTest {
     void savesARegistrationWithNormalizedIdentityAndEncryptedValues() {
         ProviderCredentialMapper mapper = mock(ProviderCredentialMapper.class);
         CredentialCodec codec = mock(CredentialCodec.class);
-        when(codec.encode(Map.of("apiKey", "secret"))).thenReturn("encrypted");
+        when(codec.encode("default", Map.of("apiKey", "secret"))).thenReturn("encrypted");
         ProviderCredentialService service = new ProviderCredentialService(mapper, codec);
 
         ProviderCredentialEntity saved = service.save(new ProviderCredentialRegistration(
@@ -58,14 +60,15 @@ class ProviderCredentialServiceTest {
         CredentialCodec codec = mock(CredentialCodec.class);
         ProviderCredentialEntity existing = new ProviderCredentialEntity();
         existing.setId("credential-id");
+        existing.setTenantId("default");
         existing.setEncryptedConfig("old-ciphertext");
-        when(mapper.selectById("credential-id")).thenReturn(existing);
-        when(codec.encode(Map.of("apiKey", "rotated"))).thenReturn("new-ciphertext");
+        when(mapper.selectOne(any())).thenReturn(existing);
+        when(codec.encode("default", Map.of("apiKey", "rotated"))).thenReturn("new-ciphertext");
         ProviderCredentialService service = new ProviderCredentialService(mapper, codec);
 
         service.update("credential-id", Map.of("apiKey", "rotated"));
 
         assertThat(existing.getEncryptedConfig()).isEqualTo("new-ciphertext");
-        verify(mapper).updateById(existing);
+        verify(mapper).update(eq(existing), any());
     }
 }

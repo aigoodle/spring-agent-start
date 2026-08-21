@@ -27,6 +27,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -280,6 +282,6 @@ class ScheduleParameterExtractorTest {
         model.setId("materialized-model");
         when(modelService.findOrMaterialize("tenant-1", "openai", "gpt-test", ModelType.LLM))
                 .thenReturn(model);
-        when(modelService.getChatClient("materialized-model")).thenReturn(client);
+        when(modelService.getChatClient(anyString(), eq("materialized-model"))).thenReturn(client);
     }
 }

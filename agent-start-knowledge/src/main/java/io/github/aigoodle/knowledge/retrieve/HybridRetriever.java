@@ -77,7 +77,9 @@ public class HybridRetriever {
         }
 
         Map<String, SegmentEntity> segmentsById = new HashMap<>();
-        for (SegmentEntity segment : segmentMapper.selectBatchIds(candidateIds)) {
+        for (SegmentEntity segment : segmentMapper.selectList(new LambdaQueryWrapper<SegmentEntity>()
+                .eq(SegmentEntity::getTenantId, dataset.getTenantId())
+                .in(SegmentEntity::getId, candidateIds))) {
             segmentsById.put(segment.getId(), segment);
         }
 
@@ -135,7 +137,7 @@ public class HybridRetriever {
                 break;
             }
         }
-        expandAdjacentContext(selectedResults, config.getNeighborWindow());
+        expandAdjacentContext(dataset.getTenantId(), selectedResults, config.getNeighborWindow());
         return selectedResults;
     }
 
@@ -157,11 +159,12 @@ public class HybridRetriever {
         source.forEach((id, score) -> target.merge(id, score, Math::max));
     }
 
-    private void expandAdjacentContext(List<RetrievedSegment> results, int window) {
+    private void expandAdjacentContext(String tenantId, List<RetrievedSegment> results, int window) {
         if (window <= 0) return;
         for (RetrievedSegment result : results) {
             int position = result.getPosition() == null ? 0 : result.getPosition();
             List<SegmentEntity> neighbors = segmentMapper.selectList(new LambdaQueryWrapper<SegmentEntity>()
+                    .eq(SegmentEntity::getTenantId, tenantId)
                     .eq(SegmentEntity::getDocumentId, result.getDocumentId())
                     .eq(SegmentEntity::getEnabled, true)
                     .between(SegmentEntity::getPosition, Math.max(0, position - window), position + window)
@@ -212,6 +215,7 @@ public class HybridRetriever {
             return scores;
         }
         List<SegmentEntity> segments = segmentMapper.selectList(new LambdaQueryWrapper<SegmentEntity>()
+                .eq(SegmentEntity::getTenantId, dataset.getTenantId())
                 .eq(SegmentEntity::getDatasetId, dataset.getId())
                 .eq(SegmentEntity::getEnabled, true));
         Map<String, Integer> documentFrequency = documentFrequency(segments);

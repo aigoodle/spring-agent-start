@@ -20,21 +20,27 @@
         "type": "string",
         "description": "Gateway operator token used for tools.catalog and tools.invoke."
       },
+      "eventSinkUrl": {
+        "type": "string",
+        "description": "Spring Agent Start callback URL used to claim inbound channel messages."
+      },
+      "eventSinkTimeoutMs": {
+        "type": "integer",
+        "minimum": 1000,
+        "maximum": 120000,
+        "default": 60000
+      },
       "allowInstall": {
         "type": "boolean",
         "default": false,
-        "description": "Allow trusted package installation through the bridge."
-      },
-      "allowedPackagePrefixes": {
-        "type": "array",
-        "items": { "type": "string" },
-        "default": ["@openclaw/", "@aigoodle/", "clawhub:"]
+        "description": "Allow the deployment administrator to install npm or ClawHub plugins through the bridge."
       }
     }
   },
   "uiHints": {
     "serviceToken": { "label": "Service Token", "sensitive": true },
     "gatewayToken": { "label": "Gateway Token", "sensitive": true },
-    "allowInstall": { "label": "Allow remote plugin installation" }
+    "allowInstall": { "label": "Allow remote plugin installation" },
+    "eventSinkUrl": { "label": "Inbound channel event sink URL" }
   }
 }

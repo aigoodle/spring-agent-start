@@ -23,6 +23,8 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 import java.util.Map;
 
+import static io.github.aigoodle.common.context.UserContextHolder.currentTenantId;
+
 /** Document ingestion, inspection and reindexing endpoints for datasets. */
 @RestController
 @ConditionalOnBean(KnowledgeService.class)
@@ -37,22 +39,19 @@ public class DatasetDocumentController {
 
     @GetMapping("/{id}/documents")
     public ApiResponse<List<KnowledgeDocumentEntity>> listDocuments(@PathVariable String id) {
-        return ApiResponse.ok(knowledgeService.listDocuments(id));
+        return ApiResponse.ok(knowledgeService.listDocuments(currentTenantId(), id));
     }
 
     @GetMapping("/{id}/documents/{documentId}")
     public ApiResponse<KnowledgeDocumentEntity> getDocument(
             @PathVariable String id, @PathVariable String documentId) {
-        KnowledgeDocumentEntity document = knowledgeService.getDocument(documentId);
-        return document == null
-                ? ApiResponse.error("document_not_found", "Document not found: " + documentId)
-                : ApiResponse.ok(document);
+        return ApiResponse.ok(knowledgeService.getDocument(currentTenantId(), id, documentId));
     }
 
     @GetMapping("/{id}/documents/{documentId}/parsed")
     public ApiResponse<ParsedDocument> getParsedDocument(
             @PathVariable String id, @PathVariable String documentId) {
-        ParsedDocument parsed = knowledgeService.getParsedDocument(documentId);
+        ParsedDocument parsed = knowledgeService.getParsedDocument(currentTenantId(), id, documentId);
         return parsed == null
                 ? ApiResponse.error("parsed_document_not_found", "Parsed document not found: " + documentId)
                 : ApiResponse.ok(parsed);
@@ -61,13 +60,15 @@ public class DatasetDocumentController {
     @PostMapping("/{id}/documents/text")
     public ApiResponse<KnowledgeDocumentEntity> addText(
             @PathVariable String id, @RequestBody AddTextRequest request) {
-        return ApiResponse.ok(knowledgeService.addText(id, request.name(), request.text()));
+        return ApiResponse.ok(knowledgeService.addText(
+                currentTenantId(), id, request.name(), request.text()));
     }
 
     @PostMapping("/{id}/documents/markdown")
     public ApiResponse<KnowledgeDocumentEntity> addMarkdown(
             @PathVariable String id, @RequestBody AddTextRequest request) {
-        return ApiResponse.ok(knowledgeService.addMarkdown(id, request.name(), request.text()));
+        return ApiResponse.ok(knowledgeService.addMarkdown(
+                currentTenantId(), id, request.name(), request.text()));
     }
 
     @PostMapping("/{id}/documents/upload")
@@ -77,13 +78,14 @@ public class DatasetDocumentController {
             return ApiResponse.error("file_required", "An uploaded file is required");
         }
         UploadedDocument upload = UploadedDocument.from(file);
-        return ApiResponse.ok(knowledgeService.addFile(id, upload.filename(), upload.content()));
+        return ApiResponse.ok(knowledgeService.addFile(
+                currentTenantId(), id, upload.filename(), upload.content()));
     }
 
     @DeleteMapping("/{id}/documents/{documentId}")
     public ApiResponse<Void> deleteDocument(@PathVariable String id,
                                             @PathVariable String documentId) {
-        knowledgeService.deleteDocument(documentId);
+        knowledgeService.deleteDocument(currentTenantId(), id, documentId);
         return ApiResponse.ok();
     }
 
@@ -110,14 +112,15 @@ public class DatasetDocumentController {
     @PostMapping("/{id}/documents/{documentId}/reindex")
     public ApiResponse<Map<String, Object>> reindex(
             @PathVariable String id, @PathVariable String documentId) {
-        int segmentCount = knowledgeService.reindexDocument(id, documentId);
+        int segmentCount = knowledgeService.reindexDocument(currentTenantId(), id, documentId);
         return ApiResponse.ok(Map.of("segmentCount", segmentCount));
     }
 
     @PostMapping("/{id}/documents/{documentId}/reparse")
     public ApiResponse<KnowledgeDocumentEntity> reparse(
             @PathVariable String id, @PathVariable String documentId) {
-        KnowledgeDocumentEntity document = knowledgeService.reparseDocument(id, documentId);
+        KnowledgeDocumentEntity document = knowledgeService.reparseDocument(
+                currentTenantId(), id, documentId);
         return document == null
                 ? ApiResponse.error("source_not_available", "Original source is not available for reparsing")
                 : ApiResponse.ok(document);

@@ -46,6 +46,20 @@ class AppSiteServiceTest {
         assertThat(savedSite.getCode()).isEqualTo("stable-code");
         assertThat(savedSite.getTitle()).isEqualTo("New title");
         assertThat(savedSite.getDescription()).isEqualTo("Keep this description");
-        verify(siteMapper).updateById(existingSite);
+        verify(siteMapper).update(org.mockito.ArgumentMatchers.eq(existingSite), any());
+    }
+
+    @Test
+    void scopedCreateOverridesForgedTenantAndApplication() {
+        AppSiteMapper mapper = mock(AppSiteMapper.class);
+        AppSiteEntity supplied = new AppSiteEntity();
+        supplied.setId("forged-id"); supplied.setTenantId("tenant-b"); supplied.setAppId("app-b");
+
+        AppSiteEntity saved = new AppSiteService(mapper).save("tenant-a", "app-a", supplied);
+
+        assertThat(saved.getId()).isNull();
+        assertThat(saved.getTenantId()).isEqualTo("tenant-a");
+        assertThat(saved.getAppId()).isEqualTo("app-a");
+        verify(mapper).insert(supplied);
     }
 }

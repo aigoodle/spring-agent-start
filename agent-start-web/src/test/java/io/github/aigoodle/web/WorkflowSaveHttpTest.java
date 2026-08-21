@@ -139,7 +139,8 @@ class WorkflowSaveHttpTest {
                 }
                 """;
         JsonNode graphNode = MAPPER.readTree(designerGraphJson);
-        String appId = "app-post-" + java.util.UUID.randomUUID();
+        String appId = createSelectorApp(
+                "app-post-" + java.util.UUID.randomUUID(), "workflow", false);
         Map<String, Object> body = Map.of(
                 "appId", appId,
                 "tenantId", "wire-test",
@@ -184,7 +185,8 @@ class WorkflowSaveHttpTest {
         // The core invariant the user reported: two saves for the same app
         // must land on the same PK, so the DB never grows a duplicate draft.
         // Only publish (a separate endpoint) creates a snapshot copy.
-        String appId = "app-upsert-" + java.util.UUID.randomUUID();
+        String appId = createSelectorApp(
+                "app-upsert-" + java.util.UUID.randomUUID(), "workflow", false);
         String firstGraph = """
                 {"nodes":[{"id":"1","type":"START","position":{"x":0,"y":0},"data":{}}],
                  "edges":[],"viewport":{"x":0,"y":0,"zoom":1.0}}
@@ -385,8 +387,9 @@ class WorkflowSaveHttpTest {
     void putWorkflowsUpdatesGraphJsonInDatabase() throws Exception {
         // Seed a row via the service (typed) so the update path is exercised in
         // isolation from insert.
-        String appId = "app-put-" + java.util.UUID.randomUUID();
-        WorkflowEntity seed = workflowService.save(appId, "wire-test", "seed", "workflow", (JsonNode) null);
+        String appId = createSelectorApp(
+                "app-put-" + java.util.UUID.randomUUID(), "workflow", false);
+        WorkflowEntity seed = workflowService.require(appId);
 
         String updatedGraphJson = """
                 {

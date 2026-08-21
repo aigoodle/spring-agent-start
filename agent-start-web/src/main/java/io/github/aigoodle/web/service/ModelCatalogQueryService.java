@@ -87,7 +87,8 @@ public class ModelCatalogQueryService {
         // shows the same model twice with two conflicting enable switches, so the
         // predefined row wins and the duplicate is dropped.
         Set<String> predefinedTriples = new HashSet<>();
-        for (PredefinedModelEntity predefinedModel : definitionService.listPredefined(providerName)) {
+        for (PredefinedModelEntity predefinedModel
+                : definitionService.listPredefined(tenantId, providerName)) {
             predefinedTriples.add(triple(predefinedModel.getModel(), predefinedModel.getModelType()));
             catalog.add(viewAssembler.toCatalogRow(predefinedModel, settings, defaults));
         }
@@ -145,7 +146,7 @@ public class ModelCatalogQueryService {
             Set<String> predefinedTriples = new HashSet<>();
 
             for (PredefinedModelEntity predefinedModel
-                    : definitionService.listPredefined(definition.getName())) {
+                    : definitionService.listPredefined(tenantId, definition.getName())) {
                 ModelType modelType = predefinedModel.getModelType();
                 predefinedTriples.add(triple(predefinedModel.getModel(), modelType));
                 ProviderModelSettingEntity setting = settings.get(
@@ -194,9 +195,9 @@ public class ModelCatalogQueryService {
         return modelName + "::" + (modelType == null ? "" : modelType.name());
     }
 
-    public ModelParametersView parameters(String modelId) {
-        List<ModelParameterRule> rules = modelService.parameterRulesFor(modelId);
-        Map<String, Object> storedValues = modelService.getModelProperties(modelId);
+    public ModelParametersView parameters(String tenantId, String modelId) {
+        List<ModelParameterRule> rules = modelService.parameterRulesFor(tenantId, modelId);
+        Map<String, Object> storedValues = modelService.getModelProperties(tenantId, modelId);
         Map<String, Object> configuredValues = new LinkedHashMap<>();
         for (ModelParameterRule rule : rules) {
             Object configuredValue = storedValues.get(rule.getName());
@@ -211,4 +212,3 @@ public class ModelCatalogQueryService {
     }
 
 }
-

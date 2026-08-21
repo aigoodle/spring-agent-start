@@ -30,8 +30,21 @@ public final class DifyMessageHistory {
                 conversationId, MAX_HISTORY_SIZE);
     }
 
+    public List<MemoryItem> findAll(String tenantId, String appId, String conversationId) {
+        AppConversationEntity conversation = conversationService.require(tenantId, appId, conversationId);
+        return memoryManager.history(conversation.getTenantId(), conversation.getAppId(),
+                conversationId, MAX_HISTORY_SIZE);
+    }
+
     public String suggestTitle(String conversationId) {
         return findAll(conversationId).stream().limit(TITLE_SCAN_SIZE)
+                .filter(item -> item.role() == MemoryRole.USER)
+                .map(MemoryItem::content).filter(content -> content != null && !content.isBlank())
+                .findFirst().map(String::trim).map(DifyMessageHistory::abbreviate).orElse(null);
+    }
+
+    public String suggestTitle(String tenantId, String appId, String conversationId) {
+        return findAll(tenantId, appId, conversationId).stream().limit(TITLE_SCAN_SIZE)
                 .filter(item -> item.role() == MemoryRole.USER)
                 .map(MemoryItem::content).filter(content -> content != null && !content.isBlank())
                 .findFirst().map(String::trim).map(DifyMessageHistory::abbreviate).orElse(null);

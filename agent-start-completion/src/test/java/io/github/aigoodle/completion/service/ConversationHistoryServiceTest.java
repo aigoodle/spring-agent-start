@@ -29,14 +29,14 @@ class ConversationHistoryServiceTest {
         conversation.setAppId("app-1");
         conversation.setTenantId("default");
         conversation.setFromEndUserId("user-1");
-        when(conversations.listByApp("app-1")).thenReturn(List.of(conversation));
+        when(conversations.listByApp("default", "app-1")).thenReturn(List.of(conversation));
         when(memory.history("default", "app-1", "conversation-1", 20)).thenReturn(List.of(
                 item("1", MemoryRole.ASSISTANT, "Hello"),
                 item("2", MemoryRole.USER, "Explain the quarterly report")));
         ConversationHistoryService history = new ConversationHistoryService(
                 providerOf(conversations), providerOf(memory));
 
-        List<Map<String, Object>> views = history.conversations("app-1", 10);
+        List<Map<String, Object>> views = history.conversations("default", "app-1", 10);
 
         assertThat(views).singleElement().satisfies(view -> {
             assertThat(view).containsEntry("conversationId", "conversation-1");

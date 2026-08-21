@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+import static io.github.aigoodle.common.context.UserContextHolder.currentTenantId;
+
 /** Segment inspection and editing endpoints for knowledge documents. */
 @RestController
 @ConditionalOnBean(KnowledgeService.class)
@@ -34,7 +36,8 @@ public class DatasetSegmentController {
             @PathVariable String documentId,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "50") int pageSize) {
-        return ApiResponse.ok(knowledgeService.listSegments(documentId, page, pageSize));
+        return ApiResponse.ok(knowledgeService.listSegments(
+                currentTenantId(), id, documentId, page, pageSize));
     }
 
     @PostMapping("/{id}/documents/{documentId}/segments")
@@ -42,7 +45,8 @@ public class DatasetSegmentController {
             @PathVariable String id,
             @PathVariable String documentId,
             @RequestBody UpdateSegmentRequest request) {
-        SegmentEntity segment = knowledgeService.appendSegment(id, documentId, request.content());
+        SegmentEntity segment = knowledgeService.appendSegment(
+                currentTenantId(), id, documentId, request.content());
         return segment == null
                 ? ApiResponse.error("document_not_found", "Document not found: " + documentId)
                 : ApiResponse.ok(segment);
@@ -54,7 +58,8 @@ public class DatasetSegmentController {
             @PathVariable String documentId,
             @PathVariable String segmentId,
             @RequestBody UpdateSegmentRequest request) {
-        SegmentEntity segment = knowledgeService.updateSegment(id, segmentId, request.content());
+        SegmentEntity segment = knowledgeService.updateSegment(
+                currentTenantId(), id, documentId, segmentId, request.content());
         return segment == null
                 ? ApiResponse.error("segment_not_found", "Segment not found: " + segmentId)
                 : ApiResponse.ok(segment);
@@ -65,7 +70,7 @@ public class DatasetSegmentController {
             @PathVariable String id,
             @PathVariable String documentId,
             @PathVariable String segmentId) {
-        knowledgeService.deleteSegment(id, segmentId);
+        knowledgeService.deleteSegment(currentTenantId(), id, documentId, segmentId);
         return ApiResponse.ok();
     }
 
@@ -76,7 +81,8 @@ public class DatasetSegmentController {
             @PathVariable String segmentId,
             @RequestBody EnabledRequest request) {
         boolean enabled = Boolean.TRUE.equals(request.enabled());
-        SegmentEntity segment = knowledgeService.setSegmentEnabled(id, segmentId, enabled);
+        SegmentEntity segment = knowledgeService.setSegmentEnabled(
+                currentTenantId(), id, documentId, segmentId, enabled);
         return segment == null
                 ? ApiResponse.error("segment_not_found", "Segment not found: " + segmentId)
                 : ApiResponse.ok(segment);
@@ -87,4 +93,5 @@ public class DatasetSegmentController {
 
     public record EnabledRequest(Boolean enabled) {
     }
+
 }

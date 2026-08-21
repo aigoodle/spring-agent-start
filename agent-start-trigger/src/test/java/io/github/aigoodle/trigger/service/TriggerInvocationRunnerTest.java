@@ -18,6 +18,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 
 class TriggerInvocationRunnerTest {
 
@@ -66,7 +68,7 @@ class TriggerInvocationRunnerTest {
         assertThat(invocation.getError()).isEqualTo("target rejected request");
         assertThat(invocation.getRunId()).isEqualTo("run-1");
         assertThat(invocation.getOutputsJson()).isEqualTo("{\"accepted\":false}");
-        verify(invocationMapper, times(2)).updateById(invocation);
+        verify(invocationMapper, times(2)).update(eq(invocation), any());
     }
 
     @Test
@@ -83,7 +85,7 @@ class TriggerInvocationRunnerTest {
         assertThat(result.getError()).isEqualTo("dispatcher unavailable");
         assertThat(invocation.getStatus()).isEqualTo(InvocationStatus.FAILED);
         assertThat(invocation.getError()).isEqualTo("dispatcher unavailable");
-        verify(invocationMapper, times(2)).updateById(invocation);
+        verify(invocationMapper, times(2)).update(eq(invocation), any());
     }
 
     private static TriggerDispatcher failingDispatcher() {
@@ -128,6 +130,7 @@ class TriggerInvocationRunnerTest {
 
     private static TriggerInvocationEntity invocation(String id) {
         TriggerInvocationEntity invocation = new TriggerInvocationEntity();
+        invocation.setTenantId("default");
         invocation.setId(id);
         invocation.setStatus(InvocationStatus.PENDING);
         return invocation;
