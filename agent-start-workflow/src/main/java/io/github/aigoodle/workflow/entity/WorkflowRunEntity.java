@@ -17,7 +17,7 @@ public class WorkflowRunEntity extends BaseEntity {
 
     private String conversationId;
 
-    /** {@code SUCCESS} or {@code FAILED}. */
+    /** SUCCESS, FAILED, CANCELLED, TIMED_OUT, WAITING, or another lifecycle state. */
     private String status;
 
     private String inputsJson;

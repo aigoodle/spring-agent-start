@@ -2,6 +2,8 @@ package io.github.aigoodle.observability.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.github.aigoodle.observability.api.LlmCallMeasurement;
+import io.github.aigoodle.observability.api.LlmTrendPoint;
+import io.github.aigoodle.observability.api.LlmTrendRange;
 import io.github.aigoodle.observability.api.LlmUsageStats;
 import io.github.aigoodle.observability.api.TokenUsage;
 import io.github.aigoodle.observability.config.ObservabilityProperties;
@@ -14,6 +16,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 
 /**
  * Records every LLM call (tokens, cost, latency, success) and answers the aggregate
@@ -87,6 +91,71 @@ public class LlmMetricsService {
         return callRecordMapper.selectList(new LambdaQueryWrapper<LlmCallRecord>()
                 .orderByDesc(LlmCallRecord::getCreatedAt)
                 .last("limit " + Math.max(1, limit)));
+    }
+
+    /**
+     * Returns a fixed-size, zero-filled time series suitable for a cloud-monitor style chart.
+     * HOUR has 6 ten-minute buckets, DAY has 24 hourly buckets and WEEK has 7 daily buckets.
+     */
+    public List<LlmTrendPoint> trend(String tenantId, LlmTrendRange range) {
+        LlmTrendRange resolvedRange = range == null ? LlmTrendRange.HOUR : range;
+        long bucketSeconds = resolvedRange.bucketSize().toSeconds();
+        LocalDateTime currentBucket = floorToBucket(LocalDateTime.now(), bucketSeconds);
+        LocalDateTime start = currentBucket.minus(
+                resolvedRange.bucketSize().multipliedBy(resolvedRange.bucketCount() - 1L));
+        LocalDateTime end = currentBucket.plus(resolvedRange.bucketSize());
+
+        LambdaQueryWrapper<LlmCallRecord> query = new LambdaQueryWrapper<LlmCallRecord>()
+                .ge(LlmCallRecord::getCreatedAt, start)
+                .lt(LlmCallRecord::getCreatedAt, end)
+                .orderByAsc(LlmCallRecord::getCreatedAt);
+        if (tenantId != null) {
+            query.eq(LlmCallRecord::getTenantId, tenantId);
+        }
+
+        Map<LocalDateTime, TrendAccumulator> buckets = new LinkedHashMap<>();
+        for (int i = 0; i < resolvedRange.bucketCount(); i++) {
+            buckets.put(start.plus(resolvedRange.bucketSize().multipliedBy(i)), new TrendAccumulator());
+        }
+        for (LlmCallRecord record : callRecordMapper.selectList(query)) {
+            LocalDateTime bucket = floorToBucket(record.getCreatedAt(), bucketSeconds);
+            TrendAccumulator accumulator = buckets.get(bucket);
+            if (accumulator != null) {
+                accumulator.include(record);
+            }
+        }
+        return buckets.entrySet().stream()
+                .map(entry -> entry.getValue().toPoint(entry.getKey()))
+                .toList();
+    }
+
+    private static LocalDateTime floorToBucket(LocalDateTime value, long bucketSeconds) {
+        LocalDateTime epoch = LocalDateTime.of(1970, 1, 1, 0, 0);
+        long seconds = ChronoUnit.SECONDS.between(epoch, value);
+        return epoch.plusSeconds(Math.floorDiv(seconds, bucketSeconds) * bucketSeconds);
+    }
+
+    private static final class TrendAccumulator {
+        private long calls;
+        private long errors;
+        private long totalTokens;
+        private long costMicros;
+        private long latencyMs;
+
+        private void include(LlmCallRecord record) {
+            calls++;
+            if (!Boolean.TRUE.equals(record.getSuccess())) {
+                errors++;
+            }
+            totalTokens += record.getTotalTokens() == null ? 0 : record.getTotalTokens();
+            costMicros += record.getCostMicros() == null ? 0 : record.getCostMicros();
+            latencyMs += record.getLatencyMs() == null ? 0 : record.getLatencyMs();
+        }
+
+        private LlmTrendPoint toPoint(LocalDateTime bucketStart) {
+            return new LlmTrendPoint(bucketStart, calls, errors, totalTokens, costMicros,
+                    calls == 0 ? 0.0 : (double) latencyMs / calls);
+        }
     }
 
     private List<LlmCallRecord> load(String tenantId) {

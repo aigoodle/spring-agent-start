@@ -34,6 +34,7 @@ public class LlmNodeExecutor implements NodeExecutor {
 
     private final ModelService modelService;
     private final LlmConversationBuilder conversationBuilder;
+    private final MemoryManager conversationMemory;
 
     public LlmNodeExecutor(ModelService modelService) {
         this(modelService, null, null);
@@ -48,6 +49,7 @@ public class LlmNodeExecutor implements NodeExecutor {
                            PromptTemplateService promptTemplateService,
                            MemoryManager conversationMemory) {
         this.modelService = modelService;
+        this.conversationMemory = conversationMemory;
         this.conversationBuilder = new LlmConversationBuilder(
                 promptTemplateService, conversationMemory);
     }
@@ -59,6 +61,7 @@ public class LlmNodeExecutor implements NodeExecutor {
 
     @Override
     public NodeResult execute(NodeDef node, ExecutionContext context) {
+        context.throwIfCancelled();
         List<Message> messages = conversationBuilder.build(node, context);
         boolean structuredOutput = requiresStructuredOutput(node);
         if (shouldStream(context.getChatSink(), structuredOutput)) {
@@ -79,7 +82,11 @@ public class LlmNodeExecutor implements NodeExecutor {
         Prompt prompt = new Prompt(messages, resolveChatOptions(node, chatModel));
         Flux<String> tokens = chatModel.stream(prompt)
                 .mapNotNull(LlmNodeExecutor::extractDelta)
-                .filter(delta -> !delta.isEmpty());
+                .filter(delta -> !delta.isEmpty())
+                .doOnNext(ignored -> context.throwIfCancelled());
+        if (context.getCancellationToken() != null) {
+            tokens = tokens.takeUntilOther(context.getCancellationToken().cancellationSignal());
+        }
         return NodeResult.of("text", new ChatFluxHandle(tokens));
     }
 
@@ -97,10 +104,39 @@ public class LlmNodeExecutor implements NodeExecutor {
         if (nodeOptions != null) {
             request = request.options(nodeOptions);
         }
+        ChatResponse response = request.call().chatResponse();
+        String content = response == null ? request.call().content() : extractContent(response);
+        NodeResult result;
         if (structuredOutput) {
-            return executeStructured(request);
+            result = LlmStructuredOutputMapper.map(content);
+        } else {
+            result = NodeResult.of("text", content);
         }
-        return NodeResult.of("text", request.call().content());
+        attachUsage(node, response, result);
+        rememberChannelExchange(context, content);
+        context.throwIfCancelled();
+        return result;
+    }
+
+    private void rememberChannelExchange(ExecutionContext context, String answer) {
+        if (conversationMemory == null
+                || !Boolean.parseBoolean(String.valueOf(context.getInputs().get("_channel_conversation")))
+                || context.getConversationId() == null || context.getConversationId().isBlank()) return;
+        String query = text(context.getInputs().get("query"));
+        String tenant = text(context.getInputs().get("_memory_tenant_id"));
+        String owner = text(context.getInputs().get("_memory_owner_id"));
+        if (query == null || answer == null || answer.isBlank() || owner == null) return;
+        try {
+            conversationMemory.rememberExchange(
+                    tenant == null ? "default" : tenant, owner,
+                    context.getConversationId(), query, answer);
+        } catch (RuntimeException ignored) {
+            // History persistence is best-effort and must not fail the LLM node.
+        }
+    }
+
+    private static String text(Object value) {
+        return value == null || String.valueOf(value).isBlank() ? null : String.valueOf(value);
     }
 
     private static boolean shouldStream(ChatStreamSink streamSink, boolean structuredOutput) {
@@ -137,7 +173,25 @@ public class LlmNodeExecutor implements NodeExecutor {
         return node.get("structOutput") != null;
     }
 
-    private static NodeResult executeStructured(ChatClient.ChatClientRequestSpec request) {
-        return LlmStructuredOutputMapper.map(request.call().content());
+    private static String extractContent(ChatResponse response) {
+        if (response == null || response.getResult() == null || response.getResult().getOutput() == null) return "";
+        String text = response.getResult().getOutput().getText();
+        return text == null ? "" : text;
+    }
+
+    private static void attachUsage(NodeDef node, ChatResponse response, NodeResult result) {
+        if (response == null || response.getMetadata() == null || response.getMetadata().getUsage() == null) return;
+        long tokens = response.getMetadata().getUsage().getTotalTokens();
+        String cost = null;
+        String configuredRate = node.getString("costPer1kTokens");
+        if (configuredRate != null && tokens > 0) {
+            try {
+                cost = new java.math.BigDecimal(configuredRate)
+                        .multiply(java.math.BigDecimal.valueOf(tokens))
+                        .divide(java.math.BigDecimal.valueOf(1000), 8, java.math.RoundingMode.HALF_UP)
+                        .stripTrailingZeros().toPlainString();
+            } catch (NumberFormatException ignored) { }
+        }
+        result.usage(tokens, cost);
     }
 }

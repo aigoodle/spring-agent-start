@@ -12,6 +12,7 @@ import io.github.aigoodle.knowledge.config.ProcessRule;
 import io.github.aigoodle.knowledge.entity.DatasetEntity;
 import io.github.aigoodle.knowledge.entity.KnowledgeDocumentEntity;
 import io.github.aigoodle.knowledge.enums.DocumentStatus;
+import io.github.aigoodle.knowledge.enums.IngestionJobStatus;
 import io.github.aigoodle.knowledge.index.IndexingService;
 import io.github.aigoodle.knowledge.mapper.DocumentIngestQueueMapper;
 import io.github.aigoodle.knowledge.mapper.KnowledgeDocumentMapper;
@@ -205,8 +206,21 @@ final class DocumentIngestionService {
                                              String sourceType, ParsedDocument parsedDocument) {
         DatasetEntity dataset = datasetService.require(tenantId, datasetId);
         String extractedText = parsedDocument == null ? "" : parsedDocument.text();
+        String checksum = sha256(extractedText.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        KnowledgeDocumentEntity duplicate = documentMapper.selectOne(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<KnowledgeDocumentEntity>()
+                        .eq(KnowledgeDocumentEntity::getTenantId, dataset.getTenantId())
+                        .eq(KnowledgeDocumentEntity::getDatasetId, datasetId)
+                        .eq(KnowledgeDocumentEntity::getSourceChecksum, checksum)
+                        .ne(KnowledgeDocumentEntity::getStatus, DocumentStatus.FAILED)
+                        .last("LIMIT 1"));
+        if (duplicate != null) {
+            log.info("Deduplicated ingestion submission '{}' against document {}", name, duplicate.getId());
+            return duplicate;
+        }
         KnowledgeDocumentEntity document = createDocument(
                 dataset, name, sourceType, extractedText, DocumentStatus.PENDING);
+        document.setSourceChecksum(checksum);
         applyParseDiagnostics(document, parsedDocument);
         updateOwned(document);
 
@@ -219,6 +233,8 @@ final class DocumentIngestionService {
         queuedDocument.setRawText(extractedText);
         queuedDocument.setParsedDocumentJson(JsonUtils.toJson(parsedDocument));
         queuedDocument.setRetryCount(0);
+        queuedDocument.setIdempotencyKey(dataset.getTenantId() + ":" + datasetId + ":" + checksum);
+        queuedDocument.setStatus(IngestionJobStatus.READY);
         LocalDateTime now = LocalDateTime.now();
         queuedDocument.setCreatedAt(now);
         queuedDocument.setUpdatedAt(now);

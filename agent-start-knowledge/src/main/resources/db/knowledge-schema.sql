@@ -16,12 +16,35 @@ CREATE TABLE IF NOT EXISTS goodle_dataset (
     process_rule_json     TEXT,
     retrieval_config_json TEXT,
     vector_store          VARCHAR(64),
+    active_index_version_id VARCHAR(64),
     document_count        INT DEFAULT 0,
     segment_count         INT DEFAULT 0,
     created_at            TIMESTAMP,
     updated_at            TIMESTAMP,
     PRIMARY KEY (id)
 );
+ALTER TABLE goodle_dataset ADD COLUMN IF NOT EXISTS active_index_version_id VARCHAR(64);
+
+CREATE TABLE IF NOT EXISTS goodle_index_versions (
+    id VARCHAR(64) NOT NULL,
+    tenant_id VARCHAR(64) NOT NULL DEFAULT 'default',
+    dataset_id VARCHAR(64) NOT NULL,
+    version VARCHAR(128) NOT NULL,
+    embedding_model_version VARCHAR(255),
+    chunking_rule_version VARCHAR(255),
+    content_checksum VARCHAR(64),
+    status VARCHAR(32) NOT NULL,
+    error_message TEXT,
+    document_count INT DEFAULT 0,
+    segment_count INT DEFAULT 0,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    PRIMARY KEY (id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_index_version_dataset_version
+    ON goodle_index_versions (tenant_id, dataset_id, version);
+CREATE INDEX IF NOT EXISTS idx_index_version_status
+    ON goodle_index_versions (tenant_id, dataset_id, status);
 
 CREATE TABLE IF NOT EXISTS goodle_documents (
     id            VARCHAR(64)  NOT NULL,
@@ -71,12 +94,26 @@ CREATE TABLE IF NOT EXISTS goodle_document_ingest_queue (
     raw_text    TEXT,
     parsed_document_json TEXT,
     retry_count INT DEFAULT 0,
+    idempotency_key VARCHAR(255),
+    status VARCHAR(32) DEFAULT 'READY',
+    claimed_by VARCHAR(128),
+    lease_expires_at TIMESTAMP,
+    next_attempt_at TIMESTAMP,
+    last_error TEXT,
     created_at  TIMESTAMP,
     updated_at  TIMESTAMP,
     PRIMARY KEY (document_id)
 );
 CREATE INDEX IF NOT EXISTS idx_ingest_queue_dataset ON goodle_document_ingest_queue (dataset_id);
 ALTER TABLE goodle_document_ingest_queue ADD COLUMN IF NOT EXISTS parsed_document_json TEXT;
+ALTER TABLE goodle_document_ingest_queue ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(255);
+ALTER TABLE goodle_document_ingest_queue ADD COLUMN IF NOT EXISTS status VARCHAR(32) DEFAULT 'READY';
+ALTER TABLE goodle_document_ingest_queue ADD COLUMN IF NOT EXISTS claimed_by VARCHAR(128);
+ALTER TABLE goodle_document_ingest_queue ADD COLUMN IF NOT EXISTS lease_expires_at TIMESTAMP;
+ALTER TABLE goodle_document_ingest_queue ADD COLUMN IF NOT EXISTS next_attempt_at TIMESTAMP;
+ALTER TABLE goodle_document_ingest_queue ADD COLUMN IF NOT EXISTS last_error TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS uk_ingest_idempotency ON goodle_document_ingest_queue (idempotency_key);
+CREATE INDEX IF NOT EXISTS idx_ingest_claim ON goodle_document_ingest_queue (status, next_attempt_at, lease_expires_at);
 
 CREATE TABLE IF NOT EXISTS goodle_document_segments (
     id            VARCHAR(64)  NOT NULL,
@@ -90,12 +127,15 @@ CREATE TABLE IF NOT EXISTS goodle_document_segments (
     metadata_json TEXT,
     parent_id     VARCHAR(64),
     vector_id     VARCHAR(64),
+    index_version_id VARCHAR(64),
     enabled       BOOLEAN DEFAULT TRUE,
     hash          VARCHAR(32),
     created_at    TIMESTAMP,
     updated_at    TIMESTAMP,
     PRIMARY KEY (id)
 );
+ALTER TABLE goodle_document_segments ADD COLUMN IF NOT EXISTS index_version_id VARCHAR(64);
+CREATE INDEX IF NOT EXISTS idx_segment_index_version ON goodle_document_segments (index_version_id);
 
 -- Optional table for the built-in JDBC vector store (spring-agent.knowledge.vector-store=jdbc).
 CREATE TABLE IF NOT EXISTS goodle_embeddings (

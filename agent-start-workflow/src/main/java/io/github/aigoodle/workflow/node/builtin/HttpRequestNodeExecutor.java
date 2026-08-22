@@ -5,6 +5,7 @@ import io.github.aigoodle.workflow.graph.NodeType;
 import io.github.aigoodle.workflow.node.ExecutionContext;
 import io.github.aigoodle.workflow.node.NodeExecutor;
 import io.github.aigoodle.workflow.node.NodeResult;
+import io.github.aigoodle.workflow.node.NodeExecutionMode;
 
 import java.io.IOException;
 import java.net.http.HttpClient;
@@ -44,13 +45,23 @@ public class HttpRequestNodeExecutor implements NodeExecutor {
     }
 
     @Override
+    public NodeExecutionMode executionMode(NodeDef node) {
+        String method = node.getString("method", "GET").toUpperCase(java.util.Locale.ROOT);
+        if (method.equals("GET") || method.equals("HEAD") || method.equals("OPTIONS")) return NodeExecutionMode.PURE;
+        return NodeExecutionMode.IDEMPOTENT;
+    }
+
+    @Override
     public NodeResult execute(NodeDef node, ExecutionContext context) {
+        context.throwIfCancelled();
         HttpNodeRequestFactory.PreparedRequest preparedRequest =
                 requestFactory.prepare(node, context);
         if (preparedRequest.failed()) {
             return NodeResult.failure(preparedRequest.error());
         }
-        return send(preparedRequest);
+        NodeResult result = send(preparedRequest);
+        context.throwIfCancelled();
+        return result;
     }
 
     private NodeResult send(HttpNodeRequestFactory.PreparedRequest preparedRequest) {
@@ -83,6 +94,7 @@ public class HttpRequestNodeExecutor implements NodeExecutor {
     private static NodeResult responseResult(HttpResponse<String> response) {
         // 4xx/5xx are valid HTTP responses; downstream nodes decide how to handle them.
         return NodeResult.empty()
+                .externalStatus(response.statusCode())
                 .output("status", response.statusCode())
                 .output("body", response.body())
                 .output("headers", response.headers().map());

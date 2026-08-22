@@ -42,15 +42,30 @@ public class OpenClawConnectorProvider implements ConnectorProvider {
         for (Map.Entry<String, List<OpenClawDtos.ToolInfo>> entry : toolsByPlugin.entrySet()) {
             OpenClawDtos.PluginInfo plugin = plugins.get(entry.getKey());
             List<ConnectorActionDefinition> actions = entry.getValue().stream().map(this::action).toList();
+            Map<String, Object> connectorMetadata = new LinkedHashMap<>();
+            if (plugin != null && plugin.metadata() != null) connectorMetadata.putAll(plugin.metadata());
+            connectorMetadata.putIfAbsent("capabilities", inferCapabilities(plugin, entry.getValue()));
             definitions.add(new ConnectorDefinition(new ConnectorKey(PROVIDER, entry.getKey()),
                     plugin == null ? entry.getKey() : plugin.name(),
                     plugin == null ? "OpenClaw plugin" : plugin.description(),
                     plugin == null ? "unknown" : plugin.version(), ConnectorSource.OPENCLAW,
                     null, "openclaw", plugin == null ? null : plugin.configSchema(), actions,
-                    ConnectorTrustLevel.REVIEWED, plugin == null ? null : plugin.license(),
-                    plugin == null || plugin.metadata() == null ? Map.of() : plugin.metadata()));
+                    ConnectorTrustLevel.REVIEWED, plugin == null ? null : plugin.license(), connectorMetadata));
         }
         return definitions;
+    }
+
+    private static List<String> inferCapabilities(OpenClawDtos.PluginInfo plugin,
+                                                   List<OpenClawDtos.ToolInfo> tools) {
+        if (plugin != null && plugin.metadata() != null
+                && plugin.metadata().get("capabilities") instanceof List<?> declared && !declared.isEmpty()) {
+            return declared.stream().map(String::valueOf).toList();
+        }
+        boolean channel = tools.stream().anyMatch(tool -> {
+            String value = (tool.name() + " " + tool.label() + " " + tool.tags()).toLowerCase();
+            return value.contains("channel") || value.contains("message") || value.contains("send");
+        });
+        return channel ? List.of("CHANNEL_INBOUND", "CHANNEL_OUTBOUND", "ACTION") : List.of("ACTION");
     }
 
     @Override

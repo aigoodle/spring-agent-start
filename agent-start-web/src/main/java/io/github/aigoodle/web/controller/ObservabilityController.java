@@ -1,6 +1,8 @@
 package io.github.aigoodle.web.controller;
 
 import io.github.aigoodle.observability.api.LlmUsageStats;
+import io.github.aigoodle.observability.api.LlmTrendPoint;
+import io.github.aigoodle.observability.api.LlmTrendRange;
 import io.github.aigoodle.observability.entity.LlmCallRecord;
 import io.github.aigoodle.observability.service.LlmMetricsService;
 import io.github.aigoodle.web.common.ApiResponse;
@@ -44,5 +46,11 @@ public class ObservabilityController {
     @GetMapping("/recent")
     public ApiResponse<List<LlmCallRecord>> recent(@RequestParam(defaultValue = "50") int limit) {
         return ApiResponse.ok(metrics.recentCalls(limit));
+    }
+
+    @GetMapping("/trend")
+    public ApiResponse<List<LlmTrendPoint>> trend(
+            @RequestParam(defaultValue = "HOUR") LlmTrendRange range) {
+        return ApiResponse.ok(metrics.trend(currentTenantId(), range));
     }
 }

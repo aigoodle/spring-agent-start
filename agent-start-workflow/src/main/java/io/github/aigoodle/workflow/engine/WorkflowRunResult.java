@@ -1,6 +1,7 @@
 package io.github.aigoodle.workflow.engine;
 
 import io.github.aigoodle.workflow.node.StepRecord;
+import io.github.aigoodle.workflow.node.WorkflowWaitRequest;
 import lombok.Data;
 
 import java.util.List;
@@ -15,26 +16,50 @@ public class WorkflowRunResult {
 
     private String runId;
     private boolean success;
+    private WorkflowRunStatus status;
     private String error;
     private Map<String, Object> outputs;
     private List<StepRecord> steps;
+    private String waitingNodeId;
+    private WorkflowWaitRequest waitRequest;
 
     public static WorkflowRunResult forRun(String runId, List<StepRecord> steps) {
         WorkflowRunResult result = new WorkflowRunResult();
         result.runId = runId;
         result.steps = steps;
+        result.status = WorkflowRunStatus.RUNNING;
         return result;
     }
 
     public WorkflowRunResult succeed(Map<String, Object> outputs) {
         this.success = true;
+        this.status = WorkflowRunStatus.SUCCEEDED;
         this.error = null;
+        this.outputs = outputs;
+        return this;
+    }
+
+    public WorkflowRunResult terminate(WorkflowRunStatus status, String error, Map<String, Object> outputs) {
+        this.success = false;
+        this.status = status;
+        this.error = error;
+        this.outputs = outputs;
+        return this;
+    }
+
+    public WorkflowRunResult waiting(String nodeId, WorkflowWaitRequest request,
+                                     Map<String, Object> outputs) {
+        this.success = false;
+        this.status = WorkflowRunStatus.WAITING;
+        this.waitingNodeId = nodeId;
+        this.waitRequest = request;
         this.outputs = outputs;
         return this;
     }
 
     public WorkflowRunResult fail(String error, Map<String, Object> outputs) {
         this.success = false;
+        this.status = WorkflowRunStatus.FAILED;
         this.error = error;
         this.outputs = outputs;
         return this;

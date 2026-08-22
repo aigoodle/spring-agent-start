@@ -47,11 +47,19 @@ public final class TriggerInvocationRunner {
     DispatchResult execute(TriggerEntity trigger,
                            TriggerInvocationEntity invocation,
                            Map<String, Object> payload) {
+        return execute(trigger, invocation, payload, trigger.getUserId());
+    }
+
+    DispatchResult execute(TriggerEntity trigger,
+                           TriggerInvocationEntity invocation,
+                           Map<String, Object> payload,
+                           String executionUserId) {
         invocation.markRunning();
         save(invocation);
         try {
             CurrentUser scheduledUser = CurrentUser.builder()
-                    .userId(trigger.getUserId())
+                    .userId(executionUserId == null || executionUserId.isBlank()
+                            ? trigger.getUserId() : executionUserId)
                     .tenantId(trigger.getTenantId())
                     .build();
             DispatchResult dispatchResult = UserContextHolder.callAs(scheduledUser,

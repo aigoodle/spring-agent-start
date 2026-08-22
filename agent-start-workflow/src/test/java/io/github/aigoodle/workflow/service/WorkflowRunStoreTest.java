@@ -64,6 +64,19 @@ class WorkflowRunStoreTest {
                 .doesNotThrowAnyException();
     }
 
+    @Test
+    void redactsSecretsAndBoundsPersistedObservabilityPayloads() {
+        WorkflowRunResult result = WorkflowRunResult.forRun("run-private", new ArrayList<>())
+                .succeed(Map.of("accessToken", "must-not-leak", "text", "x".repeat(800)));
+        runStore.recordAdHocRun("tenant-a", null,
+                Map.of("password", "must-not-leak", "question", "safe"), result);
+
+        WorkflowRunEntity entity = insertedEntity();
+        assertThat(entity.getInputsJson()).contains("[REDACTED]").doesNotContain("must-not-leak");
+        assertThat(entity.getOutputsJson()).contains("[REDACTED]").doesNotContain("must-not-leak");
+        assertThat(entity.getOutputsJson().length()).isLessThan(700);
+    }
+
     private WorkflowRunEntity insertedEntity() {
         ArgumentCaptor<WorkflowRunEntity> entityCaptor = ArgumentCaptor.forClass(WorkflowRunEntity.class);
         verify(workflowRunMapper).insert(entityCaptor.capture());

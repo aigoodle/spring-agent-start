@@ -7,6 +7,7 @@ import io.github.aigoodle.model.service.ModelService;
 import io.github.aigoodle.observability.api.LlmUsageStats;
 import io.github.aigoodle.observability.api.TokenUsage;
 import io.github.aigoodle.observability.api.LlmCallMeasurement;
+import io.github.aigoodle.observability.api.LlmTrendRange;
 import io.github.aigoodle.observability.entity.LlmCallRecord;
 import io.github.aigoodle.observability.service.LlmMetricsService;
 import org.junit.jupiter.api.Test;
@@ -71,5 +72,21 @@ class LlmMetricsIntegrationTest {
         metrics.record(LlmCallMeasurement.successful(
                 "ollama", "llama3.2", "tenantB", TokenUsage.of(10, 5, null), 50));
         assertEquals(15, metrics.total("tenantB").getTotalTokens());
+    }
+
+    @Test
+    void trendReturnsFixedZeroFilledMonitoringBuckets() {
+        metrics.record(LlmCallMeasurement.successful(
+                "openai", "gpt-4o-mini", "trendTenant", new TokenUsage(12, 8, 20), 120));
+
+        var hour = metrics.trend("trendTenant", LlmTrendRange.HOUR);
+        var day = metrics.trend("trendTenant", LlmTrendRange.DAY);
+        var week = metrics.trend("trendTenant", LlmTrendRange.WEEK);
+
+        assertEquals(6, hour.size());
+        assertEquals(24, day.size());
+        assertEquals(7, week.size());
+        assertEquals(1, hour.stream().mapToLong(point -> point.calls()).sum());
+        assertEquals(20, hour.stream().mapToLong(point -> point.totalTokens()).sum());
     }
 }

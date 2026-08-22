@@ -306,7 +306,15 @@ export default definePluginEntry({
       inboundStats.lastObservedAt = new Date().toISOString();
       const sink = config.eventSinkUrl?.trim();
       const channelId = ctx.channelId ?? event.channel;
-      if (!sink || !channelId) return;
+      if (!sink) return;
+      // Once an event sink is configured, Spring Agent Start exclusively owns message
+      // dispatch. Never fall through to OpenClaw's native agent/model, including when
+      // the event cannot be forwarded or the sink elects not to return a reply.
+      if (!channelId) {
+        recordInboundFailure("channelId is missing");
+        api.logger.error("channel event sink dispatch skipped: channelId is missing");
+        return { handled: true };
+      }
       const timeoutMs = Math.max(1000, Math.min(120000, config.eventSinkTimeoutMs ?? 60000));
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -350,18 +358,17 @@ export default definePluginEntry({
         if (!response.ok) {
           recordInboundFailure(`HTTP ${response.status}`);
           api.logger.warn(`channel event sink returned ${response.status}`);
-          return;
+          return { handled: true };
         }
         inboundStats.callbackSucceeded += 1;
         inboundStats.lastCallbackSucceededAt = new Date().toISOString();
         inboundStats.lastCallbackError = null;
         const result = await response.json() as { handled?: boolean; reply?: string; metadata?: { managed?: boolean } };
-        if (result.metadata?.managed !== true && result.handled !== true) return;
         return { handled: true, ...(result.reply ? { text: result.reply } : {}) };
       } catch (error) {
         recordInboundFailure(error);
         api.logger.error(`channel event sink failed: ${String(error)}`);
-        return;
+        return { handled: true };
       } finally {
         clearTimeout(timeout);
       }

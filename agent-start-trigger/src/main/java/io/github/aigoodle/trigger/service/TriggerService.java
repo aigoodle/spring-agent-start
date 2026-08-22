@@ -126,8 +126,12 @@ public class TriggerService {
     }
 
     public List<TriggerEntity> listEnabledByType(TriggerType type) {
+        return listEnabledByType(UserContextHolder.currentTenantId(), type);
+    }
+
+    public List<TriggerEntity> listEnabledByType(String tenantId, TriggerType type) {
         return triggerMapper.selectList(new LambdaQueryWrapper<TriggerEntity>()
-                .eq(TriggerEntity::getTenantId, UserContextHolder.currentTenantId())
+                .eq(TriggerEntity::getTenantId, tenantId == null || tenantId.isBlank() ? "default" : tenantId)
                 .eq(TriggerEntity::getType, type)
                 .eq(TriggerEntity::getEnabled, true));
     }
@@ -162,6 +166,15 @@ public class TriggerService {
         TriggerInvocationEntity invocation = invocationRunner.open(
                 InvocationDraft.initial(request), trigger.getTenantId());
         return invocationRunner.execute(trigger, invocation, request.payload());
+    }
+
+    /** Fires a trusted channel trigger as the owner of the configured channel account. */
+    public DispatchResult fireSynchronouslyAs(String tenantId, String executionUserId,
+                                              TriggerInvocationRequest request) {
+        TriggerEntity trigger = requireEnabled(tenantId, request.triggerId());
+        TriggerInvocationEntity invocation = invocationRunner.open(
+                InvocationDraft.initial(request), trigger.getTenantId());
+        return invocationRunner.execute(trigger, invocation, request.payload(), executionUserId);
     }
 
     /** All workflow schedules owned by one authenticated user, used as LLM deletion candidates. */
@@ -291,7 +304,7 @@ public class TriggerService {
         return trigger;
     }
 
-    /** Reconciles the published workflow's START-node schedule into one durable trigger. */
+    /** Reconciles the published workflow's START-node schedule or channel selector into one durable trigger. */
     @Transactional
     public TriggerEntity syncPublishedWorkflowSchedule(WorkflowEntity workflow,
                                                         WorkflowService workflowService) {
@@ -315,10 +328,34 @@ public class TriggerService {
                 ? map.entrySet().stream().collect(java.util.stream.Collectors.toMap(
                         entry -> String.valueOf(entry.getKey()), Map.Entry::getValue))
                 : Map.of();
-        if (!Boolean.TRUE.equals(data.get("triggersEnabled"))
-                || !"schedule".equalsIgnoreCase(String.valueOf(designer.get("type")))) {
+        if (!Boolean.TRUE.equals(data.get("triggersEnabled"))) {
             return null;
         }
+        String triggerType = String.valueOf(designer.get("type"));
+        if ("connector".equalsIgnoreCase(triggerType)) {
+            String provider = text(designer.get("provider"));
+            String channelId = text(designer.get("channelId"));
+            if (provider == null || channelId == null) {
+                throw new PlatformException("channel_trigger_invalid",
+                        "Message connector trigger requires provider and channelId", null);
+            }
+            Map<String, Object> config = new java.util.LinkedHashMap<>();
+            copy(designer, config, "provider", "channelId", "channelName", "connectionId",
+                    "connectionName", "messageTypes");
+            config.put("sourceWorkflowKey", sourceKey);
+            return create(CreateTriggerRequest.builder()
+                    .tenantId(workflow.getTenantId())
+                    .userId(UserContextHolder.currentUserId())
+                    .name(text(designer.get("name")) == null
+                            ? workflow.getName() + " message connector" : text(designer.get("name")))
+                    .type(TriggerType.CHANNEL_MESSAGE)
+                    .targetType("workflow")
+                    .targetId(workflow.getId())
+                    .config(config)
+                    .enabled(true)
+                    .build());
+        }
+        if (!"schedule".equalsIgnoreCase(triggerType)) return null;
         Map<String, Object> config = new java.util.LinkedHashMap<>();
         copy(designer, config, "scheduleType", "expression", "runAt", "timeZone", "conversationId");
         config.put("sourceWorkflowKey", sourceKey);
@@ -374,12 +411,24 @@ public class TriggerService {
     }
 
     public String fireAsynchronously(String tenantId, TriggerInvocationRequest request) {
+        return fireAsynchronouslyAs(tenantId, null, request);
+    }
+
+    /**
+     * Fire asynchronously under an explicit execution identity. Channel triggers use
+     * the channel account owner rather than the user who originally published the
+     * workflow. The invocation is persisted before this method returns.
+     */
+    public String fireAsynchronouslyAs(String tenantId, String executionUserId,
+                                       TriggerInvocationRequest request) {
         TriggerEntity trigger = requireEnabled(tenantId, request.triggerId());
         TriggerInvocationEntity invocation = invocationRunner.open(
                 InvocationDraft.initial(request), trigger.getTenantId());
         executor.execute(() -> {
             try {
-                invocationRunner.execute(trigger, invocation, request.payload());
+                invocationRunner.execute(trigger, invocation, request.payload(),
+                        executionUserId == null || executionUserId.isBlank()
+                                ? trigger.getUserId() : executionUserId);
             } catch (Exception exception) {
                 // Persistence infrastructure failures can still escape the runner.
                 logger.error("Async trigger {} failed: {}",

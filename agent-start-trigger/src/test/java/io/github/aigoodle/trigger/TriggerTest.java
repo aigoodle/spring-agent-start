@@ -234,6 +234,45 @@ class TriggerTest {
     }
 
     @Test
+    void publishedStartNodeConnectorBecomesDurableChannelMessageTrigger() {
+        WorkflowGraph graph = new WorkflowGraph();
+        graph.addNode(NodeDef.of("start", NodeType.START)
+                .with("triggersEnabled", true)
+                .with("triggers", Map.of(
+                        "type", "connector",
+                        "provider", "openclaw",
+                        "channelId", "qqbot",
+                        "channelName", "QQ Bot",
+                        "connectionId", "connection-1",
+                        "connectionName", "招生机器人",
+                        "messageTypes", List.of("TEXT", "IMAGE"))));
+        graph.addNode(NodeDef.of("end", NodeType.END).with("outputs", Map.of(
+                "tenantId", "{{#start.triggers.tenantId#}}",
+                "instanceName", "{{#start.triggers.instanceName#}}",
+                "message", "{{#start.message.content#}}")));
+        graph.addEdge(EdgeDef.of("start", "end"));
+        WorkflowEntity workflow = workflowService.save(
+                "app-channel-" + java.util.UUID.randomUUID(), "t", "channel workflow", "workflow", graph);
+
+        TriggerEntity created = triggerService.syncPublishedWorkflowSchedule(workflow, workflowService);
+
+        assertNotNull(created);
+        assertEquals(TriggerType.CHANNEL_MESSAGE, created.getType());
+        assertEquals(workflow.getId(), created.getTargetId());
+        assertEquals("connection-1", triggerService.config(created).get("connectionId"));
+        assertEquals(List.of("TEXT", "IMAGE"), triggerService.config(created).get("messageTypes"));
+
+        DispatchResult result = triggerService.fireSynchronouslyAs("t", "account-owner-1",
+                new TriggerInvocationRequest(created.getId(), Map.of(
+                        "triggers", Map.of("tenantId", "t", "instanceName", "招生机器人"),
+                        "message", Map.of("content", "你好")), "channel_message", "channel:t:connection-1:c1"));
+        assertTrue(result.isSuccess());
+        assertEquals("t", result.getOutputs().get("tenantId"));
+        assertEquals("招生机器人", result.getOutputs().get("instanceName"));
+        assertEquals("你好", result.getOutputs().get("message"));
+    }
+
+    @Test
     void userCanListAndDeleteOnlyOwnedWorkflowSchedules() {
         UserContextHolder.set(CurrentUser.builder().tenantId("tenant-owned").userId("user-a").build());
         ScheduledTaskGateway.ScheduledTaskResult owned = scheduledTaskGateway.createTask(

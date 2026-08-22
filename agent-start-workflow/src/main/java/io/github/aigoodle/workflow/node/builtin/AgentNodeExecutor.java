@@ -9,6 +9,7 @@ import io.github.aigoodle.workflow.graph.NodeType;
 import io.github.aigoodle.workflow.node.ExecutionContext;
 import io.github.aigoodle.workflow.node.NodeExecutor;
 import io.github.aigoodle.workflow.node.NodeResult;
+import io.github.aigoodle.workflow.node.NodeExecutionMode;
 import io.github.aigoodle.workflow.variable.VariableResolver;
 
 import java.util.List;
@@ -30,9 +31,11 @@ public class AgentNodeExecutor implements NodeExecutor {
 
     @Override
     public NodeType type() { return NodeType.AGENT; }
+    @Override public NodeExecutionMode executionMode(NodeDef node) { return NodeExecutionMode.SIDE_EFFECT; }
 
     @Override
     public NodeResult execute(NodeDef node, ExecutionContext context) {
+        context.throwIfCancelled();
         String provider = firstNonBlank(node.getString("modelProvider"), node.getString("provider"));
         String model = firstNonBlank(node.getString("modelName"), node.getString("model"));
         if ((provider == null || model == null) && modelService != null) {
@@ -65,6 +68,7 @@ public class AgentNodeExecutor implements NodeExecutor {
             String query = VariableResolver.render(node.getString("query", "{{#sys.query#}}"), context.getPool());
             AgentResponse response = agentRuntime.run(definition, AgentRequest.builder()
                     .query(query).conversationId(context.getConversationId()).variables(context.getInputs()).build());
+            context.throwIfCancelled();
             if (response.getStatus() != AgentResponse.Status.COMPLETED) {
                 return NodeResult.failure("Agent run ended with status " + response.getStatus());
             }

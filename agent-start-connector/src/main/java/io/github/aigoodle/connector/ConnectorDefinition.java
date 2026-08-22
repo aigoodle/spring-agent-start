@@ -2,6 +2,7 @@ package io.github.aigoodle.connector;
 
 import java.util.List;
 import java.util.Map;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 /** Provider-neutral catalog representation used by UI, agents and workflows. */
 public record ConnectorDefinition(
@@ -33,5 +34,21 @@ public record ConnectorDefinition(
         return actions.stream().filter(action -> action.id().equals(actionId)).findFirst()
                 .orElseThrow(() -> new ConnectorException("connector_action_not_found",
                         "No action '" + actionId + "' in connector " + key.externalForm()));
+    }
+
+    /**
+     * Capability is deliberately separate from riskLevel. Providers declare it in
+     * metadata.capabilities; legacy connectors remain ordinary callable Actions.
+     */
+    @JsonProperty("capabilities")
+    public List<ConnectorCapability> capabilities() {
+        Object configured = metadata.get("capabilities");
+        if (!(configured instanceof List<?> values) || values.isEmpty()) return List.of(ConnectorCapability.ACTION);
+        List<ConnectorCapability> parsed = values.stream().map(String::valueOf).map(String::trim)
+                .map(String::toUpperCase).map(value -> {
+                    try { return ConnectorCapability.valueOf(value); }
+                    catch (IllegalArgumentException ignored) { return null; }
+                }).filter(java.util.Objects::nonNull).distinct().toList();
+        return parsed.isEmpty() ? List.of(ConnectorCapability.ACTION) : parsed;
     }
 }

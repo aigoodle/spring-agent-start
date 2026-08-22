@@ -16,6 +16,11 @@ import java.util.UUID;
 final class SegmentIndexDocumentMapper {
 
     SegmentEntity fromChunk(DatasetEntity dataset, KnowledgeDocumentEntity document, Chunk chunk) {
+        return fromChunk(dataset, document, chunk, dataset.getActiveIndexVersionId());
+    }
+
+    SegmentEntity fromChunk(DatasetEntity dataset, KnowledgeDocumentEntity document, Chunk chunk,
+                            String indexVersionId) {
         Map<String, Object> metadata = new HashMap<>(chunk.getMetadata());
         if (chunk.getParentContent() != null) {
             metadata.put("parentContent", chunk.getParentContent());
@@ -23,6 +28,7 @@ final class SegmentIndexDocumentMapper {
 
         SegmentEntity segment = baseSegment(dataset, document, chunk.getPosition(), chunk.getContent());
         segment.setTokenCount(chunk.tokenCount());
+        segment.setIndexVersionId(indexVersionId);
         segment.setMetadataJson(JsonUtils.toJson(metadata));
         return segment;
     }
@@ -53,6 +59,9 @@ final class SegmentIndexDocumentMapper {
         metadata.put("datasetId", dataset.getId());
         metadata.put("documentId", segment.getDocumentId());
         metadata.put("position", segment.getPosition());
+        if (segment.getIndexVersionId() != null) {
+            metadata.put("indexVersionId", segment.getIndexVersionId());
+        }
         return Document.builder()
                 .id(segment.getVectorId())
                 .text(segment.getContent())

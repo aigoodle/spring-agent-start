@@ -1,6 +1,7 @@
 package io.github.aigoodle.web.common;
 
 import io.github.aigoodle.common.exception.PlatformException;
+import io.github.aigoodle.connector.ConnectorException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -63,6 +64,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse<?>> handleIllegal(IllegalArgumentException ex) {
         return build(ApiErrorCode.BAD_REQUEST, ex.getMessage(), null);
+    }
+
+    @ExceptionHandler(ConnectorException.class)
+    public ResponseEntity<ApiResponse<?>> handleConnector(ConnectorException ex) {
+        log.warn("ConnectorException [{}]: {}", ex.code(), ex.getMessage());
+        return build(ApiErrorCode.UPSTREAM_UNAVAILABLE, ex.getMessage(), Map.of("connectorCode", ex.code()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

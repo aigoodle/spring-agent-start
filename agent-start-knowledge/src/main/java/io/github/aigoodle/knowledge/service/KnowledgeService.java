@@ -224,6 +224,16 @@ public class KnowledgeService {
         return requireDocument(tenantId, datasetId, documentId);
     }
 
+    public KnowledgeDocumentEntity setDocumentEnabled(String tenantId, String datasetId,
+                                                       String documentId, boolean enabled) {
+        DatasetEntity dataset = requireDataset(tenantId, datasetId);
+        KnowledgeDocumentEntity document = requireDocument(tenantId, datasetId, documentId);
+        indexingService.setDocumentEnabled(dataset, documentId, enabled);
+        document.setEnabled(enabled);
+        updateOwned(document);
+        return document;
+    }
+
     public ParsedDocument getParsedDocument(String documentId) {
         return JsonUtils.parse(documentMapper.selectParsedDocumentJson(
                 UserContextHolder.currentTenantId(), documentId), ParsedDocument.class);

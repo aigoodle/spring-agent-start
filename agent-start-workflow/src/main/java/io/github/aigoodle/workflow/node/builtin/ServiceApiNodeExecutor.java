@@ -41,13 +41,16 @@ public class ServiceApiNodeExecutor implements NodeExecutor {
 
     @Override
     public NodeResult execute(NodeDef node, ExecutionContext context) {
+        context.throwIfCancelled();
         ServiceApiRequestFactory.PreparedServiceRequest preparedRequest;
         try {
             preparedRequest = requestFactory.create(node, context);
         } catch (ServiceApiRequestFactory.InvalidServiceRequestException invalidRequest) {
             return NodeResult.failure(invalidRequest.getMessage());
         }
-        return send(preparedRequest);
+        NodeResult result = send(preparedRequest);
+        context.throwIfCancelled();
+        return result;
     }
 
     private NodeResult send(ServiceApiRequestFactory.PreparedServiceRequest preparedRequest) {
@@ -55,6 +58,7 @@ public class ServiceApiNodeExecutor implements NodeExecutor {
             HttpResponse<String> response = httpClient.send(
                     preparedRequest.request(), HttpResponse.BodyHandlers.ofString());
             return NodeResult.empty()
+                    .externalStatus(response.statusCode())
                     .output("status", response.statusCode())
                     .output("body", response.body());
         } catch (IOException transportFailure) {

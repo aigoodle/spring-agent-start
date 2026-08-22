@@ -7,7 +7,9 @@ import io.github.aigoodle.completion.common.SseBridge;
 import io.github.aigoodle.completion.dto.openai.OpenAIChatRequest;
 import io.github.aigoodle.completion.dto.openai.OpenAIChatResponse;
 import io.github.aigoodle.workflow.engine.WorkflowRunResult;
+import io.github.aigoodle.workflow.engine.WorkflowRunStatus;
 import io.github.aigoodle.workflow.service.WorkflowService;
+import io.github.aigoodle.workflow.service.WorkflowSignalResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,8 +28,7 @@ public class WorkflowChatGenerator {
 
     public OpenAIChatResponse generateBlocking(AppEntity application, OpenAIChatRequest request) {
         WorkflowChatContext chatContext = WorkflowChatContext.resolve(application, request, logger);
-        WorkflowRunResult runResult = workflowService.run(
-                chatContext.workflowId(), chatContext.inputs(), chatContext.conversationId());
+        WorkflowRunResult runResult = resumeOrRun(application, request, chatContext);
         requireSuccess(runResult);
 
         String answer = WorkflowAnswerExtractor.extract(runResult);
@@ -45,12 +46,18 @@ public class WorkflowChatGenerator {
 
         WorkflowRunResult runResult;
         try {
-            runResult = workflowService.run(
-                    chatContext.workflowId(),
-                    chatContext.inputs(),
-                    chatContext.conversationId(),
-                    streamSession::nodeFinished,
-                    streamSession.sink());
+            if (request.getHumanInput() != null) {
+                runResult = requireAccepted(workflowService.signal(
+                        application.getTenantId(),
+                        request.getHumanInput().getRunId(),
+                        request.getHumanInput().getResumeToken(),
+                        request.getHumanInput().getEventId(),
+                        request.getHumanInput().getPayload())).runResult();
+            } else {
+                runResult = workflowService.run(
+                        chatContext.workflowId(), chatContext.inputs(), chatContext.conversationId(),
+                        streamSession::nodeFinished, streamSession.sink());
+            }
         } catch (RuntimeException runFailure) {
             logger.warn("Workflow chat run failed for app {}: {}",
                     application.getId(), runFailure.getMessage());
@@ -59,13 +66,37 @@ public class WorkflowChatGenerator {
         }
 
         String persistedAnswer = streamSession.complete(runResult);
-        if (runResult.isSuccess()) {
+        // WAITING is a completed chat turn too: persist the original question,
+        // any direct-output text, and the renderable human-input form. Previously
+        // only SUCCESS was stored, so history started at the later resume request.
+        if (runResult.isSuccess() || runResult.getStatus() == WorkflowRunStatus.WAITING) {
             appendHistory(application.getTenantId(),
                     application.getId(),
                     chatContext.conversationId(),
                     request.lastUserMessage(),
                     persistedAnswer);
         }
+    }
+
+    private WorkflowRunResult resumeOrRun(AppEntity application, OpenAIChatRequest request,
+                                          WorkflowChatContext context) {
+        if (request.getHumanInput() == null) {
+            return workflowService.run(context.workflowId(), context.inputs(), context.conversationId());
+        }
+        return requireAccepted(workflowService.signal(
+                application.getTenantId(),
+                request.getHumanInput().getRunId(), request.getHumanInput().getResumeToken(),
+                request.getHumanInput().getEventId(), request.getHumanInput().getPayload())).runResult();
+    }
+
+    private static WorkflowSignalResult requireAccepted(WorkflowSignalResult signal) {
+        if (signal == null || !signal.accepted() || signal.runResult() == null) {
+            throw new PlatformException("human_input_not_accepted",
+                    signal != null && signal.duplicate()
+                            ? "This human input was already submitted"
+                            : "Workflow did not accept the human input", null);
+        }
+        return signal;
     }
 
     private void appendHistory(String tenantId, String appId, String conversationId,

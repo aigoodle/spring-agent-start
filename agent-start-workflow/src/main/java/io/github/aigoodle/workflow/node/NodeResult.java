@@ -19,6 +19,10 @@ public class NodeResult {
 
     private boolean failed;
     private String error;
+    private WorkflowWaitRequest waitRequest;
+    private Long tokenCount;
+    private String cost;
+    private Integer externalStatus;
 
     public NodeResult output(String key, Object value) {
         outputs.put(key, value);
@@ -27,6 +31,17 @@ public class NodeResult {
 
     public NodeResult handle(String handle) {
         this.handle = handle;
+        return this;
+    }
+
+    public NodeResult usage(Long tokenCount, String cost) {
+        this.tokenCount = tokenCount;
+        this.cost = cost;
+        return this;
+    }
+
+    public NodeResult externalStatus(Integer externalStatus) {
+        this.externalStatus = externalStatus;
         return this;
     }
 
@@ -43,5 +58,15 @@ public class NodeResult {
         result.failed = true;
         result.error = error;
         return result;
+    }
+
+    public static NodeResult waiting(WorkflowWaitRequest request) {
+        NodeResult result = new NodeResult();
+        result.waitRequest = request;
+        return result;
+    }
+
+    public boolean isWaiting() {
+        return waitRequest != null;
     }
 }

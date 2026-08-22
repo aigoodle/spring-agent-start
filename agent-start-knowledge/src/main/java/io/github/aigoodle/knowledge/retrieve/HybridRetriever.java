@@ -195,6 +195,9 @@ public class HybridRetriever {
             return scores;
         }
         for (Document document : documents) {
+            if (!belongsToActiveIndex(dataset, document.getMetadata().get("indexVersionId"))) {
+                continue;
+            }
             Object segmentId = document.getMetadata().get("segmentId");
             if (segmentId != null) {
                 scores.put(segmentId.toString(), document.getScore() == null ? 0.0 : document.getScore());
@@ -217,6 +220,10 @@ public class HybridRetriever {
         List<SegmentEntity> segments = segmentMapper.selectList(new LambdaQueryWrapper<SegmentEntity>()
                 .eq(SegmentEntity::getTenantId, dataset.getTenantId())
                 .eq(SegmentEntity::getDatasetId, dataset.getId())
+                .and(dataset.getActiveIndexVersionId() != null, wrapper -> wrapper
+                        .eq(SegmentEntity::getIndexVersionId, dataset.getActiveIndexVersionId()))
+                .and(dataset.getActiveIndexVersionId() == null, wrapper -> wrapper
+                        .isNull(SegmentEntity::getIndexVersionId))
                 .eq(SegmentEntity::getEnabled, true));
         Map<String, Integer> documentFrequency = documentFrequency(segments);
         for (SegmentEntity segment : segments) {
@@ -227,6 +234,11 @@ public class HybridRetriever {
             }
         }
         return scores;
+    }
+
+    private static boolean belongsToActiveIndex(DatasetEntity dataset, Object vectorIndexVersion) {
+        String active = dataset.getActiveIndexVersionId();
+        return active == null ? vectorIndexVersion == null : active.equals(String.valueOf(vectorIndexVersion));
     }
 
     private Reranker pickReranker(RetrievalConfig config) {

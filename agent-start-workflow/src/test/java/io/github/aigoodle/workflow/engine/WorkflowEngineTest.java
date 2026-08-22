@@ -101,9 +101,11 @@ class WorkflowEngineTest {
             }
         };
         WorkflowEngine tenantAwareEngine = new WorkflowEngine(
-                new NodeExecutorRegistry(List.of(capturingStart)));
+                new NodeExecutorRegistry(List.of(capturingStart, new EndNodeExecutor())));
         WorkflowGraph graph = new WorkflowGraph();
         graph.addNode(NodeDef.of("start", NodeType.START));
+        graph.addNode(NodeDef.of("end", NodeType.END));
+        graph.addEdge(EdgeDef.of("start", "end"));
 
         CurrentUser user = CurrentUser.builder()
                 .userId("user-1")
@@ -133,9 +135,11 @@ class WorkflowEngineTest {
             }
         };
         WorkflowEngine tenantAwareEngine = new WorkflowEngine(
-                new NodeExecutorRegistry(List.of(capturingStart)));
+                new NodeExecutorRegistry(List.of(capturingStart, new EndNodeExecutor())));
         WorkflowGraph graph = new WorkflowGraph();
         graph.addNode(NodeDef.of("start", NodeType.START));
+        graph.addNode(NodeDef.of("end", NodeType.END));
+        graph.addEdge(EdgeDef.of("start", "end"));
 
         WorkflowRunResult result = tenantAwareEngine.run(
                 graph, Map.of(), null, null, null, "stored-workflow-tenant");

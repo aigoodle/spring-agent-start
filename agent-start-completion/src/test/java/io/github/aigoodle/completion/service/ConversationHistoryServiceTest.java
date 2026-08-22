@@ -30,6 +30,8 @@ class ConversationHistoryServiceTest {
         conversation.setTenantId("default");
         conversation.setFromEndUserId("user-1");
         when(conversations.listByApp("default", "app-1")).thenReturn(List.of(conversation));
+        when(memory.history("default", "app-1", "conversation-1", 1)).thenReturn(List.of(
+                item("2", MemoryRole.USER, "Explain the quarterly report")));
         when(memory.history("default", "app-1", "conversation-1", 20)).thenReturn(List.of(
                 item("1", MemoryRole.ASSISTANT, "Hello"),
                 item("2", MemoryRole.USER, "Explain the quarterly report")));

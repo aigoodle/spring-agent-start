@@ -35,6 +35,7 @@ public class ConversationHistoryService {
         }
         MemoryManager memory = memoryManagers.getIfAvailable();
         return conversationService.listByApp(tenantId, appId).stream()
+                .filter(conversation -> hasMessages(conversation, memory))
                 .limit(limit)
                 .map(conversation -> toConversationView(conversation, memory))
                 .toList();
@@ -72,7 +73,18 @@ public class ConversationHistoryService {
         Map<String, Object> view = new LinkedHashMap<>();
         view.put("role", message.role() == null ? null : message.role().name());
         view.put("content", message.content());
+        view.put("createdAt", message.createdAt() == null ? null : message.createdAt().toString());
         return view;
+    }
+
+    private static boolean hasMessages(AppConversationEntity conversation, MemoryManager memory) {
+        if (memory == null) return false;
+        try {
+            return !memory.history(conversation.getTenantId(), conversation.getAppId(),
+                    conversation.getId(), 1).isEmpty();
+        } catch (RuntimeException ignored) {
+            return false;
+        }
     }
 
     private String firstMessageOf(AppConversationEntity conversation, MemoryManager memory) {

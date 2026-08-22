@@ -1,7 +1,6 @@
 package io.github.aigoodle.workflow.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.common.util.JsonUtils;
 import io.github.aigoodle.workflow.graph.WorkflowGraph;
@@ -32,9 +31,12 @@ final class WorkflowGraphCodec {
     }
 
     JsonNode emptyGraph() {
-        ObjectNode emptyGraph = JsonUtils.mapper().createObjectNode();
-        emptyGraph.putArray("nodes");
-        emptyGraph.putArray("edges");
-        return emptyGraph;
+        WorkflowGraph graph = new WorkflowGraph();
+        graph.addNode(io.github.aigoodle.workflow.graph.NodeDef.of("start",
+                io.github.aigoodle.workflow.graph.NodeType.START));
+        graph.addNode(io.github.aigoodle.workflow.graph.NodeDef.of("end",
+                io.github.aigoodle.workflow.graph.NodeType.END));
+        graph.addEdge(io.github.aigoodle.workflow.graph.EdgeDef.of("start", "end"));
+        return write(graph);
     }
 }

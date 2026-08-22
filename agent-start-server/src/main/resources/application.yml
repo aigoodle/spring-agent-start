@@ -160,6 +160,11 @@ logging:
     io.github.aigoodle.trigger.mapper: DEBUG
     io.github.aigoodle.observability.mapper: DEBUG
 
+    # 高频后台轮询只关闭 SQL 明细，避免每秒刷屏；其他 Mapper 仍输出 DEBUG。
+    io.github.aigoodle.workflow.mapper.WorkflowCheckpointMapper: INFO
+    io.github.aigoodle.trigger.mapper.TriggerMapper: INFO
+    io.github.aigoodle.connector.persistence.ChannelEventMapper: INFO
+
     # ---- Spring / WebFlux / 启动 ----
     org.springframework.boot.autoconfigure: WARN
     org.springframework.boot.web: INFO

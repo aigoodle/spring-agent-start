@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import io.github.aigoodle.knowledge.enums.IngestionJobStatus;
 
 /**
  * Sidecar row that carries the "large payload" of an async ingestion task —
@@ -52,6 +53,19 @@ public class DocumentIngestQueueEntity {
 
     /** Number of times a worker tried and failed. 0 = fresh. */
     private Integer retryCount;
+
+    /** Stable submission identity; protected by a database unique index. */
+    private String idempotencyKey;
+
+    private IngestionJobStatus status;
+
+    private String claimedBy;
+
+    private LocalDateTime leaseExpiresAt;
+
+    private LocalDateTime nextAttemptAt;
+
+    private String lastError;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

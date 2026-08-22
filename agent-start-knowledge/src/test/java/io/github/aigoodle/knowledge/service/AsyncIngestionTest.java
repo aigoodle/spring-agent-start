@@ -75,6 +75,11 @@ class AsyncIngestionTest {
         assertEquals(DocumentStatus.PENDING, doc.getStatus(),
                 "Async submission must return with the doc in PENDING state");
 
+        KnowledgeDocumentEntity duplicate = knowledgeService.addText(ds.getTenantId(), ds.getId(), "copy.txt",
+                "Alpha beta gamma. Delta epsilon zeta. Eta theta iota kappa. "
+                        + "Repeat: alpha beta gamma delta epsilon zeta eta theta.");
+        assertEquals(doc.getId(), duplicate.getId(), "Identical async submissions must be idempotent");
+
         // Sidecar row must be present so the worker has raw_text to consume.
         DocumentIngestQueueEntity task = queueMapper.selectOne(
                 new LambdaQueryWrapper<DocumentIngestQueueEntity>()

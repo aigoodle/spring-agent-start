@@ -60,17 +60,30 @@ public class IterationNodeExecutor implements NodeExecutor {
         IterationConfiguration configuration = IterationConfiguration.from(node);
         WorkflowEngine workflowEngine = engineSupplier.get();
         List<Object> collectedOutputs = new ArrayList<>(items.size());
-        for (int index = 0; index < items.size(); index++) {
+        int startIndex = 0;
+        Object durableCursor = context.iterationCursor(node.getId());
+        if (durableCursor instanceof Map<?, ?> cursor) {
+            Object nextIndex = cursor.get("nextIndex");
+            if (nextIndex instanceof Number number) startIndex = Math.max(0, number.intValue());
+            Object priorOutputs = cursor.get("outputs");
+            if (priorOutputs instanceof List<?> list) collectedOutputs.addAll(list);
+        }
+        for (int index = startIndex; index < items.size(); index++) {
+            context.throwIfCancelled();
             Map<String, Object> iterationInputs = configuration.inputsFor(items.get(index), index);
             WorkflowRunResult iterationResult = workflowEngine.run(
                     subGraph, iterationInputs, context.getConversationId(), null, null,
                     context.getTenantId());
             if (iterationResult.isSuccess()) {
                 collectedOutputs.add(iterationResult.getOutputs());
+                context.checkpointIteration(node.getId(), Map.of(
+                        "nextIndex", index + 1, "outputs", new ArrayList<>(collectedOutputs)));
                 continue;
             }
             if (configuration.continueOnError()) {
                 collectedOutputs.add(null);
+                context.checkpointIteration(node.getId(), Map.of(
+                        "nextIndex", index + 1, "outputs", new ArrayList<>(collectedOutputs)));
                 continue;
             }
             return NodeResult.failure(

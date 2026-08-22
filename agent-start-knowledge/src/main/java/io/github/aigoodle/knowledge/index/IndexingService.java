@@ -34,23 +34,71 @@ public class IndexingService {
     }
 
     public int index(DatasetEntity dataset, KnowledgeDocumentEntity document, List<Chunk> chunks) {
+        return index(dataset, document, chunks, dataset.getActiveIndexVersionId());
+    }
+
+    /** Writes into a rebuilding generation without making it visible to queries. */
+    public int index(DatasetEntity dataset, KnowledgeDocumentEntity document, List<Chunk> chunks,
+                     String indexVersionId) {
         List<Document> vectorDocuments = new ArrayList<>();
+        List<String> insertedSegmentIds = new ArrayList<>();
         boolean vectorIndexAvailable = vectorStoreManager.hasVectorIndex(dataset);
 
-        for (Chunk chunk : chunks) {
-            SegmentEntity segment = documentMapper.fromChunk(dataset, document, chunk);
-            segmentMapper.insert(segment);
+        // A retried at-least-once job replaces its own incomplete generation.
+        List<SegmentEntity> stale = segmentMapper.selectList(new LambdaQueryWrapper<SegmentEntity>()
+                .eq(SegmentEntity::getTenantId, dataset.getTenantId())
+                .eq(SegmentEntity::getDocumentId, document.getId())
+                .eq(indexVersionId != null, SegmentEntity::getIndexVersionId, indexVersionId)
+                .isNull(indexVersionId == null, SegmentEntity::getIndexVersionId));
+        if (!stale.isEmpty()) {
             if (vectorIndexAvailable) {
-                vectorDocuments.add(documentMapper.toVectorDocument(dataset, segment));
+                try {
+                    vectorStoreManager.getStore(dataset).delete(stale.stream()
+                            .map(SegmentEntity::getVectorId).filter(java.util.Objects::nonNull).toList());
+                } catch (Exception exception) {
+                    logger.warn("Failed to clean stale vectors before retrying document {}: {}",
+                            document.getId(), exception.getMessage());
+                }
             }
+            segmentMapper.delete(new LambdaQueryWrapper<SegmentEntity>()
+                    .eq(SegmentEntity::getTenantId, dataset.getTenantId())
+                    .in(SegmentEntity::getId, stale.stream().map(SegmentEntity::getId).toList()));
         }
 
-        if (!vectorDocuments.isEmpty()) {
-            logger.debug("Embedding and storing {} vectors for document {}",
-                    vectorDocuments.size(), document.getId());
-            vectorStoreManager.getStore(dataset).add(vectorDocuments);
+        try {
+            for (Chunk chunk : chunks) {
+                SegmentEntity segment = documentMapper.fromChunk(dataset, document, chunk, indexVersionId);
+                segmentMapper.insert(segment);
+                insertedSegmentIds.add(segment.getId());
+                if (vectorIndexAvailable) {
+                    vectorDocuments.add(documentMapper.toVectorDocument(dataset, segment));
+                }
+            }
+
+            if (!vectorDocuments.isEmpty()) {
+                logger.debug("Embedding and storing {} vectors for document {}",
+                        vectorDocuments.size(), document.getId());
+                vectorStoreManager.getStore(dataset).add(vectorDocuments);
+            }
+            return chunks.size();
+        } catch (RuntimeException exception) {
+            // DB succeeded but vector write failed: remove both sides before retry.
+            if (!vectorDocuments.isEmpty()) {
+                try {
+                    vectorStoreManager.getStore(dataset).delete(vectorDocuments.stream()
+                            .map(Document::getId).toList());
+                } catch (Exception cleanupFailure) {
+                    logger.warn("Orphan vector cleanup failed for document {}: {}",
+                            document.getId(), cleanupFailure.getMessage());
+                }
+            }
+            if (!insertedSegmentIds.isEmpty()) {
+                segmentMapper.delete(new LambdaQueryWrapper<SegmentEntity>()
+                        .eq(SegmentEntity::getTenantId, dataset.getTenantId())
+                        .in(SegmentEntity::getId, insertedSegmentIds));
+            }
+            throw exception;
         }
-        return chunks.size();
     }
 
     /** Read paginated segments for a document — powers the frontend "chunks" tab. */
@@ -161,6 +209,34 @@ public class IndexingService {
             }
         }
         return segment;
+    }
+
+    /** Enables/disables every segment and vector belonging to a document. */
+    public int setDocumentEnabled(DatasetEntity dataset, String documentId, boolean enabled) {
+        List<SegmentEntity> segments = segmentMapper.selectList(new LambdaQueryWrapper<SegmentEntity>()
+                .eq(SegmentEntity::getTenantId, dataset.getTenantId())
+                .eq(SegmentEntity::getDocumentId, documentId));
+        int changed = 0;
+        for (SegmentEntity segment : segments) {
+            if (Boolean.TRUE.equals(segment.getEnabled()) == enabled) continue;
+            segment.setEnabled(enabled);
+            updateOwned(segment);
+            changed++;
+            if (!vectorStoreManager.hasVectorIndex(dataset)) continue;
+            try {
+                if (enabled) {
+                    vectorStoreManager.getStore(dataset).add(
+                            List.of(documentMapper.toVectorDocument(dataset, segment)));
+                } else if (segment.getVectorId() != null) {
+                    vectorStoreManager.getStore(dataset).delete(List.of(segment.getVectorId()));
+                }
+            } catch (Exception exception) {
+                logger.warn("Failed to synchronize document {} segment {} enabled={}: {}",
+                        documentId, segment.getId(), enabled, exception.getMessage());
+                throw exception;
+            }
+        }
+        return changed;
     }
 
     public SegmentEntity getSegment(String segmentId) {

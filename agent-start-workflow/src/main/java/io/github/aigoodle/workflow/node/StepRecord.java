@@ -5,6 +5,7 @@ import io.github.aigoodle.workflow.graph.NodeType;
 import lombok.Data;
 
 import java.util.Map;
+import java.time.Instant;
 
 /**
  * One executed node, captured for observability / debugging / replay.
@@ -20,8 +21,21 @@ public class StepRecord {
     private long elapsedMillis;
     private boolean failed;
     private String error;
+    private int attempt;
+    private Instant startedAt;
+    private Instant finishedAt;
+    private Long tokenCount;
+    private String cost;
+    private Integer externalStatus;
+    private String traceId;
+    private String spanId;
 
     public static StepRecord completed(NodeDef node, NodeResult result, long elapsedMillis) {
+        return completed(node, result, elapsedMillis, 1, Instant.now().minusMillis(elapsedMillis), Instant.now());
+    }
+
+    public static StepRecord completed(NodeDef node, NodeResult result, long elapsedMillis, int attempt,
+                                       Instant startedAt, Instant finishedAt) {
         StepRecord step = new StepRecord();
         step.nodeId = node.getId();
         step.nodeType = node.getType();
@@ -31,6 +45,14 @@ public class StepRecord {
         step.elapsedMillis = elapsedMillis;
         step.failed = result.isFailed();
         step.error = result.getError();
+        step.attempt = attempt;
+        step.startedAt = startedAt;
+        step.finishedAt = finishedAt;
+        step.tokenCount = result.getTokenCount();
+        step.cost = result.getCost();
+        step.externalStatus = result.getExternalStatus();
+        step.traceId = org.slf4j.MDC.get("traceId");
+        step.spanId = org.slf4j.MDC.get("spanId");
         return step;
     }
 }

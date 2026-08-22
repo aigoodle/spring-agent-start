@@ -27,7 +27,7 @@ public record ChannelDefinition(
         description = description == null || description.isBlank() ? name : description;
         runtimeStatus = runtimeStatus == null || runtimeStatus.isBlank() ? "UNKNOWN" : runtimeStatus;
         uiSchema = immutableWithoutNulls(uiSchema);
-        capabilities = immutableWithoutNulls(capabilities);
+        capabilities = immutableWithoutNulls(ChannelInteractionCapabilities.normalize(channelId, capabilities));
         metadata = immutableWithoutNulls(metadata);
     }
 

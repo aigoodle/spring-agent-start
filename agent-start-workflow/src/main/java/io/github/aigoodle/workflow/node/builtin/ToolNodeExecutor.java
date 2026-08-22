@@ -8,6 +8,7 @@ import io.github.aigoodle.workflow.graph.NodeType;
 import io.github.aigoodle.workflow.node.ExecutionContext;
 import io.github.aigoodle.workflow.node.NodeExecutor;
 import io.github.aigoodle.workflow.node.NodeResult;
+import io.github.aigoodle.workflow.node.NodeExecutionMode;
 import io.github.aigoodle.workflow.variable.VariableResolver;
 
 import java.util.HashMap;
@@ -38,8 +39,11 @@ public class ToolNodeExecutor implements NodeExecutor {
         return NodeType.TOOL;
     }
 
+    @Override public NodeExecutionMode executionMode(NodeDef node) { return NodeExecutionMode.SIDE_EFFECT; }
+
     @Override
     public NodeResult execute(NodeDef node, ExecutionContext context) {
+        context.throwIfCancelled();
         String toolName = node.getString("tool");
         if (toolName == null) {
             return NodeResult.failure("Tool node requires a 'tool' name");
@@ -57,7 +61,9 @@ public class ToolNodeExecutor implements NodeExecutor {
         }
         Object toolResult = executionGateway.execute(toolRegistry.get(toolName), resolvedArguments,
                 new ToolExecutionContext(context.getRunId(), context.getTenantId(),
-                        node.getId(), context.getConversationId(), Map.of("nodeType", "TOOL")));
+                        node.getId(), context.getConversationId(), Map.of(
+                        "nodeType", "TOOL", "idempotencyKey", context.getRunId() + ":" + node.getId())));
+        context.throwIfCancelled();
         return NodeResult.of(node.getString("outputKey", "result"), toolResult);
     }
 }

@@ -68,6 +68,15 @@ final class HttpNodeRequestFactory {
                         1, node.getInt("timeoutSeconds", DEFAULT_TIMEOUT_SECONDS))));
         Set<String> configuredHeaders = applyHeaders(
                 requestBuilder, node.get("headers"), context);
+        if (!method.equals("GET") && !method.equals("HEAD") && !method.equals("OPTIONS")
+                && !configuredHeaders.contains("idempotency-key")) {
+            String configuredKey = node.getString("idempotencyKey");
+            String key = configuredKey == null || configuredKey.isBlank()
+                    ? context.getRunId() + ":" + node.getId()
+                    : VariableResolver.render(configuredKey, context.getPool());
+            requestBuilder.header("Idempotency-Key", key);
+            configuredHeaders.add("idempotency-key");
+        }
         applyAuthorization(
                 requestBuilder, node.get("authorization"), context, configuredHeaders);
 

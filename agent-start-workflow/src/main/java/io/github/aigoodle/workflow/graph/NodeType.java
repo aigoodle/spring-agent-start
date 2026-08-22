@@ -38,7 +38,11 @@ public enum NodeType {
     ITERATION,
     CODE,
     CONNECTOR,
-    TOOL;
+    TOOL,
+    HUMAN_INPUT,
+    APPROVAL,
+    WAIT_EVENT,
+    SLEEP_UNTIL;
 
     /**
      * Designer / Dify-parity aliases mapped onto the engine's canonical enum
@@ -61,7 +65,6 @@ public enum NodeType {
             // onto START — they're the graph's entry point in disguise.
             Map.entry("USER-INPUT", START),
             Map.entry("USER_INPUT", START),
-            Map.entry("HUMAN_INPUT", START),
             Map.entry("FILE-UPLOAD", START),
             Map.entry("FILE_UPLOAD", START)
     );

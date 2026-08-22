@@ -6,6 +6,7 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 import java.util.List;
 import java.util.Map;
 
@@ -48,9 +49,18 @@ public class RestOpenClawGatewayClient implements OpenClawGatewayClient {
                 .body(OpenClawDtos.InvokeResponse.class));
     }
     @Override public OpenClawDtos.PluginInfo install(OpenClawDtos.InstallRequest request) {
-        return required(client.post().uri(ROOT + "/plugins/install")
-                .contentType(MediaType.APPLICATION_JSON).body(request).retrieve()
-                .body(OpenClawDtos.PluginInfo.class));
+        try {
+            return required(client.post().uri(ROOT + "/plugins/install")
+                    .contentType(MediaType.APPLICATION_JSON).body(request).retrieve()
+                    .body(OpenClawDtos.PluginInfo.class));
+        } catch (RestClientResponseException failure) {
+            Map<?, ?> body = failure.getResponseBodyAs(Map.class);
+            String code = body == null ? "openclaw_install_failed"
+                    : String.valueOf(body.containsKey("code") ? body.get("code") : "openclaw_install_failed");
+            String message = body == null ? failure.getStatusText()
+                    : String.valueOf(body.containsKey("message") ? body.get("message") : failure.getStatusText());
+            throw new ConnectorException(code, message, failure);
+        }
     }
     @Override public OpenClawDtos.PluginInfo configure(String pluginId, Map<String, Object> config) {
         return required(client.put().uri(ROOT + "/plugins/{id}/config", pluginId)

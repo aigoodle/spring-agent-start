@@ -51,7 +51,13 @@ final class WorkflowRunStore {
 
     private void record(RunRecord record) {
         try {
-            workflowRunMapper.insert(toEntity(record));
+            WorkflowRunEntity entity = toEntity(record);
+            if (workflowRunMapper.update(entity,
+                    new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<WorkflowRunEntity>()
+                            .eq(WorkflowRunEntity::getTenantId, entity.getTenantId())
+                            .eq(WorkflowRunEntity::getId, entity.getId())) == 0) {
+                workflowRunMapper.insert(entity);
+            }
         } catch (Exception exception) {
             // A failed observability write must not turn a completed workflow into a failed run.
             log.warn("Could not persist workflow run {}: {}",
@@ -66,12 +72,33 @@ final class WorkflowRunStore {
         entity.setTenantId(record.tenantId());
         entity.setWorkflowId(record.workflowId());
         entity.setConversationId(record.conversationId());
-        entity.setStatus(result.isSuccess() ? STATUS_SUCCESS : STATUS_FAILED);
-        entity.setInputsJson(JsonUtils.toJson(record.inputs()));
-        entity.setOutputsJson(JsonUtils.toJson(result.getOutputs()));
-        entity.setStepsJson(JsonUtils.toJson(result.getSteps()));
+        entity.setStatus(result.isSuccess() ? STATUS_SUCCESS
+                : result.getStatus() == null ? STATUS_FAILED : result.getStatus().name());
+        entity.setInputsJson(WorkflowDataSanitizer.summary(record.inputs()));
+        entity.setOutputsJson(WorkflowDataSanitizer.summary(result.getOutputs()));
+        entity.setStepsJson(JsonUtils.toJson(result.getSteps().stream()
+                .map(WorkflowRunStore::stepSummary).toList()));
         entity.setError(result.getError());
         return entity;
+    }
+
+    private static Map<String, Object> stepSummary(io.github.aigoodle.workflow.node.StepRecord step) {
+        Map<String, Object> value = new java.util.LinkedHashMap<>();
+        value.put("nodeId", step.getNodeId());
+        value.put("nodeType", step.getNodeType());
+        value.put("attempt", step.getAttempt());
+        value.put("startedAt", step.getStartedAt());
+        value.put("finishedAt", step.getFinishedAt());
+        value.put("elapsedMillis", step.getElapsedMillis());
+        value.put("failed", step.isFailed());
+        value.put("tokenCount", step.getTokenCount());
+        value.put("cost", step.getCost());
+        value.put("externalStatus", step.getExternalStatus());
+        value.put("traceId", step.getTraceId());
+        value.put("spanId", step.getSpanId());
+        value.put("outputSummary", WorkflowDataSanitizer.summary(step.getOutputs()));
+        value.put("error", step.getError());
+        return value;
     }
 
     private record RunRecord(

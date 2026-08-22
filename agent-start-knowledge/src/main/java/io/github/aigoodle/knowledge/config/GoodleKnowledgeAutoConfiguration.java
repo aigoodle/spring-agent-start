@@ -4,16 +4,20 @@ import io.github.aigoodle.knowledge.async.DocumentIngestionListener;
 import io.github.aigoodle.knowledge.async.DocumentIngestionQueue;
 import io.github.aigoodle.knowledge.async.DocumentIngestionRunner;
 import io.github.aigoodle.knowledge.async.KnowledgeQueueNames;
+import io.github.aigoodle.knowledge.async.IngestionJobCoordinator;
+import io.github.aigoodle.knowledge.async.IngestionRecoveryService;
 import io.github.aigoodle.knowledge.async.RabbitDocumentIngestionQueue;
 import io.github.aigoodle.knowledge.async.SyncDocumentIngestionQueue;
 import io.github.aigoodle.knowledge.chunk.Chunker;
 import io.github.aigoodle.knowledge.chunk.ChunkerRegistry;
 import io.github.aigoodle.knowledge.index.IndexingService;
+import io.github.aigoodle.knowledge.index.IndexVersionService;
 import io.github.aigoodle.knowledge.index.JdbcVectorStoreFactory;
 import io.github.aigoodle.knowledge.index.VectorStoreFactory;
 import io.github.aigoodle.knowledge.index.VectorStoreManager;
 import io.github.aigoodle.knowledge.mapper.DatasetMapper;
 import io.github.aigoodle.knowledge.mapper.DocumentIngestQueueMapper;
+import io.github.aigoodle.knowledge.mapper.IndexVersionMapper;
 import io.github.aigoodle.knowledge.mapper.KnowledgeDocumentMapper;
 import io.github.aigoodle.knowledge.mapper.SegmentMapper;
 import io.github.aigoodle.knowledge.reader.DocumentExtractor;
@@ -38,6 +42,8 @@ import io.github.aigoodle.knowledge.rerank.WeightedRerankerSettings;
 import io.github.aigoodle.knowledge.retrieve.HybridRetriever;
 import io.github.aigoodle.knowledge.retrieve.DefaultQueryTransformer;
 import io.github.aigoodle.knowledge.retrieve.QueryTransformer;
+import io.github.aigoodle.knowledge.eval.RetrievalEvaluator;
+import io.github.aigoodle.knowledge.eval.RetrievalRegressionGate;
 import io.github.aigoodle.knowledge.service.DatasetService;
 import io.github.aigoodle.knowledge.service.KnowledgeService;
 import io.github.aigoodle.model.config.GoodleModelAutoConfiguration;
@@ -53,6 +59,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.time.Duration;
 
 /**
  * Auto-configuration for the knowledge module. Builds on the model module
@@ -207,11 +214,30 @@ public class GoodleKnowledgeAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    public IndexVersionService indexVersionService(IndexVersionMapper indexVersionMapper,
+                                                   DatasetMapper datasetMapper) {
+        return new IndexVersionService(indexVersionMapper, datasetMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     public HybridRetriever hybridRetriever(SegmentMapper segmentMapper, VectorStoreManager vectorStoreManager,
                                            RerankerRegistry rerankerRegistry,
                                            ObjectProvider<QueryTransformer> queryTransformers) {
         return new HybridRetriever(segmentMapper, vectorStoreManager, rerankerRegistry,
                 queryTransformers.orderedStream().toList());
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public RetrievalEvaluator retrievalEvaluator() {
+        return new RetrievalEvaluator();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public RetrievalRegressionGate retrievalRegressionGate() {
+        return new RetrievalRegressionGate();
     }
 
     @Bean
@@ -265,13 +291,32 @@ public class GoodleKnowledgeAutoConfiguration {
     @Bean
     @ConditionalOnProperty(prefix = "spring-agent.knowledge.async", name = "enabled", havingValue = "true")
     @ConditionalOnMissingBean
+    public IngestionJobCoordinator ingestionJobCoordinator(DocumentIngestQueueMapper queueMapper,
+            @Value("${spring-agent.knowledge.async.lease-duration:PT5M}") Duration leaseDuration,
+            @Value("${spring-agent.knowledge.async.retry-base-delay:PT2S}") Duration baseDelay,
+            @Value("${spring-agent.knowledge.async.max-attempts:5}") int maxAttempts) {
+        return new IngestionJobCoordinator(queueMapper, leaseDuration, baseDelay, maxAttempts);
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "spring-agent.knowledge.async", name = "enabled", havingValue = "true")
+    @ConditionalOnMissingBean
     public DocumentIngestionRunner documentIngestionRunner(DatasetService datasetService,
                                                            KnowledgeDocumentMapper documentMapper,
                                                            DocumentIngestQueueMapper queueMapper,
                                                            ChunkerRegistry chunkerRegistry,
-                                                           IndexingService indexingService) {
+                                                           IndexingService indexingService,
+                                                           IngestionJobCoordinator coordinator) {
         return new DocumentIngestionRunner(datasetService, documentMapper, queueMapper,
-                chunkerRegistry, indexingService);
+                chunkerRegistry, indexingService, coordinator);
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "spring-agent.knowledge.async", name = "enabled", havingValue = "true")
+    @ConditionalOnMissingBean
+    public IngestionRecoveryService ingestionRecoveryService(IngestionJobCoordinator coordinator,
+                                                              DocumentIngestionQueue queue) {
+        return new IngestionRecoveryService(coordinator, queue);
     }
 
     /**

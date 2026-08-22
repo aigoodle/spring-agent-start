@@ -75,6 +75,14 @@ public class AppConversationService {
     @Transactional
     public AppConversationEntity ensure(String conversationId, String appId,
                                      String tenantId, String firstMessage) {
+        return ensure(conversationId, appId, tenantId, firstMessage, "web", null);
+    }
+
+    /** Idempotent channel-aware conversation creation. */
+    @Transactional
+    public AppConversationEntity ensure(String conversationId, String appId,
+                                     String tenantId, String firstMessage,
+                                     String source, String endUserId) {
         String tenant = resolveTenantId(tenantId);
         AppConversationEntity existingConversation = conversationMapper.selectOne(
                 new LambdaQueryWrapper<AppConversationEntity>()
@@ -97,7 +105,8 @@ public class AppConversationService {
         newConversation.setName(truncate(firstMessage, GENERATED_NAME_MAX_LENGTH));
         newConversation.setStatus("normal");
         newConversation.setPinned(false);
-        newConversation.setFromSource("web");
+        newConversation.setFromSource(source == null || source.isBlank() ? "web" : source);
+        newConversation.setFromEndUserId(endUserId);
         conversationMapper.insert(newConversation);
         return newConversation;
     }

@@ -2,10 +2,12 @@ package io.github.aigoodle.workflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.JsonNode;
+import io.github.aigoodle.agent.service.AppConversationService;
 import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.common.context.UserContextHolder;
 import io.github.aigoodle.workflow.chat.ChatStreamSink;
 import io.github.aigoodle.workflow.engine.WorkflowEngine;
+import io.github.aigoodle.workflow.engine.WorkflowCompiler;
 import io.github.aigoodle.workflow.engine.WorkflowRunResult;
 import io.github.aigoodle.workflow.entity.WorkflowEntity;
 import io.github.aigoodle.workflow.entity.WorkflowRunEntity;
@@ -14,6 +16,7 @@ import io.github.aigoodle.workflow.mapper.WorkflowMapper;
 import io.github.aigoodle.workflow.mapper.WorkflowRunMapper;
 import io.github.aigoodle.workflow.node.StepRecord;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.ObjectProvider;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -32,13 +35,30 @@ public class WorkflowService {
     private final WorkflowEngine workflowEngine;
     private final WorkflowGraphCodec graphCodec;
     private final WorkflowRunStore runStore;
+    private final WorkflowCompiler workflowCompiler;
+    private final PersistentWorkflowRunner persistentRunner;
+    private final ObjectProvider<AppConversationService> conversationServices;
 
     public WorkflowService(WorkflowMapper workflowMapper, WorkflowRunMapper runMapper,
                            WorkflowEngine workflowEngine) {
+        this(workflowMapper, runMapper, workflowEngine, null);
+    }
+
+    public WorkflowService(WorkflowMapper workflowMapper, WorkflowRunMapper runMapper,
+                           WorkflowEngine workflowEngine, PersistentWorkflowRunner persistentRunner) {
+        this(workflowMapper, runMapper, workflowEngine, persistentRunner, null);
+    }
+
+    public WorkflowService(WorkflowMapper workflowMapper, WorkflowRunMapper runMapper,
+                           WorkflowEngine workflowEngine, PersistentWorkflowRunner persistentRunner,
+                           ObjectProvider<AppConversationService> conversationServices) {
         this.workflowMapper = workflowMapper;
         this.workflowEngine = workflowEngine;
         this.graphCodec = new WorkflowGraphCodec();
         this.runStore = new WorkflowRunStore(runMapper);
+        this.workflowCompiler = new WorkflowCompiler();
+        this.persistentRunner = persistentRunner;
+        this.conversationServices = conversationServices;
     }
 
     public WorkflowEntity save(String appId, String tenantId, String name, String mode,
@@ -219,6 +239,7 @@ public class WorkflowService {
                     "draft_not_found", "No draft workflow for app " + appId + "; nothing to publish", null);
         }
 
+        workflowCompiler.compile(graphOf(draft));
         WorkflowEntity snapshot = WorkflowEntityFactory.publishedSnapshot(
                 draft, publication, LocalDateTime.now().toString());
         workflowMapper.insert(snapshot);
@@ -231,6 +252,7 @@ public class WorkflowService {
         if (draft == null) {
             throw new PlatformException("draft_not_found", "No draft workflow for app " + appId, null);
         }
+        workflowCompiler.compile(graphOf(draft));
         WorkflowEntity snapshot = WorkflowEntityFactory.publishedSnapshot(
                 draft, publication, LocalDateTime.now().toString());
         workflowMapper.insert(snapshot);
@@ -356,11 +378,76 @@ public class WorkflowService {
                 workflow.getAppId() == null ? workflowId : workflow.getAppId());
         scopedInputs.putIfAbsent("_memory_tenant_id",
                 workflow.getTenantId() == null ? "default" : workflow.getTenantId());
-        WorkflowRunResult result = workflowEngine.run(
-                graph, scopedInputs, conversationId, stepListener, chatSink,
-                workflow.getTenantId());
+        ensureChannelConversation(workflow, scopedInputs, conversationId);
+        WorkflowRunResult result = persistentRunner == null
+                ? workflowEngine.run(graph, scopedInputs, conversationId, stepListener, chatSink,
+                        workflow.getTenantId())
+                : persistentRunner.start(workflow.getTenantId(), workflowId, workflow.getVersion(), graph,
+                        scopedInputs, conversationId, io.github.aigoodle.workflow.engine.WorkflowRunOptions.defaults(),
+                        stepListener, chatSink);
         runStore.recordStoredRun(workflow.getTenantId(), workflowId, conversationId, scopedInputs, result);
         return result;
+    }
+
+    private void ensureChannelConversation(WorkflowEntity workflow, Map<String, Object> inputs,
+                                           String conversationId) {
+        if (!Boolean.parseBoolean(String.valueOf(inputs.get("_channel_conversation")))
+                || conversationId == null || conversationId.isBlank()
+                || workflow.getAppId() == null || conversationServices == null) return;
+        AppConversationService conversations = conversationServices.getIfAvailable();
+        if (conversations == null) return;
+        try {
+            conversations.ensure(conversationId, workflow.getAppId(), workflow.getTenantId(),
+                    text(inputs.get("query")), "channel",
+                    text(inputs.get("_conversation_sender_id")));
+        } catch (RuntimeException exception) {
+            // Conversation indexing must not prevent the workflow from running.
+        }
+    }
+
+    private static String text(Object value) {
+        return value == null || String.valueOf(value).isBlank() ? null : String.valueOf(value);
+    }
+
+    public WorkflowRunResult resume(String tenantId, String runId) {
+        if (persistentRunner == null) {
+            throw new PlatformException("resume_unavailable", "Persistent workflow runner is not configured", null);
+        }
+        WorkflowRunResult result = persistentRunner.resume(defaultIfBlank(tenantId, DEFAULT_TENANT), runId,
+                io.github.aigoodle.workflow.engine.WorkflowRunOptions.defaults());
+        runStore.recordStoredRun(defaultIfBlank(tenantId, DEFAULT_TENANT), null, null, Map.of(), result);
+        return result;
+    }
+
+    public boolean cancel(String tenantId, String runId, String reason) {
+        if (persistentRunner == null) return false;
+        return persistentRunner.cancel(defaultIfBlank(tenantId, DEFAULT_TENANT), runId, reason);
+    }
+
+    public boolean pause(String tenantId, String runId, String reason) {
+        if (persistentRunner == null) return false;
+        return persistentRunner.pause(defaultIfBlank(tenantId, DEFAULT_TENANT), runId, reason);
+    }
+
+    public WorkflowSignalResult signal(String tenantId, String runId, String resumeToken,
+                                       String eventId, Map<String, Object> payload) {
+        if (persistentRunner == null) {
+            throw new PlatformException("resume_unavailable", "Persistent workflow runner is not configured", null);
+        }
+        return persistentRunner.signal(defaultIfBlank(tenantId, DEFAULT_TENANT), runId,
+                resumeToken, eventId, payload,
+                io.github.aigoodle.workflow.engine.WorkflowRunOptions.defaults());
+    }
+
+    public WorkflowSignalResult signalByCorrelation(String tenantId, String correlationKey,
+                                                     String resumeToken, String eventId,
+                                                     Map<String, Object> payload) {
+        if (persistentRunner == null) {
+            throw new PlatformException("resume_unavailable", "Persistent workflow runner is not configured", null);
+        }
+        return persistentRunner.signalByCorrelation(defaultIfBlank(tenantId, DEFAULT_TENANT), correlationKey,
+                resumeToken, eventId, payload,
+                io.github.aigoodle.workflow.engine.WorkflowRunOptions.defaults());
     }
 
     private WorkflowRunResult executeAdHoc(WorkflowGraph graph, Map<String, Object> inputs,

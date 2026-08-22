@@ -22,7 +22,8 @@ public final class WorkflowNodeCatalog {
 
     private static String categoryOf(NodeType nodeType) {
         return switch (nodeType) {
-            case START, END, ANSWER, IF_ELSE, ITERATION -> "flow";
+            case START, END, ANSWER, IF_ELSE, ITERATION,
+                    HUMAN_INPUT, APPROVAL, WAIT_EVENT, SLEEP_UNTIL -> "flow";
             case TEMPLATE_TRANSFORM, VARIABLE_ASSIGNER, VARIABLE_AGGREGATOR, LIST_OPERATOR, CODE -> "data";
             case HTTP_REQUEST, SERVICE_API, SCHEDULE_TRIGGER, DOCUMENT_EXTRACTOR,
                     KNOWLEDGE_RETRIEVAL, CONNECTOR, TOOL -> "io";

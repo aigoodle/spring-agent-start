@@ -2,6 +2,8 @@ package io.github.aigoodle.connector;
 
 import java.time.Duration;
 import java.util.Map;
+import java.util.List;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 /** One callable operation contributed by a connector. */
 public record ConnectorActionDefinition(
@@ -23,5 +25,18 @@ public record ConnectorActionDefinition(
                 ? "{\"type\":\"object\",\"properties\":{},\"additionalProperties\":true}" : inputSchema;
         riskLevel = riskLevel == null ? ConnectorRiskLevel.WRITE : riskLevel;
         metadata = metadata == null ? Map.of() : Map.copyOf(metadata);
+    }
+
+    @JsonProperty("capabilities")
+    public List<ConnectorCapability> capabilities() {
+        Object configured = metadata.get("capabilities");
+        if (configured instanceof List<?> values) {
+            List<ConnectorCapability> parsed = values.stream().map(String::valueOf).map(String::toUpperCase)
+                    .map(value -> { try { return ConnectorCapability.valueOf(value); }
+                    catch (IllegalArgumentException ignored) { return null; } })
+                    .filter(java.util.Objects::nonNull).distinct().toList();
+            if (!parsed.isEmpty()) return parsed;
+        }
+        return List.of(ConnectorCapability.ACTION);
     }
 }

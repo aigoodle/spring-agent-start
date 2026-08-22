@@ -10,6 +10,8 @@ import io.github.aigoodle.workflow.node.ExecutionContext;
 import io.github.aigoodle.workflow.node.NodeExecutor;
 import io.github.aigoodle.workflow.node.NodeResult;
 import io.github.aigoodle.workflow.node.StepRecord;
+import io.github.aigoodle.workflow.node.NodeExecutionPolicy;
+import io.github.aigoodle.workflow.node.WorkflowWaitRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,9 +26,15 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.time.Duration;
+import java.time.Instant;
 
 /**
  * Executes a {@link WorkflowGraph} as a DAG: independent branches run in parallel.
@@ -55,11 +63,24 @@ public class WorkflowEngine {
 
     private static final Logger log = LoggerFactory.getLogger(WorkflowEngine.class);
     private static final int MAX_STEPS = 1000;
+    private static final ScheduledExecutorService DEADLINE_SCHEDULER =
+            Executors.newSingleThreadScheduledExecutor(Thread.ofPlatform()
+                    .daemon(true).name("workflow-deadlines").factory());
 
     private final NodeExecutorRegistry executorRegistry;
+    private final WorkflowCompiler compiler;
 
     public WorkflowEngine(NodeExecutorRegistry executorRegistry) {
+        this(executorRegistry, new WorkflowCompiler());
+    }
+
+    public WorkflowEngine(NodeExecutorRegistry executorRegistry, WorkflowCompiler compiler) {
         this.executorRegistry = executorRegistry;
+        this.compiler = compiler;
+    }
+
+    public NodeExecutionPolicy executionPolicy(NodeDef node, ExecutionContext context) {
+        return executorRegistry.get(node.getType()).policy(node, context);
     }
 
     public WorkflowRunResult run(WorkflowGraph graph, Map<String, Object> inputs, String conversationId) {
@@ -88,8 +109,32 @@ public class WorkflowEngine {
                                   Consumer<StepRecord> stepListener,
                                   io.github.aigoodle.workflow.chat.ChatStreamSink chatSink,
                                   String tenantId) {
-        graph.reindex();
-        ExecutionContext context = ExecutionContext.start(inputs, conversationId, chatSink);
+        return run(graph, inputs, conversationId, stepListener, chatSink, tenantId,
+                WorkflowRunOptions.defaults());
+    }
+
+    public WorkflowRunResult run(WorkflowGraph graph, Map<String, Object> inputs, String conversationId,
+                                  Consumer<StepRecord> stepListener,
+                                  io.github.aigoodle.workflow.chat.ChatStreamSink chatSink,
+                                  String tenantId, WorkflowRunOptions options) {
+        return run(graph, inputs, conversationId, stepListener, chatSink, tenantId, options,
+                WorkflowResumeState.empty(), WorkflowExecutionObserver.NOOP);
+    }
+
+    public WorkflowRunResult run(WorkflowGraph graph, Map<String, Object> inputs, String conversationId,
+                                  Consumer<StepRecord> stepListener,
+                                  io.github.aigoodle.workflow.chat.ChatStreamSink chatSink,
+                                  String tenantId, WorkflowRunOptions options,
+                                  WorkflowResumeState resumeState,
+                                  WorkflowExecutionObserver observer) {
+        graph = compiler.compile(graph);
+        ExecutionContext context = ExecutionContext.start(inputs, conversationId, chatSink, options.runId());
+        if (!resumeState.variablePool().isEmpty()) context.getPool().restore(resumeState.variablePool());
+        context.setCancellationToken(options.cancellationToken());
+        context.setIterationCursors(new ConcurrentHashMap<>(resumeState.iterationCursors()));
+        WorkflowExecutionObserver executionObserver = observer;
+        context.setIterationProgressListener((nodeId, cursor) ->
+                executionObserver.iterationProgress(nodeId, cursor, context));
         // Capture the request tenant before node execution switches to per-run
         // virtual threads. UserContextHolder is backed by a regular ThreadLocal,
         // so reading it inside NodeExecutor/NodeModelResolver would otherwise
@@ -100,7 +145,13 @@ public class WorkflowEngine {
         context.getPool().setSystem("tenant_id", context.getTenantId());
         context.getPool().setSystem("user_id", context.getUserId());
         WorkflowRunResult result = WorkflowRunResult.forRun(context.getRunId(), context.getSteps());
-        RunState run = new RunState(context, stepListener);
+        RunState run = new RunState(context, stepListener, options, resumeState, observer);
+        for (Map.Entry<String, WorkflowResumeState.ResumedNode> entry : resumeState.terminalNodes().entrySet()) {
+            NodeDef resumedNode = graph.node(entry.getKey());
+            if (resumedNode.getType() == NodeType.END && entry.getValue().executed()) {
+                run.endOutputs.putAll(context.getPool().namespace(entry.getKey()));
+            }
+        }
 
         NodeDef startNode = graph.startNode();
         Map<String, List<EdgeDef>> incomingByTarget = indexIncoming(graph);
@@ -113,7 +164,11 @@ public class WorkflowEngine {
         // A per-run virtual-thread executor: nodes are typically I/O-bound (HTTP,
         // LLM, retrieval), so per-task virtual threads give ideal parallelism
         // without needing a bounded pool tuned for blocking.
-        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+        ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+        ScheduledFuture<?> workflowDeadline = DEADLINE_SCHEDULER.schedule(
+                () -> options.cancellationToken().timeout("Workflow deadline exceeded"),
+                options.workflowTimeout().toMillis(), TimeUnit.MILLISECONDS);
+        try {
             for (NodeDef node : graph.getNodes()) {
                 scheduleNode(node, startNode, incomingByTarget.getOrDefault(node.getId(), List.of()),
                         nodeFutures, run, executor);
@@ -129,12 +184,37 @@ public class WorkflowEngine {
                 log.error("Workflow run {} failed: {}", context.getRunId(), ex.getMessage(), ex);
                 return result.fail(ex.getMessage(), run.endOutputs);
             }
+        } finally {
+            workflowDeadline.cancel(false);
+            executor.shutdownNow();
         }
 
+        WorkflowWaitRequest waitRequest = run.waitRequest.get();
+        if (waitRequest != null) {
+            return result.waiting(run.waitingNodeId.get(), waitRequest, run.endOutputs);
+        }
         String failureMessage = run.failure.get();
         if (failureMessage != null) {
             return result.fail(failureMessage, run.endOutputs);
         }
+        if (options.cancellationToken().isCancelled()) {
+            WorkflowRunStatus status = options.cancellationToken().isTimedOut()
+                    ? WorkflowRunStatus.TIMED_OUT : options.cancellationToken().isPaused()
+                    ? WorkflowRunStatus.PAUSED : WorkflowRunStatus.CANCELLED;
+            return result.terminate(status, options.cancellationToken().reason(), run.endOutputs);
+        }
+
+        // Chatflows may terminate at a direct ANSWER node without a technical END
+        // node. Promote the executed terminal answer to run outputs so blocking
+        // chat and resumed human-input requests return the same visible content.
+        if (run.endOutputs.isEmpty()) {
+            for (NodeDef node : graph.getNodes()) {
+                if (node.getType() == NodeType.ANSWER && graph.outgoing(node.getId()).isEmpty()) {
+                    run.endOutputs.putAll(context.getPool().namespace(node.getId()));
+                }
+            }
+        }
+
         return result.succeed(run.endOutputs);
     }
 
@@ -144,6 +224,16 @@ public class WorkflowEngine {
                               Executor executor) {
         boolean isStart = node.getId().equals(startNode.getId());
         CompletableFuture<Void> nodeFuture = nodeFutures.get(node.getId());
+
+        WorkflowResumeState.ResumedNode resumed = run.resumeState.terminalNodes().get(node.getId());
+        if (resumed != null) {
+            run.outcomes.put(node.getId(), resumed.executed()
+                    ? NodeOutcome.executed(resumed.handle()) : NodeOutcome.skipped());
+            nodeFuture.complete(null);
+            return;
+        }
+
+        run.observer.nodeScheduled(node, run.nextAttempt(node.getId()), run.context);
 
         Runnable nodeTask = () -> executeNode(node, isStart, incoming, run, nodeFuture);
 
@@ -168,45 +258,137 @@ public class WorkflowEngine {
     private void executeNode(NodeDef node, boolean isStart, List<EdgeDef> incoming,
                         RunState run,
                         CompletableFuture<Void> nodeFuture) {
+        boolean permit = false;
         try {
+            if (run.waitRequest.get() != null) {
+                run.outcomes.put(node.getId(), NodeOutcome.skipped());
+                run.observer.nodeFinished(node, NodeExecutionStatus.CANCELLED, NodeResult.empty(),
+                        run.nextAttempt(node.getId()), run.context);
+                return;
+            }
             boolean fired = isStart || anyIncomingFired(incoming, run.outcomes);
-            if (!fired || run.failure.get() != null) {
+            if (!fired) {
                 run.outcomes.put(node.getId(), NodeOutcome.skipped());
+                run.observer.nodeFinished(node, NodeExecutionStatus.SKIPPED, NodeResult.empty(),
+                        run.nextAttempt(node.getId()), run.context);
                 return;
             }
-            if (run.stepCount.incrementAndGet() > MAX_STEPS) {
-                run.failure.compareAndSet(null,
-                        new PlatformException("max_steps",
-                                "Workflow exceeded " + MAX_STEPS + " steps", null).getMessage());
+            if (run.failure.get() != null || run.options.cancellationToken().isCancelled()) {
                 run.outcomes.put(node.getId(), NodeOutcome.skipped());
+                run.observer.nodeFinished(node, NodeExecutionStatus.CANCELLED, NodeResult.empty(),
+                        run.nextAttempt(node.getId()), run.context);
                 return;
             }
-
-            long start = System.nanoTime();
+            run.concurrency.acquire();
+            permit = true;
+            run.options.cancellationToken().throwIfCancelled();
+            NodeExecutor nodeExecutor = executorRegistry.get(node.getType());
+            NodeExecutionPolicy policy = nodeExecutor.policy(node, run.context);
+            int maximumAttempts = policy.executionMode() == io.github.aigoodle.workflow.node.NodeExecutionMode.SIDE_EFFECT
+                    && !policy.resumable() ? 1 : policy.retryPolicy().maxAttempts();
             NodeResult nodeResult;
-            try {
-                NodeExecutor nodeExecutor = executorRegistry.get(node.getType());
-                nodeResult = nodeExecutor.execute(node, run.context);
-            } catch (Exception exception) {
-                log.error("Node {} ({}) failed: {}", node.getId(), node.getType(), exception.getMessage(), exception);
-                nodeResult = NodeResult.failure(exception.getMessage());
-            }
-            long elapsedMillis = (System.nanoTime() - start) / 1_000_000;
+            int attempt;
+            while (true) {
+                attempt = run.nextAttempt(node.getId());
+                run.attempts.put(node.getId(), attempt);
+                run.observer.nodeStarted(node, attempt, run.context);
+                if (run.stepCount.incrementAndGet() > MAX_STEPS) {
+                    nodeResult = NodeResult.failure("Workflow exceeded " + MAX_STEPS + " steps");
+                } else {
+                    AttemptExecution execution = executeAttempt(node, nodeExecutor, run);
+                    nodeResult = execution.result();
+                    run.record(node, nodeResult, execution.elapsedMillis(), attempt,
+                            execution.startedAt(), execution.finishedAt());
+                }
+                if (!nodeResult.isFailed() || run.options.cancellationToken().isCancelled()
+                        || attempt >= maximumAttempts) break;
 
-            run.record(node, nodeResult, elapsedMillis);
+                run.observer.nodeFinished(node, NodeExecutionStatus.RETRYING, nodeResult,
+                        attempt, run.context);
+                Duration backoff = policy.retryPolicy().backoffBefore(attempt + 1);
+                if (!backoff.isZero()) {
+                    try (RunCancellationToken.Registration ignored =
+                                 run.options.cancellationToken().registerCurrentThread()) {
+                        Thread.sleep(backoff.toMillis());
+                    }
+                }
+                run.options.cancellationToken().throwIfCancelled();
+            }
+
+            if (nodeResult.isWaiting()) {
+                run.waitRequest.compareAndSet(null, nodeResult.getWaitRequest());
+                run.waitingNodeId.compareAndSet(null, node.getId());
+                run.observer.nodeFinished(node, NodeExecutionStatus.WAITING, nodeResult,
+                        attempt, run.context);
+                return;
+            }
 
             if (nodeResult.isFailed()) {
-                run.failure.compareAndSet(null, "Node " + node.getId() + " failed: " + nodeResult.getError());
+                NodeExecutionStatus terminalStatus = run.options.cancellationToken().isCancelled()
+                        ? NodeExecutionStatus.CANCELLED : NodeExecutionStatus.FAILED;
+                if (!run.options.cancellationToken().isCancelled()) {
+                    run.failure.compareAndSet(null, "Node " + node.getId() + " failed: " + nodeResult.getError());
+                    run.options.cancellationToken().cancel(run.failure.get());
+                }
                 run.outcomes.put(node.getId(), NodeOutcome.executed(nodeResult.getHandle()));
+                run.observer.nodeFinished(node, terminalStatus, nodeResult,
+                        attempt, run.context);
                 return;
             }
             if (node.getType() == NodeType.END && nodeResult.getOutputs() != null) {
                 run.endOutputs.putAll(nodeResult.getOutputs());
             }
             run.outcomes.put(node.getId(), NodeOutcome.executed(nodeResult.getHandle()));
+            run.observer.nodeFinished(node, NodeExecutionStatus.COMPLETED, nodeResult,
+                    attempt, run.context);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            run.outcomes.put(node.getId(), NodeOutcome.skipped());
         } finally {
+            if (permit) run.concurrency.release();
             nodeFuture.complete(null);
         }
+    }
+
+    private AttemptExecution executeAttempt(NodeDef node, NodeExecutor executor, RunState run) {
+        long start = System.nanoTime();
+        Instant startedAt = Instant.now();
+        NodeResult result;
+        AtomicReference<Boolean> nodeTimedOut = new AtomicReference<>(false);
+        Thread executingThread = Thread.currentThread();
+        Duration nodeTimeout = nodeTimeout(node, run.options.defaultNodeTimeout());
+        ScheduledFuture<?> deadline = DEADLINE_SCHEDULER.schedule(() -> {
+            nodeTimedOut.set(true);
+            executingThread.interrupt();
+        }, nodeTimeout.toMillis(), TimeUnit.MILLISECONDS);
+        try (RunCancellationToken.Registration ignored =
+                     run.options.cancellationToken().registerCurrentThread()) {
+            run.context.throwIfCancelled();
+            result = executor.execute(node, run.context);
+            if (Boolean.TRUE.equals(nodeTimedOut.get())) {
+                result = NodeResult.failure("Node deadline exceeded after " + nodeTimeout);
+            }
+        } catch (Exception exception) {
+            log.error("Node {} ({}) failed: {}", node.getId(), node.getType(), exception.getMessage(), exception);
+            String message = Boolean.TRUE.equals(nodeTimedOut.get())
+                    ? "Node deadline exceeded after " + nodeTimeout
+                    : (run.options.cancellationToken().isCancelled()
+                    ? run.options.cancellationToken().reason() : exception.getMessage());
+            result = NodeResult.failure(message);
+        } finally {
+            deadline.cancel(false);
+            Thread.interrupted();
+        }
+        return new AttemptExecution(result, (System.nanoTime() - start) / 1_000_000,
+                startedAt, Instant.now());
+    }
+
+    private record AttemptExecution(NodeResult result, long elapsedMillis,
+                                    Instant startedAt, Instant finishedAt) {}
+
+    private static Duration nodeTimeout(NodeDef node, Duration defaultTimeout) {
+        int configured = node.getInt("timeoutMillis", -1);
+        return configured > 0 ? Duration.ofMillis(configured) : defaultTimeout;
     }
 
     private static boolean anyIncomingFired(List<EdgeDef> incoming, Map<String, NodeOutcome> outcomes) {
@@ -270,17 +452,40 @@ public class WorkflowEngine {
         private final Map<String, Object> endOutputs = new ConcurrentHashMap<>();
         private final AtomicInteger stepCount = new AtomicInteger();
         private final AtomicReference<String> failure = new AtomicReference<>();
+        private final WorkflowRunOptions options;
+        private final Semaphore concurrency;
+        private final WorkflowResumeState resumeState;
+        private final WorkflowExecutionObserver observer;
+        private final Map<String, Integer> attempts = new ConcurrentHashMap<>();
+        private final AtomicReference<WorkflowWaitRequest> waitRequest = new AtomicReference<>();
+        private final AtomicReference<String> waitingNodeId = new AtomicReference<>();
         private final Object listenerLock = new Object();
 
-        private RunState(ExecutionContext context, Consumer<StepRecord> stepListener) {
+        private RunState(ExecutionContext context, Consumer<StepRecord> stepListener,
+                         WorkflowRunOptions options, WorkflowResumeState resumeState,
+                         WorkflowExecutionObserver observer) {
             this.context = context;
             this.stepListener = stepListener;
+            this.options = options;
+            this.concurrency = new Semaphore(options.maxConcurrency());
+            this.resumeState = resumeState;
+            this.observer = observer;
+            this.attempts.putAll(resumeState.attempts());
         }
 
-        private void record(NodeDef node, NodeResult result, long elapsedMillis) {
+        private int nextAttempt(String nodeId) {
+            return attempts.getOrDefault(nodeId, 0) + 1;
+        }
+
+        private int currentAttempt(String nodeId) {
+            return attempts.getOrDefault(nodeId, 0);
+        }
+
+        private void record(NodeDef node, NodeResult result, long elapsedMillis, int attempt,
+                            Instant startedAt, Instant finishedAt) {
             context.getPool().putAll(node.getId(), result.getOutputs());
             synchronized (listenerLock) {
-                StepRecord step = StepRecord.completed(node, result, elapsedMillis);
+                StepRecord step = StepRecord.completed(node, result, elapsedMillis, attempt, startedAt, finishedAt);
                 context.record(step);
                 notifyStepListener(stepListener, step);
             }

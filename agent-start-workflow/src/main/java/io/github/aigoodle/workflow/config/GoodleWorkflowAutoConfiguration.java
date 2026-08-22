@@ -10,6 +10,11 @@ import io.github.aigoodle.workflow.engine.NodeExecutorRegistry;
 import io.github.aigoodle.workflow.engine.WorkflowEngine;
 import io.github.aigoodle.workflow.mapper.WorkflowMapper;
 import io.github.aigoodle.workflow.mapper.WorkflowRunMapper;
+import io.github.aigoodle.workflow.mapper.WorkflowCheckpointMapper;
+import io.github.aigoodle.workflow.mapper.WorkflowExecutionEventMapper;
+import io.github.aigoodle.workflow.mapper.WorkflowRunNodeMapper;
+import io.github.aigoodle.workflow.mapper.WorkflowResumeSignalMapper;
+import io.github.aigoodle.workflow.mapper.HumanInteractionMapper;
 import io.github.aigoodle.memory.MemoryManager;
 import io.github.aigoodle.workflow.node.NodeExecutor;
 import io.github.aigoodle.workflow.node.builtin.AgentNodeExecutor;
@@ -31,7 +36,15 @@ import io.github.aigoodle.workflow.node.builtin.StartNodeExecutor;
 import io.github.aigoodle.workflow.node.builtin.TemplateTransformNodeExecutor;
 import io.github.aigoodle.workflow.node.builtin.VariableAggregatorNodeExecutor;
 import io.github.aigoodle.workflow.node.builtin.VariableAssignerNodeExecutor;
+import io.github.aigoodle.workflow.node.builtin.HumanInputNodeExecutor;
+import io.github.aigoodle.workflow.node.builtin.ApprovalNodeExecutor;
+import io.github.aigoodle.workflow.node.builtin.WaitEventNodeExecutor;
+import io.github.aigoodle.workflow.node.builtin.SleepUntilNodeExecutor;
 import io.github.aigoodle.workflow.service.WorkflowService;
+import io.github.aigoodle.workflow.service.WorkflowCheckpointStore;
+import io.github.aigoodle.workflow.service.PersistentWorkflowRunner;
+import io.github.aigoodle.workflow.service.HumanInteractionStore;
+import io.github.aigoodle.workflow.service.HumanInteractionService;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.beans.factory.ObjectProvider;
@@ -42,6 +55,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 import java.util.List;
 
@@ -50,8 +64,11 @@ import java.util.List;
  * DAG engine and the workflow service. Nodes that need optional modules
  * (knowledge / tools / JEXL) are only wired when those modules are on the classpath.
  */
-@AutoConfiguration(after = GoodleModelAutoConfiguration.class)
+@AutoConfiguration(
+        after = GoodleModelAutoConfiguration.class,
+        afterName = "io.github.aigoodle.connector.config.GoodleConnectorAutoConfiguration")
 @EnableConfigurationProperties(GoodleWorkflowProperties.class)
+@EnableScheduling
 @MapperScan("io.github.aigoodle.workflow.mapper")
 public class GoodleWorkflowAutoConfiguration {
 
@@ -91,6 +108,11 @@ public class GoodleWorkflowAutoConfiguration {
     public IfElseNodeExecutor ifElseNodeExecutor() {
         return new IfElseNodeExecutor();
     }
+
+    @Bean public HumanInputNodeExecutor humanInputNodeExecutor(ModelService modelService) { return new HumanInputNodeExecutor(modelService); }
+    @Bean public ApprovalNodeExecutor approvalNodeExecutor() { return new ApprovalNodeExecutor(); }
+    @Bean public WaitEventNodeExecutor waitEventNodeExecutor() { return new WaitEventNodeExecutor(); }
+    @Bean public SleepUntilNodeExecutor sleepUntilNodeExecutor() { return new SleepUntilNodeExecutor(); }
 
     @Bean
     public HttpRequestNodeExecutor httpRequestNodeExecutor(GoodleWorkflowProperties properties) {
@@ -193,8 +215,11 @@ public class GoodleWorkflowAutoConfiguration {
         @Bean
         @ConditionalOnBean(type = "io.github.aigoodle.connector.execution.ConnectorExecutionGateway")
         public io.github.aigoodle.workflow.node.builtin.ConnectorNodeExecutor connectorNodeExecutor(
-                io.github.aigoodle.connector.execution.ConnectorExecutionGateway gateway) {
-            return new io.github.aigoodle.workflow.node.builtin.ConnectorNodeExecutor(gateway);
+                io.github.aigoodle.connector.execution.ConnectorExecutionGateway gateway,
+                io.github.aigoodle.connector.channel.ChannelConnectionService channelConnections,
+                io.github.aigoodle.connector.channel.ChannelRuntimeRegistry channelRuntimes) {
+            return new io.github.aigoodle.workflow.node.builtin.ConnectorNodeExecutor(
+                    gateway, channelConnections, channelRuntimes);
         }
     }
 
@@ -213,6 +238,45 @@ public class GoodleWorkflowAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    public WorkflowCheckpointStore workflowCheckpointStore(WorkflowCheckpointMapper checkpointMapper,
+                                                            WorkflowRunNodeMapper nodeMapper,
+                                                            WorkflowExecutionEventMapper eventMapper,
+                                                            WorkflowResumeSignalMapper signalMapper) {
+        return new WorkflowCheckpointStore(checkpointMapper, nodeMapper, eventMapper, signalMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public HumanInteractionStore humanInteractionStore(HumanInteractionMapper mapper,
+            ObjectProvider<io.github.aigoodle.workflow.interaction.HumanInteractionNotifier> notifier) {
+        return new HumanInteractionStore(mapper, notifier.getIfAvailable());
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public PersistentWorkflowRunner persistentWorkflowRunner(WorkflowEngine engine,
+                                                              WorkflowCheckpointStore checkpointStore,
+                                                              HumanInteractionStore humanInteractions) {
+        return new PersistentWorkflowRunner(engine, checkpointStore, humanInteractions);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public HumanInteractionService humanInteractionService(HumanInteractionStore store,
+                                                            PersistentWorkflowRunner runner,
+                                                            ObjectProvider<MemoryManager> memory) {
+        return new HumanInteractionService(store, runner, memory.getIfAvailable());
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public io.github.aigoodle.workflow.service.WorkflowWaitRecoveryService workflowWaitRecoveryService(
+            WorkflowCheckpointStore store, PersistentWorkflowRunner runner) {
+        return new io.github.aigoodle.workflow.service.WorkflowWaitRecoveryService(store, runner);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     public NodeExecutorRegistry nodeExecutorRegistry(List<NodeExecutor> executors) {
         return new NodeExecutorRegistry(executors);
     }
@@ -226,7 +290,8 @@ public class GoodleWorkflowAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public WorkflowService workflowService(WorkflowMapper workflowMapper, WorkflowRunMapper runMapper,
-                                           WorkflowEngine engine) {
-        return new WorkflowService(workflowMapper, runMapper, engine);
+                                           WorkflowEngine engine, PersistentWorkflowRunner persistentRunner,
+                                           ObjectProvider<io.github.aigoodle.agent.service.AppConversationService> conversations) {
+        return new WorkflowService(workflowMapper, runMapper, engine, persistentRunner, conversations);
     }
 }

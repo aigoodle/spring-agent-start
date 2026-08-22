@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -89,6 +90,14 @@ public class DatasetDocumentController {
         return ApiResponse.ok();
     }
 
+    @PutMapping("/{id}/documents/{documentId}/enabled")
+    public ApiResponse<KnowledgeDocumentEntity> setDocumentEnabled(
+            @PathVariable String id, @PathVariable String documentId,
+            @RequestBody EnabledRequest request) {
+        return ApiResponse.ok(knowledgeService.setDocumentEnabled(
+                currentTenantId(), id, documentId, Boolean.TRUE.equals(request.enabled())));
+    }
+
     @PostMapping(value = "/preview-chunks", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<KnowledgeService.ChunkPreview> previewChunks(
             @RequestPart("file") MultipartFile file,
@@ -133,5 +142,8 @@ public class DatasetDocumentController {
     }
 
     public record AddTextRequest(String name, String text) {
+    }
+
+    public record EnabledRequest(Boolean enabled) {
     }
 }

@@ -50,6 +50,32 @@ class TriggerInvocationRunnerTest {
     }
 
     @Test
+    void channelDispatchCanRunAsConnectionOwnerWithoutChangingTenant() {
+        AtomicReference<String> userId = new AtomicReference<>();
+        AtomicReference<String> tenantId = new AtomicReference<>();
+        TriggerDispatcher dispatcher = new TriggerDispatcher() {
+            @Override public String targetType() { return "workflow"; }
+            @Override public DispatchResult dispatch(String targetId, Map<String, Object> inputs,
+                                                       String conversationId) {
+                userId.set(UserContextHolder.currentUserId());
+                tenantId.set(UserContextHolder.currentTenantId());
+                return DispatchResult.ok("run-1", Map.of());
+            }
+        };
+        TriggerInvocationRunner runner = new TriggerInvocationRunner(mock(TriggerInvocationMapper.class),
+                new TriggerDispatcherRegistry(List.of(dispatcher)));
+        TriggerEntity trigger = trigger("trigger-1", "workflow");
+        trigger.setUserId("publisher-1");
+        trigger.setTenantId("tenant-1");
+
+        runner.execute(trigger, invocation("invocation-1"), Map.of(), "account-owner-1");
+
+        assertThat(userId.get()).isEqualTo("account-owner-1");
+        assertThat(tenantId.get()).isEqualTo("tenant-1");
+        assertThat(UserContextHolder.get()).isNull();
+    }
+
+    @Test
     void recordsDispatcherFailureDetails() {
         TriggerInvocationMapper invocationMapper = mock(TriggerInvocationMapper.class);
         TriggerDispatcher dispatcher = dispatcherReturning(DispatchResult.builder()

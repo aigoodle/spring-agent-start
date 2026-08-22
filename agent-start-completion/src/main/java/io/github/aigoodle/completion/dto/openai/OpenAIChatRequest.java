@@ -69,6 +69,25 @@ public class OpenAIChatRequest {
     @JsonAlias({"inputs"})
     private Map<String, Object> data = new HashMap<>();
 
+    /** Resume a durable HUMAN_INPUT checkpoint through the same chat endpoint. */
+    @JsonProperty("human_input")
+    @JsonAlias({"humanInput"})
+    private HumanInputResume humanInput;
+
+    @Data
+    public static class HumanInputResume {
+        @JsonProperty("run_id")
+        @JsonAlias({"runId"})
+        private String runId;
+        @JsonProperty("resume_token")
+        @JsonAlias({"resumeToken"})
+        private String resumeToken;
+        @JsonProperty("event_id")
+        @JsonAlias({"eventId"})
+        private String eventId;
+        private Map<String, Object> payload = new HashMap<>();
+    }
+
     @JsonProperty("invoke_from")
     private String invokeFrom;
 

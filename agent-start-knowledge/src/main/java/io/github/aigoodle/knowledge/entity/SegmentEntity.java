@@ -38,6 +38,9 @@ public class SegmentEntity extends BaseEntity {
     /** Id used as the vector store document id, so we can delete/update precisely. */
     private String vectorId;
 
+    /** Index generation owning this segment; null denotes a legacy index. */
+    private String indexVersionId;
+
     private Boolean enabled;
 
     /** Content hash for dedup / change detection. */

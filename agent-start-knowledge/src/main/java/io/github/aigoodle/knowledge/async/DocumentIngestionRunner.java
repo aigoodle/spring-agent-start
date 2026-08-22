@@ -23,6 +23,8 @@ import org.slf4j.LoggerFactory;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.time.Duration;
+import java.util.UUID;
 
 /**
  * The actual "extract → clean → chunk → index" work — the same pipeline
@@ -44,18 +46,31 @@ public class DocumentIngestionRunner {
     private final ChunkerRegistry chunkerRegistry;
     private final IndexingService indexingService;
     private final StructuredDocumentChunker structuredChunker;
+    private final IngestionJobCoordinator coordinator;
+    private final String workerId = UUID.randomUUID().toString();
 
     public DocumentIngestionRunner(DatasetService datasetService,
                                    KnowledgeDocumentMapper documentMapper,
                                    DocumentIngestQueueMapper queueMapper,
                                    ChunkerRegistry chunkerRegistry,
                                    IndexingService indexingService) {
+        this(datasetService, documentMapper, queueMapper, chunkerRegistry, indexingService,
+                new IngestionJobCoordinator(queueMapper, Duration.ofMinutes(5), Duration.ofSeconds(2), 5));
+    }
+
+    public DocumentIngestionRunner(DatasetService datasetService,
+                                   KnowledgeDocumentMapper documentMapper,
+                                   DocumentIngestQueueMapper queueMapper,
+                                   ChunkerRegistry chunkerRegistry,
+                                   IndexingService indexingService,
+                                   IngestionJobCoordinator coordinator) {
         this.datasetService = datasetService;
         this.documentMapper = documentMapper;
         this.queueMapper = queueMapper;
         this.chunkerRegistry = chunkerRegistry;
         this.indexingService = indexingService;
         this.structuredChunker = new StructuredDocumentChunker(chunkerRegistry);
+        this.coordinator = coordinator;
     }
 
     /**
@@ -75,6 +90,10 @@ public class DocumentIngestionRunner {
                         .eq(DocumentIngestQueueEntity::getDocumentId, documentId).last("LIMIT 1"));
         if (task == null) {
             log.warn("Ingest task {} not found in queue table — probably already processed", documentId);
+            return true;
+        }
+        if (!coordinator.claim(tenantId, documentId, workerId)) {
+            log.debug("Ingest task {} is leased, delayed, or isolated", documentId);
             return true;
         }
         KnowledgeDocumentEntity doc = documentMapper.selectOne(
@@ -130,6 +149,7 @@ public class DocumentIngestionRunner {
             log.error("Failed to async-ingest document '{}' into dataset {}: {}",
                     doc.getName(), doc.getDatasetId(), e.getMessage(), e);
             markFailed(doc, e.getMessage());
+            coordinator.recordFailure(tenantId, documentId, e.getMessage());
             return false;
         }
     }

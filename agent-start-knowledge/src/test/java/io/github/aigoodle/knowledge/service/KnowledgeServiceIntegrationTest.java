@@ -200,6 +200,21 @@ class KnowledgeServiceIntegrationTest {
     }
 
     @Test
+    void documentEnabledFlagControlsAllRetrievalPaths() {
+        DatasetEntity ds = highQualityDataset(ChunkingTemplate.NAIVE);
+        var doc = knowledgeService.addText(ds.getTenantId(), ds.getId(), "toggle.txt", DOC);
+        assertFalse(knowledgeService.retrieve(ds.getTenantId(), ds.getId(), "python").isEmpty());
+
+        var disabled = knowledgeService.setDocumentEnabled(ds.getTenantId(), ds.getId(), doc.getId(), false);
+        assertFalse(disabled.getEnabled());
+        assertTrue(knowledgeService.retrieve(ds.getTenantId(), ds.getId(), "python").isEmpty());
+
+        var enabled = knowledgeService.setDocumentEnabled(ds.getTenantId(), ds.getId(), doc.getId(), true);
+        assertTrue(enabled.getEnabled());
+        assertFalse(knowledgeService.retrieve(ds.getTenantId(), ds.getId(), "python").isEmpty());
+    }
+
+    @Test
     void retrievalCanExpandAdjacentChunkContext() {
         DatasetEntity ds = highQualityDataset(ChunkingTemplate.NAIVE);
         RetrievalConfig config = RetrievalConfig.hybrid();

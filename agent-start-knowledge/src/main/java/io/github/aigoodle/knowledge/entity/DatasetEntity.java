@@ -33,6 +33,9 @@ public class DatasetEntity extends BaseEntity {
     /** Optional vector store binding name; null = in-memory default. */
     private String vectorStore;
 
+    /** Currently queryable blue/green index; null preserves legacy unversioned data. */
+    private String activeIndexVersionId;
+
     private Integer documentCount;
 
     private Integer segmentCount;

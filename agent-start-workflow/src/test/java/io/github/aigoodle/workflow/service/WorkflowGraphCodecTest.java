@@ -33,13 +33,13 @@ class WorkflowGraphCodecTest {
     }
 
     @Test
-    void createsStructurallyValidEmptyDesignerGraph() {
+    void createsMinimalPublishableDesignerGraph() {
         JsonNode emptyGraph = graphCodec.emptyGraph();
 
         assertThat(emptyGraph.path("nodes").isArray()).isTrue();
-        assertThat(emptyGraph.path("nodes")).isEmpty();
+        assertThat(emptyGraph.path("nodes")).hasSize(2);
         assertThat(emptyGraph.path("edges").isArray()).isTrue();
-        assertThat(emptyGraph.path("edges")).isEmpty();
+        assertThat(emptyGraph.path("edges")).hasSize(1);
     }
 
     @Test

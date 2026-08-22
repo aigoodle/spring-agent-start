@@ -19,6 +19,8 @@ import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 class IterationNodeExecutorTest {
 
@@ -49,6 +51,22 @@ class IterationNodeExecutorTest {
         assertThat(result.isFailed()).isFalse();
         assertThat(iterationOutputs(result))
                 .containsExactly(null, Map.of("value", "second"));
+    }
+
+    @Test
+    void resumesAtDurableCursorWithoutRepeatingCompletedItems() {
+        WorkflowEngine engine = mock(WorkflowEngine.class);
+        when(engine.run(any(WorkflowGraph.class), anyMap(), isNull(), isNull(), isNull(), isNull()))
+                .thenReturn(success("second"));
+        ExecutionContext context = contextWithItems();
+        context.setIterationCursors(new java.util.concurrent.ConcurrentHashMap<>(Map.of(
+                "iteration", Map.of("nextIndex", 1, "outputs", List.of(Map.of("value", "first"))))));
+
+        NodeResult result = new IterationNodeExecutor(() -> engine).execute(iterationNode(false), context);
+
+        assertThat(iterationOutputs(result)).containsExactly(
+                Map.of("value", "first"), Map.of("value", "second"));
+        verify(engine, times(1)).run(any(WorkflowGraph.class), anyMap(), isNull(), isNull(), isNull(), isNull());
     }
 
     private static NodeDef iterationNode(boolean continueOnError) {

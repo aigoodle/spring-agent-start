@@ -14,6 +14,9 @@ public enum TriggerType {
     /** Fired when a named internal event is published. */
     EVENT,
 
+    /** Fired by a normalized inbound message from an installed channel connection. */
+    CHANNEL_MESSAGE,
+
     /** Fired only by an explicit API call. */
     MANUAL
 }

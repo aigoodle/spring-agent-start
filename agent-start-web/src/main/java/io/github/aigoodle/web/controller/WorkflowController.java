@@ -12,6 +12,7 @@ import io.github.aigoodle.workflow.entity.WorkflowEntity;
 import io.github.aigoodle.workflow.entity.WorkflowRunEntity;
 import io.github.aigoodle.workflow.service.WorkflowDraftDefinition;
 import io.github.aigoodle.workflow.service.WorkflowService;
+import io.github.aigoodle.workflow.service.WorkflowSignalResult;
 import io.github.aigoodle.trigger.service.TriggerService;
 import lombok.Data;
 import org.springframework.beans.factory.ObjectProvider;
@@ -147,6 +148,48 @@ public class WorkflowController {
     public ApiResponse<List<WorkflowRunEntity>> runs(@PathVariable String id,
                                                       @RequestParam(defaultValue = "20") int limit) {
         return ApiResponse.ok(workflowService.runs(currentTenantId(), id, limit));
+    }
+
+    @PostMapping("/workflow-runs/{runId}/cancel")
+    public ApiResponse<Boolean> cancelRun(@PathVariable String runId,
+                                          @RequestBody(required = false) Map<String, String> request) {
+        String reason = request == null ? null : request.get("reason");
+        return ApiResponse.ok(workflowService.cancel(currentTenantId(), runId, reason));
+    }
+
+    @PostMapping("/workflow-runs/{runId}/pause")
+    public ApiResponse<Boolean> pauseRun(@PathVariable String runId,
+                                         @RequestBody(required = false) Map<String, String> request) {
+        String reason = request == null ? null : request.get("reason");
+        return ApiResponse.ok(workflowService.pause(currentTenantId(), runId, reason));
+    }
+
+    @PostMapping("/workflow-runs/{runId}/resume")
+    public ApiResponse<WorkflowRunResult> resumeRun(@PathVariable String runId) {
+        return ApiResponse.ok(workflowService.resume(currentTenantId(), runId));
+    }
+
+    @PostMapping("/workflow-runs/{runId}/signal")
+    public ApiResponse<WorkflowSignalResult> signalRun(@PathVariable String runId,
+                                                       @RequestBody Map<String, Object> request) {
+        String token = request.get("resumeToken") == null ? null : String.valueOf(request.get("resumeToken"));
+        String eventId = request.get("eventId") == null ? null : String.valueOf(request.get("eventId"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> payload = request.get("payload") instanceof Map<?, ?> map
+                ? (Map<String, Object>) map : Map.of();
+        return ApiResponse.ok(workflowService.signal(currentTenantId(), runId, token, eventId, payload));
+    }
+
+    @PostMapping("/workflow-events/{correlationKey}")
+    public ApiResponse<WorkflowSignalResult> signalByCorrelation(@PathVariable String correlationKey,
+                                                                 @RequestBody Map<String, Object> request) {
+        String token = request.get("resumeToken") == null ? null : String.valueOf(request.get("resumeToken"));
+        String eventId = request.get("eventId") == null ? null : String.valueOf(request.get("eventId"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> payload = request.get("payload") instanceof Map<?, ?> map
+                ? (Map<String, Object>) map : Map.of();
+        return ApiResponse.ok(workflowService.signalByCorrelation(
+                currentTenantId(), correlationKey, token, eventId, payload));
     }
 
     @PostMapping("/workflows/{id}/run")

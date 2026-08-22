@@ -79,14 +79,16 @@ public class TriggerController {
     // ------------------------------------------------------------- firing
 
     /**
-     * Fire a trigger manually — useful for the frontend "test" button. Runs sync so
-     * the UI can render the outcome immediately.
+     * Fire a trigger manually — useful for the frontend "test" button. The target
+     * always runs asynchronously; callers can inspect invocation history for status.
      */
     @PostMapping("/triggers/{id}/fire")
     public ApiResponse<DispatchResult> fire(@PathVariable String id,
                                             @RequestBody(required = false) Map<String, Object> payload) {
-        return ApiResponse.ok(triggerService.fireSynchronously(currentTenantId(),
-                TriggerInvocationRequest.manual(id, payload)));
+        String invocationId = triggerService.fireAsynchronously(currentTenantId(),
+                TriggerInvocationRequest.manual(id, payload));
+        return ApiResponse.ok(DispatchResult.ok(null, Map.of(
+                "accepted", true, "invocationId", invocationId)));
     }
 
     // -------------------------------------------------------- invocations
