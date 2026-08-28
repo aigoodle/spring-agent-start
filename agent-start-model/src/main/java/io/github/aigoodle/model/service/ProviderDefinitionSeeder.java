@@ -18,15 +18,14 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.HashSet;
 import java.util.Set;
 
 /**
  * On {@link ApplicationReadyEvent}, walk the in-memory {@link ModelProviderRegistry}
- * and upsert one {@link ProviderDefinitionEntity} + N {@link PredefinedModelEntity}
- * rows per built-in provider. Idempotent: existing rows keep their user-owned
- * {@code enabled}/{@code sort_order}, but their metadata (label, schema,
- * predefined-model list, parameter rules) is refreshed to reflect the current
- * Java source of truth.
+ * and insert missing {@link ProviderDefinitionEntity} and
+ * {@link PredefinedModelEntity} rows for built-in providers. Existing rows are
+ * left untouched, so normal application restarts do not rewrite the catalog.
  * <p>
  * Rows are written with {@code tenant_id='system'} and {@code source='builtin'}
  * so they're visible to every tenant AND the admin API can tell them apart from
@@ -63,26 +62,46 @@ public class ProviderDefinitionSeeder implements ApplicationListener<Application
 
     /** Public so tests can trigger the seed synchronously. */
     public int seed() {
-        int seededProviders = 0;
-        int seededModels = 0;
+        int insertedProviders = 0;
+        int insertedModels = 0;
+        Set<String> existingProviders = new HashSet<>();
+        for (ProviderDefinitionEntity entity : definitionService.listOwnedDefinitions(
+                ProviderDefinitionService.SYSTEM_TENANT)) {
+            existingProviders.add(entity.getName());
+        }
+        Set<ModelKey> existingModels = new HashSet<>();
+        for (PredefinedModelEntity entity : definitionService.listOwnedPredefined(
+                ProviderDefinitionService.SYSTEM_TENANT)) {
+            existingModels.add(new ModelKey(
+                    entity.getProviderName(), entity.getModel(), entity.getModelType()));
+        }
         int sortOrder = 0;
         for (ModelProvider provider : registry.all()) {
             ProviderDefinitionEntity def = toDefinition(provider, sortOrder++);
-            definitionService.upsert(def);
-            seededProviders++;
+            if (existingProviders.add(provider.getName())) {
+                definitionService.upsert(def);
+                insertedProviders++;
+            }
 
             int mSort = 0;
             for (PredefinedModel m : provider.predefinedModels()) {
                 PredefinedModelEntity row = definitionService.fromMemory(
                         provider.getName(), m, mSort++);
-                definitionService.upsertPredefined(row);
-                seededModels++;
+                if (existingModels.add(new ModelKey(
+                        provider.getName(), m.getModel(), m.getModelType()))) {
+                    definitionService.upsertPredefined(row);
+                    insertedModels++;
+                }
             }
         }
-        log.info("Seeded {} builtin provider definitions ({} predefined model entries) into DB",
-                seededProviders, seededModels);
-        return seededProviders;
+        if (insertedProviders > 0 || insertedModels > 0) {
+            log.info("Inserted {} missing builtin provider definitions ({} predefined model entries)",
+                    insertedProviders, insertedModels);
+        }
+        return insertedProviders;
     }
+
+    private record ModelKey(String provider, String model, ModelType type) {}
 
     private ProviderDefinitionEntity toDefinition(ModelProvider provider, int sortOrder) {
         ProviderDefinitionEntity def = new ProviderDefinitionEntity();

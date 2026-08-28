@@ -151,10 +151,9 @@ public class GoodleModelAutoConfiguration {
     }
 
     /**
-     * Seed built-in provider definitions + predefined models into the DB on first
-     * boot. Idempotent — safe to run every startup; refreshes metadata but keeps
-     * user-owned enabled/sort_order fields. Registered as an ApplicationListener
-     * so it fires exactly once when the context is fully ready.
+     * Insert built-in provider definitions and predefined models only when the
+     * corresponding database rows are missing. Registered as an application-ready
+     * listener, but established catalogs remain read-only during normal restarts.
      */
     @Bean
     @ConditionalOnMissingBean
@@ -163,21 +162,4 @@ public class GoodleModelAutoConfiguration {
         return new ProviderDefinitionSeeder(registry, service);
     }
 
-    /**
-     * Seed a handful of starter Prompt templates on first boot so the library page
-     * isn't an empty state for first-time users. Only fires when the table is empty,
-     * so subsequent restarts are no-ops.
-     */
-    @Bean
-    public org.springframework.context.ApplicationListener<
-            org.springframework.boot.context.event.ApplicationReadyEvent> promptTemplateSeeder(
-            PromptTemplateService service) {
-        return event -> {
-            try {
-                service.seedStartersIfEmpty("default");
-            } catch (Exception ignored) {
-                // Seed is best-effort — never block startup on it.
-            }
-        };
-    }
 }

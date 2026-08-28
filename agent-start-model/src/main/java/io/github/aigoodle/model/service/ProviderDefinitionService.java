@@ -88,6 +88,12 @@ public class ProviderDefinitionService {
         return entity;
     }
 
+    /** Exact-tenant catalog snapshot used by the startup seeder. */
+    List<ProviderDefinitionEntity> listOwnedDefinitions(String tenantId) {
+        return providerMapper.selectList(new LambdaQueryWrapper<ProviderDefinitionEntity>()
+                .eq(ProviderDefinitionEntity::getTenantId, normalizedTenant(tenantId)));
+    }
+
     /**
      * Upsert a definition by (tenant_id, name). Existing rows with the same
      * key have their metadata refreshed <em>except</em> {@code enabled} and
@@ -213,6 +219,12 @@ public class ProviderDefinitionService {
                 .in(PredefinedModelEntity::getTenantId, effectiveTenants(tenantId))
                 .orderByDesc(PredefinedModelEntity::getTenantId)
                 .last("LIMIT 1"));
+    }
+
+    /** Exact-tenant predefined-model snapshot used by the startup seeder. */
+    List<PredefinedModelEntity> listOwnedPredefined(String tenantId) {
+        return predefinedMapper.selectList(new LambdaQueryWrapper<PredefinedModelEntity>()
+                .eq(PredefinedModelEntity::getTenantId, normalizedTenant(tenantId)));
     }
 
     /**
