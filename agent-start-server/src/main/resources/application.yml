@@ -88,26 +88,6 @@ spring-agent:
       # Explicit server migration switch. Embedded SDK consumers that do not
       # install the connector schema must not fail application startup.
       backfill-enabled: true
-    openclaw:
-      # The standalone server exposes the complete Connector Hub API by default.
-      # Keep the starter itself opt-in for embedded applications, but always
-      # register the OpenClaw facade here so /agent-start/openclaw/** does not
-      # disappear with a misleading 404 when the Bridge is temporarily offline.
-      enabled: ${OPENCLAW_ENABLED:true}
-      base-url: ${OPENCLAW_BASE_URL:http://127.0.0.1:18789}
-      # Matches docker/docker-compose.openclaw.yml for a zero-config local demo.
-      # Production deployments must override this shared demo credential.
-      service-token: ${OPENCLAW_SERVICE_TOKEN:demo-openclaw-bridge-token-change-me}
-      agent-id: ${OPENCLAW_AGENT_ID:main}
-      timeout: ${OPENCLAW_TIMEOUT:60s}
-    hermes:
-      # Standalone Server includes the Hermes runtime; embedded starters remain opt-in.
-      enabled: ${HERMES_ENABLED:true}
-      base-url: ${HERMES_BASE_URL:http://127.0.0.1:9119}
-      api-token: ${HERMES_API_TOKEN:}
-      bridge-base-url: ${HERMES_BRIDGE_BASE_URL:http://127.0.0.1:9121}
-      bridge-token: ${HERMES_BRIDGE_TOKEN:demo-hermes-bridge-token-change-me}
-      timeout: ${HERMES_TIMEOUT:15s}
   knowledge:
     # Persist embeddings via the built-in JDBC vector store (same DB). Swap to
     # pgvector / elasticsearch / milvus by adding the matching starter jar and

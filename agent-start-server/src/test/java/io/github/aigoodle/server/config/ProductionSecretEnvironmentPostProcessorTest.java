@@ -29,8 +29,6 @@ class ProductionSecretEnvironmentPostProcessorTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("spring-agent.demo.enabled")
                 .hasMessageContaining("spring-agent.model.encryption-secret")
-                .hasMessageContaining("spring-agent.connector.openclaw.service-token")
-                .hasMessageContaining("spring-agent.connector.hermes.bridge-token")
                 .hasMessageContaining("spring-agent.web.allowed-origins");
     }
 
@@ -44,12 +42,13 @@ class ProductionSecretEnvironmentPostProcessorTest {
 
     @Test
     void explicitGuardWorksWithoutAProductionProfileForDeploymentPipelines() {
-        MockEnvironment environment = secureEnvironment()
-                .withProperty(ProductionSecretEnvironmentPostProcessor.EXPLICIT_GUARD, "true")
-                .withProperty("spring-agent.connector.openclaw.service-token", "short");
+        MockEnvironment environment = secureEnvironment();
+        environment.setActiveProfiles();
+        environment.setProperty(ProductionSecretEnvironmentPostProcessor.EXPLICIT_GUARD, "true");
+        environment.setProperty("spring-agent.model.encryption-secret", "short");
 
         assertThatThrownBy(() -> guard.postProcessEnvironment(environment, new SpringApplication()))
-                .hasMessageContaining("openclaw.service-token");
+                .hasMessageContaining("model.encryption-secret");
     }
 
     private static MockEnvironment secureEnvironment() {
@@ -59,11 +58,7 @@ class ProductionSecretEnvironmentPostProcessorTest {
                 .withProperty("spring-agent.web.allowed-origins", "https://agent.example.com")
                 .withProperty("spring-agent.model.encryption-secret", "model-encryption-secret-32-bytes-long")
                 .withProperty("spring-agent.connector.encryption-secret", "connector-encryption-secret-32-bytes-long")
-                .withProperty("spring.datasource.password", "database-password-from-secret-store")
-                .withProperty("spring-agent.connector.openclaw.enabled", "true")
-                .withProperty("spring-agent.connector.openclaw.service-token", "openclaw-service-token-from-vault")
-                .withProperty("spring-agent.connector.hermes.enabled", "true")
-                .withProperty("spring-agent.connector.hermes.bridge-token", "hermes-bridge-token-from-vault");
+                .withProperty("spring.datasource.password", "database-password-from-secret-store");
         environment.setActiveProfiles("production");
         return environment;
     }

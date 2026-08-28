@@ -46,14 +46,6 @@ public final class ProductionSecretEnvironmentPostProcessor
         rejectDefaultOrWeak(environment, values, "spring-agent.connector.encryption-secret",
                 "demo-secret-change-me", 32);
         rejectDefault(environment, values, "spring.datasource.password", "ai123456");
-        if (environment.getProperty("spring-agent.connector.openclaw.enabled", Boolean.class, true)) {
-            rejectDefaultOrWeak(environment, values, "spring-agent.connector.openclaw.service-token",
-                    "demo-openclaw-bridge-token-change-me", 24);
-        }
-        if (environment.getProperty("spring-agent.connector.hermes.enabled", Boolean.class, true)) {
-            rejectDefaultOrWeak(environment, values, "spring-agent.connector.hermes.bridge-token",
-                    "demo-hermes-bridge-token-change-me", 24);
-        }
         return List.copyOf(values);
     }
 
