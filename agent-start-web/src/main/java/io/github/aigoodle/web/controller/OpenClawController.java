@@ -15,7 +15,7 @@ import java.util.Map;
 
 /** OpenClaw runtime and plugin lifecycle facade; the browser never talks to Bridge directly. */
 @RestController
-@ConditionalOnBean(OpenClawGatewayClient.class)
+@ConditionalOnBean(type = "io.github.aigoodle.connector.openclaw.OpenClawGatewayClient")
 @RequestMapping("/openclaw")
 public class OpenClawController {
     private final OpenClawGatewayClient client;

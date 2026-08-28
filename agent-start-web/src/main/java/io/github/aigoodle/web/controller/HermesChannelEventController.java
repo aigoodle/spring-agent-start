@@ -12,7 +12,10 @@ import org.springframework.web.server.ResponseStatusException;
 
 /** Authenticated data-plane callback used by the Hermes Agent Start platform plugin. */
 @RestController
-@ConditionalOnBean({ChannelInboundDispatcher.class, HermesProperties.class})
+@ConditionalOnBean(type = {
+        "io.github.aigoodle.connector.channel.ChannelInboundDispatcher",
+        "io.github.aigoodle.connector.hermes.HermesProperties"
+})
 @RequestMapping("/channel-events/hermes")
 public class HermesChannelEventController {
     private final ChannelInboundDispatcher dispatcher;

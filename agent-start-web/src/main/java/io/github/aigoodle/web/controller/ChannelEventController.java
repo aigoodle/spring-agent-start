@@ -19,7 +19,10 @@ import java.time.LocalDateTime;
 
 /** Authenticated runtime callback. Returns a reply when a bound Spring Agent claims the message. */
 @RestController
-@ConditionalOnBean({ChannelInboundDispatcher.class, OpenClawProperties.class})
+@ConditionalOnBean(type = {
+        "io.github.aigoodle.connector.channel.ChannelInboundDispatcher",
+        "io.github.aigoodle.connector.openclaw.OpenClawProperties"
+})
 @RequestMapping("/channel-events/openclaw")
 public class ChannelEventController {
     public record DeliveryReceipt(String provider, String channelId, String accountId,
