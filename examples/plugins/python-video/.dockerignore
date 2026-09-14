@@ -1,0 +1,5 @@
+__pycache__
+*.pyc
+.env
+test_*.py
+README.md

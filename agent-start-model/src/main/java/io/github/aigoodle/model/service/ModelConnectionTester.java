@@ -49,6 +49,13 @@ public class ModelConnectionTester {
     }
 
     private void addSuccessfulProbe(Map<String, Object> result, ModelEndpoint endpoint) {
+        if (endpoint.getModelType() == ModelType.VIDEO) {
+            providerRegistry.get(endpoint.getProviderName()).createVideoModel(endpoint).parameterSchema();
+            result.put("kind", "video_configuration");
+            result.put("verifiedRemote", false);
+            result.put("message", "Configuration validated locally. Run an explicit video generation to verify vendor access; no paid task was submitted.");
+            return;
+        }
         if (endpoint.getModelType() == ModelType.LLM) {
             result.put("kind", "chat");
             result.put("snippet", chatSnippet(endpoint));

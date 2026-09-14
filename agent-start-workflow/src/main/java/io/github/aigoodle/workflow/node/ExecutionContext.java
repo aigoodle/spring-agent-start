@@ -23,6 +23,23 @@ public class ExecutionContext {
     private String runId;
     private String conversationId;
     private String tenantId;
+    /** Trusted execution option, never populated from client inputs or node settings. */
+    private String resourceTenantId;
+
+    public String resourceTenant() {
+        return resourceTenantId == null || resourceTenantId.isBlank() ? tenantId : resourceTenantId;
+    }
+
+    /** Scope only configuration/model/knowledge operations; business actions keep tenantId. */
+    public <T> T withResourceTenant(java.util.function.Supplier<T> action) {
+        String resource = resourceTenant();
+        var caller = io.github.aigoodle.common.context.UserContextHolder.get();
+        if (resource == null || resource.equals(io.github.aigoodle.common.context.UserContextHolder.currentTenantId()))
+            return action.get();
+        var reader = io.github.aigoodle.common.context.CurrentUser.builder()
+                .tenantId(resource).userId(caller == null ? userId : caller.getUserId()).build();
+        return io.github.aigoodle.common.context.UserContextHolder.callAs(reader, action);
+    }
     private String userId;
     private RunCancellationToken cancellationToken;
     private Map<String, Object> iterationCursors = new java.util.concurrent.ConcurrentHashMap<>();

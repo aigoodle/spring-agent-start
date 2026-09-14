@@ -1,6 +1,7 @@
 package io.github.aigoodle.completion.service;
 
 import io.github.aigoodle.agent.entity.AppEntity;
+import io.github.aigoodle.common.context.UserContextHolder;
 import io.github.aigoodle.memory.MemoryManager;
 import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.completion.common.SseBridge;
@@ -32,7 +33,7 @@ public class WorkflowChatGenerator {
         requireSuccess(runResult);
 
         String answer = WorkflowAnswerExtractor.extract(runResult);
-        appendHistory(application.getTenantId(), application.getId(), chatContext.conversationId(),
+        appendHistory(UserContextHolder.currentTenantId(), application.getId(), chatContext.conversationId(),
                 request.lastUserMessage(), answer);
         return OpenAIChatResponse.completion(request.getModel(), answer);
     }
@@ -48,15 +49,17 @@ public class WorkflowChatGenerator {
         try {
             if (request.getHumanInput() != null) {
                 runResult = requireAccepted(workflowService.signal(
-                        application.getTenantId(),
+                        UserContextHolder.currentTenantId(),
                         request.getHumanInput().getRunId(),
                         request.getHumanInput().getResumeToken(),
                         request.getHumanInput().getEventId(),
                         request.getHumanInput().getPayload())).runResult();
             } else {
-                runResult = workflowService.run(
-                        chatContext.workflowId(), chatContext.inputs(), chatContext.conversationId(),
-                        streamSession::nodeFinished, streamSession.sink());
+                runResult = application.getTenantId().equals(UserContextHolder.currentTenantId())
+                        ? workflowService.run(chatContext.workflowId(), chatContext.inputs(), chatContext.conversationId(),
+                                streamSession::nodeFinished, streamSession.sink())
+                        : workflowService.runSharedPublished(application.getId(), application.getTenantId(),
+                                chatContext.inputs(), chatContext.conversationId(), streamSession::nodeFinished, streamSession.sink());
             }
         } catch (RuntimeException runFailure) {
             logger.warn("Workflow chat run failed for app {}: {}",
@@ -70,7 +73,7 @@ public class WorkflowChatGenerator {
         // any direct-output text, and the renderable human-input form. Previously
         // only SUCCESS was stored, so history started at the later resume request.
         if (runResult.isSuccess() || runResult.getStatus() == WorkflowRunStatus.WAITING) {
-            appendHistory(application.getTenantId(),
+            appendHistory(UserContextHolder.currentTenantId(),
                     application.getId(),
                     chatContext.conversationId(),
                     request.lastUserMessage(),
@@ -81,10 +84,13 @@ public class WorkflowChatGenerator {
     private WorkflowRunResult resumeOrRun(AppEntity application, OpenAIChatRequest request,
                                           WorkflowChatContext context) {
         if (request.getHumanInput() == null) {
-            return workflowService.run(context.workflowId(), context.inputs(), context.conversationId());
+            return application.getTenantId().equals(UserContextHolder.currentTenantId())
+                    ? workflowService.run(context.workflowId(), context.inputs(), context.conversationId())
+                    : workflowService.runSharedPublished(application.getId(), application.getTenantId(),
+                            context.inputs(), context.conversationId(), null, null);
         }
         return requireAccepted(workflowService.signal(
-                application.getTenantId(),
+                UserContextHolder.currentTenantId(),
                 request.getHumanInput().getRunId(), request.getHumanInput().getResumeToken(),
                 request.getHumanInput().getEventId(), request.getHumanInput().getPayload())).runResult();
     }

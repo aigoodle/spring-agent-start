@@ -30,7 +30,7 @@ final class ClassifierPromptBuilder {
         if (promptTemplateService == null || templateId == null || templateId.isBlank()) {
             return null;
         }
-        return promptTemplateService.get(templateId);
+        return promptTemplateService.get(io.github.aigoodle.common.context.UserContextHolder.currentTenantId(), templateId);
     }
 
     private static String defaultPrompt(String categoryMenu) {

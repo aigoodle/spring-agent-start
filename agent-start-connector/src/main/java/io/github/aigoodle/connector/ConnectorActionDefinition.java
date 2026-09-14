@@ -27,7 +27,7 @@ public record ConnectorActionDefinition(
         metadata = metadata == null ? Map.of() : Map.copyOf(metadata);
     }
 
-    @JsonProperty("capabilities")
+    @JsonProperty(value = "capabilities", access = JsonProperty.Access.READ_ONLY)
     public List<ConnectorCapability> capabilities() {
         Object configured = metadata.get("capabilities");
         if (configured instanceof List<?> values) {

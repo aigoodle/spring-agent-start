@@ -27,7 +27,7 @@ class IterationNodeExecutorTest {
     @Test
     void failsAtTheExactItemWhenSubRunFails() {
         WorkflowEngine engine = mock(WorkflowEngine.class);
-        when(engine.run(any(WorkflowGraph.class), anyMap(), isNull(), isNull(), isNull(), isNull()))
+        when(engine.run(any(WorkflowGraph.class), anyMap(), isNull(), isNull(), isNull(), isNull(), any(io.github.aigoodle.workflow.engine.WorkflowRunOptions.class)))
                 .thenReturn(success("first"))
                 .thenReturn(failure("broken item"));
         IterationNodeExecutor executor = new IterationNodeExecutor(() -> engine);
@@ -41,7 +41,7 @@ class IterationNodeExecutorTest {
     @Test
     void continueOnErrorKeepsOutputPositionsStable() {
         WorkflowEngine engine = mock(WorkflowEngine.class);
-        when(engine.run(any(WorkflowGraph.class), anyMap(), isNull(), isNull(), isNull(), isNull()))
+        when(engine.run(any(WorkflowGraph.class), anyMap(), isNull(), isNull(), isNull(), isNull(), any(io.github.aigoodle.workflow.engine.WorkflowRunOptions.class)))
                 .thenReturn(failure("first failed"))
                 .thenReturn(success("second"));
         IterationNodeExecutor executor = new IterationNodeExecutor(() -> engine);
@@ -56,7 +56,7 @@ class IterationNodeExecutorTest {
     @Test
     void resumesAtDurableCursorWithoutRepeatingCompletedItems() {
         WorkflowEngine engine = mock(WorkflowEngine.class);
-        when(engine.run(any(WorkflowGraph.class), anyMap(), isNull(), isNull(), isNull(), isNull()))
+        when(engine.run(any(WorkflowGraph.class), anyMap(), isNull(), isNull(), isNull(), isNull(), any(io.github.aigoodle.workflow.engine.WorkflowRunOptions.class)))
                 .thenReturn(success("second"));
         ExecutionContext context = contextWithItems();
         context.setIterationCursors(new java.util.concurrent.ConcurrentHashMap<>(Map.of(
@@ -66,7 +66,7 @@ class IterationNodeExecutorTest {
 
         assertThat(iterationOutputs(result)).containsExactly(
                 Map.of("value", "first"), Map.of("value", "second"));
-        verify(engine, times(1)).run(any(WorkflowGraph.class), anyMap(), isNull(), isNull(), isNull(), isNull());
+        verify(engine, times(1)).run(any(WorkflowGraph.class), anyMap(), isNull(), isNull(), isNull(), isNull(), any(io.github.aigoodle.workflow.engine.WorkflowRunOptions.class));
     }
 
     private static NodeDef iterationNode(boolean continueOnError) {

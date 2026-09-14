@@ -50,7 +50,7 @@ public class VolcengineArkModelProvider extends AbstractModelProvider {
 
     @Override
     public Set<ModelType> supportedModelTypes() {
-        return Set.of(ModelType.LLM, ModelType.TEXT_EMBEDDING);
+        return Set.of(ModelType.LLM, ModelType.TEXT_EMBEDDING, ModelType.VIDEO);
     }
 
     @Override
@@ -101,6 +101,10 @@ public class VolcengineArkModelProvider extends AbstractModelProvider {
                 .openAiApi(buildApi(endpoint))
                 .defaultOptions(options.build())
                 .build();
+    }
+
+    @Override public io.github.aigoodle.model.video.VideoModel createVideoModel(ModelEndpoint endpoint) {
+        return new SeedanceVideoModel(endpoint);
     }
 
     @Override

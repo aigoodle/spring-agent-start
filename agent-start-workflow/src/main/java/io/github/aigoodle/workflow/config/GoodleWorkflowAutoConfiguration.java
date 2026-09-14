@@ -214,6 +214,12 @@ public class GoodleWorkflowAutoConfiguration {
     static class ConnectorNodeConfiguration {
         @Bean
         @ConditionalOnBean(type = "io.github.aigoodle.connector.execution.ConnectorExecutionGateway")
+        public io.github.aigoodle.workflow.node.builtin.VideoGenerationNodeExecutor videoGenerationNodeExecutor(
+                io.github.aigoodle.connector.execution.ConnectorExecutionGateway gateway) {
+            return new io.github.aigoodle.workflow.node.builtin.VideoGenerationNodeExecutor(gateway);
+        }
+        @Bean
+        @ConditionalOnBean(type = "io.github.aigoodle.connector.execution.ConnectorExecutionGateway")
         public io.github.aigoodle.workflow.node.builtin.ConnectorNodeExecutor connectorNodeExecutor(
                 io.github.aigoodle.connector.execution.ConnectorExecutionGateway gateway,
                 io.github.aigoodle.connector.channel.ChannelConnectionService channelConnections,

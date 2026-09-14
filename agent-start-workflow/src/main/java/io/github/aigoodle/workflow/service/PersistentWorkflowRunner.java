@@ -99,6 +99,10 @@ public class PersistentWorkflowRunner {
         String runId = options.runId() == null ? UUID.randomUUID().toString() : options.runId();
         WorkflowCheckpointEntity checkpoint = initialCheckpoint(tenantId, workflowId, graphVersion,
                 graph, inputs, conversationId, runId);
+        // This metadata is written from trusted Java options, never from request inputs.
+        Map<String, Object> durableGraph = JsonUtils.parseMap(checkpoint.getGraphJson());
+        durableGraph.put("_resourceTenantId", options.resourceTenantId());
+        checkpoint.setGraphJson(JsonUtils.toJson(durableGraph));
         ExecutionContext policyContext = ExecutionContext.start(inputs, conversationId, null, runId);
         List<WorkflowRunNodeEntity> nodes = graph.getNodes().stream()
                 .map(node -> initialNode(runId, node, engine.executionPolicy(node, policyContext))).toList();
@@ -153,6 +157,10 @@ public class PersistentWorkflowRunner {
         boolean persisted = store.requestCancellation(tenantId, runId, cancellationReason);
         ActiveRun active = activeRuns.get(runId);
         if (active != null && active.tenantId().equals(tenantId)) active.token().cancel(cancellationReason);
+        if (persisted) {
+            var cancelled = store.require(tenantId, runId);
+            if (WorkflowRunStatus.CANCELLED.name().equals(cancelled.getStatus())) cleanupWait(cancelled);
+        }
         return persisted;
     }
 
@@ -269,10 +277,31 @@ public class PersistentWorkflowRunner {
         checkpoint.setInterruptReason("Wait expired at node " + checkpoint.getResumeNodeId());
         try {
             store.transition(checkpoint, checkpoint.getCheckpointVersion(), WorkflowExecutionEventType.RUN_TIMED_OUT);
+            cleanupWait(checkpoint);
             return true;
         } catch (PlatformException conflict) {
             if ("checkpoint_conflict".equals(conflict.getCode())) return false;
             throw conflict;
+        }
+    }
+
+    private void cleanupWait(WorkflowCheckpointEntity checkpoint) {
+        if (checkpoint.getResumeNodeId() == null) return;
+        try {
+            WorkflowGraph graph = JsonUtils.parse(checkpoint.getGraphJson(), WorkflowGraph.class);
+            Map<String, Map<String, Object>> pool = JsonUtils.parse(checkpoint.getVariablePoolJson(), new TypeReference<>() {});
+            for (var entry : pool.entrySet()) {
+                if (entry.getValue().get("_pluginTask") == null) continue;
+                try { engine.cancelWaiting(graph.node(entry.getKey()), entry.getValue()); }
+                catch (RuntimeException failure) {
+                    org.slf4j.LoggerFactory.getLogger(PersistentWorkflowRunner.class)
+                            .warn("External task cancellation pending for workflow {} node {}", checkpoint.getRunId(), entry.getKey());
+                }
+            }
+        } catch (RuntimeException failure) {
+            org.slf4j.LoggerFactory.getLogger(PersistentWorkflowRunner.class)
+                    .warn("External wait cleanup failed for workflow {} ({}); external task may still be running",
+                            checkpoint.getRunId(), failure.getClass().getSimpleName());
         }
     }
 
@@ -372,7 +401,8 @@ public class PersistentWorkflowRunner {
                 store.transition(checkpoint, checkpoint.getCheckpointVersion(), WorkflowExecutionEventType.RUN_RESUMED);
             }
             WorkflowRunResult result = engine.run(graph, inputs, checkpoint.getConversationId(), stepListener, chatSink,
-                    checkpoint.getTenantId(), options, resume, observer);
+                    checkpoint.getTenantId(), options.withResourceTenantId(
+                            (String) JsonUtils.parseMap(checkpoint.getGraphJson()).get("_resourceTenantId")), resume, observer);
             observer.finish(result);
             return result;
         } finally {
@@ -502,7 +532,8 @@ public class PersistentWorkflowRunner {
             checkpoint.setVariablePoolJson(JsonUtils.toJson(context.getPool().snapshot()));
             checkpoint.setBranchResultsJson(JsonUtils.toJson(branches));
             checkpoint.setPendingNodesJson(JsonUtils.toJson(new ArrayList<>(pending)));
-            checkpoint.setResumeNodeId(pending.stream().findFirst().orElse(null));
+            if (!WorkflowRunStatus.WAITING.name().equals(checkpoint.getStatus()))
+                checkpoint.setResumeNodeId(pending.stream().findFirst().orElse(null));
             if (status == NodeExecutionStatus.WAITING && result.getWaitRequest() != null) {
                 io.github.aigoodle.workflow.node.WorkflowWaitRequest wait = result.getWaitRequest();
                 checkpoint.setStatus(WorkflowRunStatus.WAITING.name());
@@ -556,6 +587,16 @@ public class PersistentWorkflowRunner {
             checkpoint.setStatus(result.getStatus().name());
             checkpoint.setInterruptReason(result.getError());
             if (result.getStatus() != WorkflowRunStatus.WAITING) checkpoint.setResumeNodeId(null);
+            else {
+                var wait = result.getWaitRequest();
+                checkpoint.setResumeNodeId(result.getWaitingNodeId());
+                checkpoint.setWaitType(wait.type().name());
+                checkpoint.setCorrelationKey(wait.correlationKey());
+                checkpoint.setResumeTokenHash(sha256(wait.resumeToken()));
+                checkpoint.setInputSchemaJson(JsonUtils.toJson(wait.inputSchema()));
+                checkpoint.setWaitExpiresAt(local(wait.expiresAt()));
+                checkpoint.setWakeAt(local(wait.wakeAt()));
+            }
             WorkflowExecutionEventType event = switch (result.getStatus()) {
                 case SUCCEEDED -> WorkflowExecutionEventType.RUN_COMPLETED;
                 case WAITING -> WorkflowExecutionEventType.RUN_WAITING;

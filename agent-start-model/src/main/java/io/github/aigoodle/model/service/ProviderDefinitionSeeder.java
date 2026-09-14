@@ -84,6 +84,7 @@ public class ProviderDefinitionSeeder implements ApplicationListener<Application
             }
 
             int mSort = 0;
+            if (provider.supports(ModelType.VIDEO)) definitionService.addBuiltinModelType(provider.getName(), ModelType.VIDEO);
             for (PredefinedModel m : provider.predefinedModels()) {
                 PredefinedModelEntity row = definitionService.fromMemory(
                         provider.getName(), m, mSort++);

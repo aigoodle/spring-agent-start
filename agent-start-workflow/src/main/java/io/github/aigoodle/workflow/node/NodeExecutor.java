@@ -14,6 +14,9 @@ public interface NodeExecutor {
 
     NodeResult execute(NodeDef node, ExecutionContext context);
 
+    /** Best-effort external cleanup after a persisted wait is cancelled or expires. */
+    default void cancelWaiting(NodeDef node, java.util.Map<String, Object> savedNamespace) {}
+
     default NodeExecutionMode executionMode(NodeDef node) {
         return NodeExecutionMode.PURE;
     }

@@ -29,6 +29,10 @@ public class AppEntity extends BaseEntity {
     /** PRIVATE / TENANT_LIST / GLOBAL. GLOBAL apps may be executed by other tenants. */
     private String visibility;
 
+    /** ALL: 保留原租户可见性；RESTRICTED: 必须命中应用数据授权。 */
+    @TableField(updateStrategy = com.baomidou.mybatisplus.annotation.FieldStrategy.NEVER)
+    private String dataAccessMode;
+
     private String name;
 
     /** Short summary shown on the agent list card (Dify parity). */

@@ -26,7 +26,7 @@ final class NodeModelResolver {
 
     static ChatClient resolve(NodeDef node, ExecutionContext context, ModelService modelService) {
         String tenantId = tenantOf(context);
-        return modelService.getChatClient(tenantId, resolveEntityId(node, context, modelService));
+        return context.withResourceTenant(() -> modelService.getChatClient(tenantId, resolveEntityId(node, context, modelService)));
     }
 
     /**
@@ -41,7 +41,7 @@ final class NodeModelResolver {
      */
     static ChatModel resolveModel(NodeDef node, ExecutionContext context, ModelService modelService) {
         String tenantId = tenantOf(context);
-        return modelService.getChatModel(tenantId, resolveEntityId(node, context, modelService));
+        return context.withResourceTenant(() -> modelService.getChatModel(tenantId, resolveEntityId(node, context, modelService)));
     }
 
     /**
@@ -70,7 +70,7 @@ final class NodeModelResolver {
 
     /** Prefer the run-bound tenant and fall back to the current authenticated user. */
     private static String tenantOf(ExecutionContext context) {
-        String tenantId = context == null ? null : context.getTenantId();
+        String tenantId = context == null ? null : context.resourceTenant();
         return tenantId == null || tenantId.isBlank()
                 ? UserContextHolder.currentTenantId() : tenantId;
     }

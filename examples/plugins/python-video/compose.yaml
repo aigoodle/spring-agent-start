@@ -1,0 +1,14 @@
+services:
+  video-plugin:
+    build: .
+    environment:
+      PLUGIN_SERVICE_TOKEN: ${PLUGIN_SERVICE_TOKEN:?Set a service authentication token}
+    ports:
+      - "127.0.0.1:8091:8091"
+    read_only: true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8091/health', timeout=2)"]
+      interval: 30s
+      timeout: 3s
+      retries: 3

@@ -121,4 +121,9 @@ public interface ModelProvider {
      * {@link UnsupportedOperationException} if embeddings are unsupported.
      */
     EmbeddingModel createEmbeddingModel(ModelEndpoint endpoint);
+
+    /** Asynchronous video generation; providers opt in by advertising VIDEO. */
+    default io.github.aigoodle.model.video.VideoModel createVideoModel(ModelEndpoint endpoint) {
+        throw new UnsupportedOperationException(getName() + " does not support video generation");
+    }
 }

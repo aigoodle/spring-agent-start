@@ -6,6 +6,7 @@ import io.github.aigoodle.workflow.engine.WorkflowRunResult;
 import io.github.aigoodle.workflow.node.StepRecord;
 import io.github.aigoodle.workflow.service.WorkflowService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -35,6 +36,8 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("${spring-agent.web.base-path:/agent-start}")
+// MVC hosts already expose these routes through the web module's SseEmitter controller.
+@ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.REACTIVE)
 @ConditionalOnBean(WorkflowService.class)
 public class WorkflowStreamController {
 

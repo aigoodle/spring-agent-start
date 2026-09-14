@@ -50,6 +50,12 @@ import java.util.List;
 @MapperScan("io.github.aigoodle.model.mapper")
 public class GoodleModelAutoConfiguration {
 
+    @Bean @ConditionalOnMissingBean
+    public io.github.aigoodle.model.video.VideoModelService videoModelService(ModelService models, ModelProviderRegistry providers,
+            ProviderDefinitionService definitions, ProviderModelSettingsService settings) {
+        return new io.github.aigoodle.model.video.VideoModelService(models, providers, definitions, settings);
+    }
+
     @Bean
     @ConditionalOnMissingBean
     public TextEncryptor agentTextEncryptor(GoodleModelProperties properties) {

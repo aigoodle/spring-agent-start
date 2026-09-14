@@ -5,7 +5,12 @@ import java.time.Duration;
 /** Resource and deadline policy for one execution. */
 public record WorkflowRunOptions(Duration workflowTimeout, Duration defaultNodeTimeout,
                                  int maxConcurrency, RunCancellationToken cancellationToken,
-                                 String runId) {
+                                 String runId, String resourceTenantId) {
+
+    public WorkflowRunOptions(Duration workflowTimeout, Duration defaultNodeTimeout,
+            int maxConcurrency, RunCancellationToken cancellationToken, String runId) {
+        this(workflowTimeout, defaultNodeTimeout, maxConcurrency, cancellationToken, runId, null);
+    }
 
     public WorkflowRunOptions(Duration workflowTimeout, Duration defaultNodeTimeout,
                               int maxConcurrency, RunCancellationToken cancellationToken) {
@@ -28,6 +33,11 @@ public record WorkflowRunOptions(Duration workflowTimeout, Duration defaultNodeT
 
     public WorkflowRunOptions withRunId(String value) {
         return new WorkflowRunOptions(workflowTimeout, defaultNodeTimeout, maxConcurrency,
-                cancellationToken, value);
+                cancellationToken, value, resourceTenantId);
+    }
+
+    public WorkflowRunOptions withResourceTenantId(String value) {
+        return new WorkflowRunOptions(workflowTimeout, defaultNodeTimeout, maxConcurrency,
+                cancellationToken, runId, value);
     }
 }

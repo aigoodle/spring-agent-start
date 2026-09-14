@@ -64,6 +64,8 @@ public final class ConnectorToolDefinition implements ContextualToolDefinition, 
             throw new io.github.aigoodle.connector.ConnectorException(result.error().code(),
                     result.error().message());
         }
+        if (result.metadata().get("pluginTask") != null)
+            return Map.of("status", "PENDING", "task", result.metadata().get("pluginTask"));
         return result.data() != null ? result.data() : result.content();
     }
 

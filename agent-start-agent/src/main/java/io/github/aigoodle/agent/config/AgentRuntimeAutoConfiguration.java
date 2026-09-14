@@ -77,6 +77,20 @@ import java.util.List;
 public class AgentRuntimeAutoConfiguration {
 
     @Bean
+    @ConditionalOnMissingBean
+    public io.github.aigoodle.common.context.DepartmentHierarchyProvider departmentHierarchyProvider() {
+        return (tenantId, departmentId) -> java.util.Set.of();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public io.github.aigoodle.agent.service.AppPermissionService appPermissionService(
+            AppMapper apps, io.github.aigoodle.agent.mapper.AppPermissionMapper permissions,
+            io.github.aigoodle.common.context.DepartmentHierarchyProvider departments) {
+        return new io.github.aigoodle.agent.service.AppPermissionService(apps, permissions, departments);
+    }
+
+    @Bean
     public ReActStrategy reActStrategy() {
         return new ReActStrategy();
     }

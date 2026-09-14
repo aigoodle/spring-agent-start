@@ -25,6 +25,7 @@ public final class AgentExecutionService {
     /** Production path: always executes an immutable current or explicitly pinned version. */
     public AgentResponse runPublished(String tenantId, String appId, String versionId, AgentRequest request,
                                       Consumer<AgentStep> steps, Consumer<String> tokens) {
+        drafts.require(tenantId, appId);
         AgentDefinition definition = versions.definition(tenantId, appId, versionId);
         return runtimes.run(definition, request, steps, tokens);
     }

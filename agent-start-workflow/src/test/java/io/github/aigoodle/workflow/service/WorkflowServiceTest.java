@@ -17,6 +17,36 @@ import static org.mockito.Mockito.when;
 
 class WorkflowServiceTest {
 
+    @Test
+    void checksLinkedApplicationBeforeReturningWorkflowOrChangingDraft() {
+        var permissions = mock(io.github.aigoodle.agent.service.AppPermissionService.class);
+        workflowService.setAppPermissions(permissions);
+        WorkflowEntity workflow = new WorkflowEntity();
+        workflow.setTenantId("tenant-1"); workflow.setAppId("app-1"); workflow.setId("workflow-1");
+        when(workflowMapper.selectOne(any())).thenReturn(workflow);
+        org.mockito.Mockito.doThrow(new io.github.aigoodle.common.exception.PlatformException("forbidden", "denied", null))
+                .when(permissions).requireLinkedApp("tenant-1", "app-1", false);
+        assertThatThrownBy(() -> workflowService.require("tenant-1", "workflow-1")).hasMessage("denied");
+
+        org.mockito.Mockito.doThrow(new io.github.aigoodle.common.exception.PlatformException("forbidden", "read only", null))
+                .when(permissions).requireLinkedApp("tenant-1", "app-1", true);
+        assertThatThrownBy(() -> workflowService.saveDraft("tenant-1", "app-1",
+                new WorkflowDraftChanges(null, null, null, null))).hasMessage("read only");
+        verify(workflowMapper, never()).update(any(), any());
+    }
+
+    @Test
+    void filtersRestrictedLinkedApplicationsFromWorkflowList() {
+        var permissions = mock(io.github.aigoodle.agent.service.AppPermissionService.class);
+        workflowService.setAppPermissions(permissions);
+        WorkflowEntity workflow = new WorkflowEntity(); workflow.setAppId("restricted-app");
+        WorkflowEntity standalone = new WorkflowEntity();
+        when(workflowMapper.selectList(any())).thenReturn(java.util.List.of(workflow, standalone));
+        when(permissions.unreadableAppIds("tenant-1", java.util.List.of("restricted-app")))
+                .thenReturn(java.util.Set.of("restricted-app"));
+        assertThat(workflowService.list("tenant-1")).containsExactly(standalone);
+    }
+
     private final WorkflowMapper workflowMapper = mock(WorkflowMapper.class);
     private final WorkflowService workflowService = new WorkflowService(
             workflowMapper, mock(WorkflowRunMapper.class), mock(WorkflowEngine.class));

@@ -18,6 +18,10 @@ import io.github.aigoodle.workflow.node.NodeExecutionMode;
 import io.github.aigoodle.workflow.variable.VariableResolver;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import io.github.aigoodle.common.util.JsonUtils;
+import io.github.aigoodle.workflow.node.WorkflowWaitRequest;
+import java.time.Instant;
+import java.util.UUID;
 
 /** Provider-neutral connector node; OpenClaw is one provider, not a workflow type. */
 public class ConnectorNodeExecutor implements NodeExecutor {
@@ -51,10 +55,50 @@ public class ConnectorNodeExecutor implements NodeExecutor {
                 context.getRunId() + ":" + node.getId(), context.getTenantId(), context.getUserId(),
                 null, null, context.getRunId(), node.getId(),
                 Map.of("conversationId", context.getConversationId() == null ? "" : context.getConversationId()));
-        ConnectorResult result = gateway.execute(new ConnectorExecutionRequest(
+        ConnectorExecutionRequest request = new ConnectorExecutionRequest(
                 new ConnectorKey(provider, connectorId), actionId,
                 node.getString("installationId"), connectionId,
-                arguments, executionContext));
+                arguments, executionContext);
+        Object pendingTask = context.getPool().namespace(node.getId()).get("_pluginTask");
+        if ("plugin".equals(provider)) {
+            if (pendingTask != null) {
+                request = JsonUtils.convert(context.getPool().namespace(node.getId()).get("_pluginInvocation"), ConnectorExecutionRequest.class);
+                if (request == null) return NodeResult.failure("Plugin task invocation is missing from checkpoint");
+                var attributes = new LinkedHashMap<>(request.context().attributes());
+                attributes.put("pluginTask", pendingTask); attributes.put("pluginTaskOperation", "QUERY");
+                var original = request.context();
+                request = new ConnectorExecutionRequest(request.connector(), request.actionId(), request.installationId(), request.connectionId(),
+                        request.arguments(), new ConnectorExecutionContext(original.executionId(), original.tenantId(), original.userId(),
+                        original.agentId(), original.workflowId(), original.runId(), original.nodeId(), attributes));
+            } else {
+                context.getPool().put(node.getId(), "_pluginInvocation", request);
+                context.getPool().put(node.getId(), "_pluginDeadline", Instant.now()
+                        .plusSeconds(Math.max(1, Math.min(86400, node.getInt("taskTimeoutSeconds", 900)))).toString());
+            }
+        }
+        ConnectorResult result = gateway.execute(request);
+        if ("plugin".equals(provider) && result.success() && result.metadata().get("pluginTask") != null) {
+            Object taskData = result.metadata().get("pluginTask");
+            context.getPool().put(node.getId(), "_pluginTask", taskData);
+            try { context.throwIfCancelled(); }
+            catch (RuntimeException cancelled) {
+                try { cancelWaiting(node, context.getPool().namespace(node.getId())); }
+                catch (RuntimeException cleanupFailure) { cancelled.addSuppressed(cleanupFailure); }
+                throw cancelled;
+            }
+            var taskEnvelope = JsonUtils.mapper().valueToTree(taskData);
+            Instant wake = Instant.parse(taskEnvelope.path("task").path("nextPollAt").asText());
+            Instant deadline = Instant.parse(String.valueOf(context.getPool().namespace(node.getId()).get("_pluginDeadline")));
+            if (Instant.now().isAfter(deadline)) {
+                cancelWaiting(node, context.getPool().namespace(node.getId()));
+                return NodeResult.failure("Plugin task deadline exceeded");
+            }
+            if (wake.isBefore(Instant.now().plusSeconds(1))) wake = Instant.now().plusSeconds(1);
+            if (wake.isAfter(deadline)) wake = deadline;
+            return NodeResult.waiting(new WorkflowWaitRequest(NodeType.SLEEP_UNTIL,
+                    "plugin:" + context.getRunId() + ":" + node.getId(), Map.of(), deadline, wake,
+                    UUID.randomUUID().toString()));
+        }
         context.throwIfCancelled();
         if (!result.success()) {
             String message = result.error() == null ? "Connector execution failed" : result.error().message();
@@ -70,6 +114,22 @@ public class ConnectorNodeExecutor implements NodeExecutor {
         output.put("actionId", actionId);
         if (connectionId != null) output.put("connectionId", connectionId);
         return NodeResult.of("result", output);
+    }
+
+    @Override public void cancelWaiting(NodeDef node, Map<String, Object> saved) {
+        if (!"plugin".equals(node.getString("provider")) || saved.get("_pluginTask") == null) return;
+        var request = JsonUtils.convert(saved.get("_pluginInvocation"), ConnectorExecutionRequest.class);
+        if (request == null) throw new IllegalStateException("Plugin task invocation is missing");
+        var original = request.context();
+        var attributes = new LinkedHashMap<>(original.attributes());
+        attributes.put("pluginTask", saved.get("_pluginTask"));
+        attributes.put("pluginTaskOperation", "CANCEL");
+        var result = gateway.execute(new ConnectorExecutionRequest(request.connector(), request.actionId(),
+                request.installationId(), request.connectionId(), request.arguments(),
+                new ConnectorExecutionContext(original.executionId(), original.tenantId(), original.userId(),
+                        original.agentId(), original.workflowId(), original.runId(), original.nodeId(), attributes)));
+        if (!result.success() || result.metadata().get("pluginTask") != null)
+            throw new IllegalStateException("Plugin task cancellation was not confirmed");
     }
 
     private NodeResult sendChannelMessage(NodeDef node, ExecutionContext context) {

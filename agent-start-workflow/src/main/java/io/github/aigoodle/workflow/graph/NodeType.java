@@ -38,6 +38,7 @@ public enum NodeType {
     ITERATION,
     CODE,
     CONNECTOR,
+    VIDEO_GENERATION,
     TOOL,
     HUMAN_INPUT,
     APPROVAL,

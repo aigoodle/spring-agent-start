@@ -40,6 +40,9 @@ public final class GraphValidator {
         for (NodeDef node : nodes) {
             require(node != null && hasText(node.getId()), "node_id_required", "Every node must have an id");
             require(node.getType() != null, "node_type_required", "Node " + node.getId() + " has no type");
+            require(depth == 0 || (node.getType() != NodeType.VIDEO_GENERATION
+                            && !(node.getType() == NodeType.CONNECTOR && "media.video".equals(node.getString("connectorId")))),
+                    "nested_video_not_supported", "Video generation requires a top-level workflow node; nested iteration does not persist asynchronous waits");
             require(byId.putIfAbsent(node.getId(), node) == null, "duplicate_node_id",
                     "Duplicate node id: " + node.getId());
         }
@@ -129,6 +132,18 @@ public final class GraphValidator {
                 "Node " + node.getId() + " maxAttempts must be a positive integer");
 
         switch (node.getType()) {
+            case VIDEO_GENERATION -> {
+                Object selection = node.get("model");
+                require(selection instanceof Map<?, ?> model
+                                && (model.get("modelId") instanceof String id && hasText(id)
+                                || model.get("providerName") instanceof String provider && hasText(provider)
+                                && model.get("modelName") instanceof String name && hasText(name)),
+                        "video_model_required", "Video generation node " + node.getId() + " requires a configured video model");
+                require(hasText(node.getString("prompt")), "video_prompt_required",
+                        "Video generation node " + node.getId() + " requires a prompt");
+                require(node.get("parameters") == null || node.get("parameters") instanceof Map<?, ?>,
+                        "invalid_video_parameters", "Video parameters must be an object");
+            }
             case HUMAN_INPUT, APPROVAL -> {
                 Object schema = node.get("inputSchema");
                 require(schema == null || schema instanceof Map<?, ?>, "invalid_input_schema",

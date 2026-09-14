@@ -102,8 +102,11 @@ public class AppGenerateService {
         String tenantId = executionTenantId == null || executionTenantId.isBlank()
                 ? UserContextHolder.currentTenantId()
                 : executionTenantId;
-        AppEntity application = appService.require(tenantId, appId);
-        requestInitializer.initialize(application, request);
+        AppEntity application = appService.requireForChat(tenantId, appId);
+        AppEntity conversationApp = new AppEntity();
+        conversationApp.setId(application.getId());
+        conversationApp.setTenantId(tenantId);
+        requestInitializer.initialize(conversationApp, request);
         return application;
     }
 
@@ -111,6 +114,10 @@ public class AppGenerateService {
                               Supplier<T> action) {
         if (executionUserId == null || executionUserId.isBlank()) {
             return action.get();
+        }
+        CurrentUser caller = UserContextHolder.get();
+        if (caller != null && executionUserId.equals(caller.getUserId())) {
+            return UserContextHolder.callAs(caller.toBuilder().appId(application.getId()).build(), action);
         }
         CurrentUser user = CurrentUser.builder()
                 .userId(executionUserId)

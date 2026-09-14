@@ -31,6 +31,17 @@ public class WorkflowService {
 
     private static final String DEFAULT_TENANT = "default";
 
+    private io.github.aigoodle.agent.service.AppPermissionService appPermissions;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setAppPermissions(io.github.aigoodle.agent.service.AppPermissionService appPermissions) {
+        this.appPermissions = appPermissions;
+    }
+
+    private void checkApp(String tenantId, String appId, boolean write) {
+        if (appPermissions != null) appPermissions.requireLinkedApp(defaultIfBlank(tenantId, DEFAULT_TENANT), appId, write);
+    }
+
     private final WorkflowMapper workflowMapper;
     private final WorkflowEngine workflowEngine;
     private final WorkflowGraphCodec graphCodec;
@@ -76,6 +87,7 @@ public class WorkflowService {
     /** Creates or updates the single draft row owned by an application. */
     @Transactional
     public WorkflowEntity save(WorkflowDraftDefinition definition) {
+        checkApp(definition.tenantId(), definition.applicationId(), true);
         requireAppId(definition.applicationId());
         String tenantId = defaultIfBlank(definition.tenantId(), DEFAULT_TENANT);
         WorkflowEntity draft = findDraft(tenantId, definition.applicationId());
@@ -100,6 +112,7 @@ public class WorkflowService {
         if (workflow == null) {
             throw new PlatformException("workflow_not_found", "Workflow not found", null);
         }
+        checkApp(workflow.getTenantId(), workflow.getAppId(), false);
         return workflow;
     }
 
@@ -108,9 +121,13 @@ public class WorkflowService {
     }
 
     public List<WorkflowEntity> list(String tenantId) {
-        return workflowMapper.selectList(new LambdaQueryWrapper<WorkflowEntity>()
+        List<WorkflowEntity> rows = workflowMapper.selectList(new LambdaQueryWrapper<WorkflowEntity>()
                 .eq(WorkflowEntity::getTenantId, defaultIfBlank(tenantId, DEFAULT_TENANT))
                 .orderByDesc(WorkflowEntity::getUpdatedAt));
+        if (appPermissions == null) return rows;
+        java.util.Set<String> denied = appPermissions.unreadableAppIds(defaultIfBlank(tenantId, DEFAULT_TENANT),
+                rows.stream().map(WorkflowEntity::getAppId).filter(java.util.Objects::nonNull).distinct().toList());
+        return rows.stream().filter(row -> row.getAppId() == null || !denied.contains(row.getAppId())).toList();
     }
 
     public WorkflowEntity update(String workflowId, String name, String mode, WorkflowGraph graph) {
@@ -124,6 +141,7 @@ public class WorkflowService {
     public WorkflowEntity update(String tenantId, String workflowId, String name, String mode,
                                  JsonNode graphDefinition) {
         WorkflowEntity workflow = require(tenantId, workflowId);
+        checkApp(workflow.getTenantId(), workflow.getAppId(), true);
         WorkflowEntityFactory.updateDefinition(workflow, name, mode, graphDefinition);
         workflowMapper.update(workflow, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<WorkflowEntity>()
                 .eq(WorkflowEntity::getTenantId, workflow.getTenantId()).eq(WorkflowEntity::getId, workflow.getId()));
@@ -135,7 +153,8 @@ public class WorkflowService {
     }
 
     public void delete(String tenantId, String workflowId) {
-        require(tenantId, workflowId);
+        WorkflowEntity workflow = require(tenantId, workflowId);
+        checkApp(workflow.getTenantId(), workflow.getAppId(), true);
         workflowMapper.delete(new LambdaQueryWrapper<WorkflowEntity>()
                 .eq(WorkflowEntity::getTenantId, defaultIfBlank(tenantId, DEFAULT_TENANT))
                 .eq(WorkflowEntity::getId, workflowId));
@@ -150,6 +169,7 @@ public class WorkflowService {
 
     @Transactional
     public WorkflowEntity createDraft(WorkflowDraftDefinition definition) {
+        checkApp(definition.tenantId(), definition.applicationId(), true);
         WorkflowEntity existingDraft = findDraft(
                 defaultIfBlank(definition.tenantId(), DEFAULT_TENANT), definition.applicationId());
         if (existingDraft != null) {
@@ -169,6 +189,7 @@ public class WorkflowService {
     }
 
     public WorkflowEntity findDraft(String tenantId, String appId) {
+        checkApp(tenantId, appId, false);
         WorkflowEntity workflow = workflowMapper.selectOne(new LambdaQueryWrapper<WorkflowEntity>()
                 .eq(WorkflowEntity::getTenantId, defaultIfBlank(tenantId, DEFAULT_TENANT))
                 .eq(WorkflowEntity::getId, appId).last("LIMIT 1"));
@@ -196,6 +217,7 @@ public class WorkflowService {
 
     @Transactional
     public WorkflowEntity saveDraft(String appId, WorkflowDraftChanges changes) {
+        checkApp(UserContextHolder.currentTenantId(), appId, true);
         requireAppId(appId);
         String tenantId = UserContextHolder.currentTenantId();
         WorkflowEntity draft = findDraft(tenantId, appId);
@@ -212,6 +234,7 @@ public class WorkflowService {
 
     @Transactional
     public WorkflowEntity saveDraft(String tenantId, String appId, WorkflowDraftChanges changes) {
+        checkApp(tenantId, appId, true);
         requireAppId(appId);
         String scopedTenant = defaultIfBlank(tenantId, DEFAULT_TENANT);
         WorkflowEntity draft = findDraft(scopedTenant, appId);
@@ -233,6 +256,7 @@ public class WorkflowService {
     /** Copies the mutable draft into a new, immutable published snapshot. */
     @Transactional
     public WorkflowEntity publishDraft(String appId, WorkflowPublication publication) {
+        checkApp(UserContextHolder.currentTenantId(), appId, true);
         WorkflowEntity draft = findDraft(appId);
         if (draft == null) {
             throw new PlatformException(
@@ -248,6 +272,7 @@ public class WorkflowService {
 
     @Transactional
     public WorkflowEntity publishDraft(String tenantId, String appId, WorkflowPublication publication) {
+        checkApp(tenantId, appId, true);
         WorkflowEntity draft = findDraft(tenantId, appId);
         if (draft == null) {
             throw new PlatformException("draft_not_found", "No draft workflow for app " + appId, null);
@@ -264,6 +289,7 @@ public class WorkflowService {
     }
 
     public List<WorkflowEntity> listByApp(String tenantId, String appId) {
+        checkApp(tenantId, appId, false);
         return workflowMapper.selectList(new LambdaQueryWrapper<WorkflowEntity>()
                 .eq(WorkflowEntity::getTenantId, defaultIfBlank(tenantId, DEFAULT_TENANT))
                 .eq(WorkflowEntity::getAppId, appId).orderByDesc(WorkflowEntity::getCreatedAt));
@@ -277,6 +303,7 @@ public class WorkflowService {
 
     @Transactional
     public WorkflowEntity restorePublishedSnapshot(String tenantId, String appId, String snapshotId) {
+        checkApp(tenantId, appId, true);
         WorkflowEntity snapshot = require(tenantId, snapshotId);
         if (!appId.equals(snapshot.getAppId()) || !Boolean.TRUE.equals(snapshot.getPublished())) {
             throw new PlatformException("workflow_snapshot_invalid",
@@ -371,19 +398,42 @@ public class WorkflowService {
                                             ChatStreamSink chatSink, String expectedTenantId) {
         WorkflowEntity workflow = hasText(expectedTenantId)
                 ? require(expectedTenantId, workflowId) : require(workflowId);
+        return executeDefinition(workflow, inputs, conversationId, stepListener, chatSink);
+    }
+
+    /** Reads a shared published definition, then executes entirely in the caller's tenant. */
+    public WorkflowRunResult runSharedPublished(String appId, String ownerTenantId,
+            Map<String, Object> inputs, String conversationId,
+            Consumer<StepRecord> stepListener, ChatStreamSink chatSink) {
+        WorkflowEntity workflow = io.github.aigoodle.persistence.TenantSqlScope.bypass(() ->
+                workflowMapper.selectSharedPublished(appId, ownerTenantId));
+        if (workflow == null) throw new PlatformException("workflow_not_found", "共享应用未发布或不可访问", null);
+        workflow.setTenantId(UserContextHolder.currentTenantId());
+        return executeDefinition(workflow, inputs, conversationId, stepListener, chatSink, ownerTenantId);
+    }
+
+    private WorkflowRunResult executeDefinition(WorkflowEntity workflow, Map<String, Object> inputs,
+            String conversationId, Consumer<StepRecord> stepListener, ChatStreamSink chatSink) {
+        return executeDefinition(workflow, inputs, conversationId, stepListener, chatSink, workflow.getTenantId());
+    }
+
+    private WorkflowRunResult executeDefinition(WorkflowEntity workflow, Map<String, Object> inputs,
+            String conversationId, Consumer<StepRecord> stepListener, ChatStreamSink chatSink, String resourceTenantId) {
+        String workflowId = workflow.getId();
         WorkflowGraph graph = graphOf(workflow);
         Map<String, Object> scopedInputs = new java.util.HashMap<>();
         if (inputs != null) scopedInputs.putAll(inputs);
-        scopedInputs.putIfAbsent("_memory_owner_id",
+        scopedInputs.put("_memory_owner_id",
                 workflow.getAppId() == null ? workflowId : workflow.getAppId());
-        scopedInputs.putIfAbsent("_memory_tenant_id",
+        scopedInputs.put("_memory_tenant_id",
                 workflow.getTenantId() == null ? "default" : workflow.getTenantId());
         ensureChannelConversation(workflow, scopedInputs, conversationId);
+        var options = io.github.aigoodle.workflow.engine.WorkflowRunOptions.defaults().withResourceTenantId(resourceTenantId);
         WorkflowRunResult result = persistentRunner == null
                 ? workflowEngine.run(graph, scopedInputs, conversationId, stepListener, chatSink,
-                        workflow.getTenantId())
+                        workflow.getTenantId(), options)
                 : persistentRunner.start(workflow.getTenantId(), workflowId, workflow.getVersion(), graph,
-                        scopedInputs, conversationId, io.github.aigoodle.workflow.engine.WorkflowRunOptions.defaults(),
+                        scopedInputs, conversationId, options,
                         stepListener, chatSink);
         runStore.recordStoredRun(workflow.getTenantId(), workflowId, conversationId, scopedInputs, result);
         return result;

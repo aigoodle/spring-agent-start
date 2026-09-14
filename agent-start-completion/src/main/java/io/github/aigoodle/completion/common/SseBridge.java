@@ -49,6 +49,7 @@ public final class SseBridge {
      * {@code {"message": "..."}} followed by an error terminal signal.
      */
     public static Flux<ServerSentEvent<Object>> stream(Producer producer) {
+        var caller = io.github.aigoodle.common.context.UserContextHolder.get();
         return Flux.<ServerSentEvent<Object>>create(sink -> {
             AtomicLong eventSequence = new AtomicLong();
             Emit emitter = (eventName, eventData) -> {
@@ -60,7 +61,7 @@ public final class SseBridge {
                         .event(eventName)
                         .build());
             };
-            try {
+            try (var ignored = io.github.aigoodle.common.context.UserContextHolder.openScope(caller)) {
                 producer.run(emitter);
                 sink.complete();
             } catch (Exception producerFailure) {

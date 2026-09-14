@@ -36,7 +36,7 @@ import java.util.Set;
  * 初始化为空 map，读取端不会 NPE。
  */
 @Data
-@Builder
+@Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
 public class CurrentUser implements Serializable {
@@ -62,9 +62,27 @@ public class CurrentUser implements Serializable {
     /** 可选：角色列表 —— 使用方鉴权后的原始角色标记，spring-agent-start 内部不解释含义。 */
     private Set<String> roles;
 
+    /** 宿主业务系统的角色 ID；与展示用角色标记 roles 分开。 */
+    private Set<String> roleIds;
+
+    /** 当前所属部门的业务 ID。 */
+    private String departmentId;
+
+    /** 当前部门及其下级部门的数据范围，由宿主通过 DepartmentHierarchyProvider 填充。
+     * 不能用此集合反向推导当前用户属于上级部门。 */
+    private Set<String> departmentIds;
+
     /** 逃生舱：宿主项目私有字段挂这里，避免为每个新维度改本类。 */
     @Builder.Default
     private Map<String, Object> extra = new HashMap<>();
+
+    /** 保留新增部门字段之前的全参数构造入口。新接入建议使用 builder。 */
+    public CurrentUser(String userId, String username, String tenantId, String appId,
+                       PrincipalType principalType, Set<String> scopes, Set<String> roles,
+                       Map<String, Object> extra) {
+        this(userId, username, tenantId, appId, principalType, scopes, roles,
+                null, null, null, extra);
+    }
 
     /** 便捷 put —— 免去调用方判空。 */
     public CurrentUser put(String key, Object value) {

@@ -37,12 +37,22 @@ public class AppService {
         agentRuntime.delete(tenantId, appId);
     }
 
+    public AppEntity requireWritable(String tenantId, String appId) {
+        AppEntity app = require(tenantId, appId);
+        agentRuntime.requireWritable(app);
+        return app;
+    }
+
     public AppEntity require(String appId) {
         return agentRuntime.require(appId);
     }
 
     public AppEntity require(String tenantId, String appId) {
         return agentRuntime.require(tenantId, appId);
+    }
+
+    public AppEntity requireForChat(String tenantId, String appId) {
+        return agentRuntime.requireForChat(tenantId, appId);
     }
 
     public List<AppEntity> list(String tenantId) {

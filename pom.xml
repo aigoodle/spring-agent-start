@@ -45,6 +45,9 @@
         <module>agent-start-store</module>
         <module>agent-start-tools</module>
         <module>agent-start-connector</module>
+        <module>agent-start-plugin</module>
+        <module>agent-start-plugin-agent</module>
+        <module>agent-start-plugins</module>
         <module>agent-start-connector-redis</module>
         <module>agent-start-connector-tools</module>
         <module>agent-start-connector-openclaw</module>
@@ -139,6 +142,23 @@
             </dependency>
 
             <!-- internal modules -->
+            <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-plugin-video</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-provider-qwen</artifactId><version>${project.version}</version></dependency>
+            <dependency>
+                <groupId>io.github.aigoodle</groupId>
+                <artifactId>agent-start-plugin-seedance</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.aigoodle</groupId>
+                <artifactId>agent-start-plugin-agent</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.aigoodle</groupId>
+                <artifactId>agent-start-plugin</artifactId>
+                <version>${project.version}</version>
+            </dependency>
             <dependency>
                 <groupId>io.github.aigoodle</groupId>
                 <artifactId>agent-start-common</artifactId>

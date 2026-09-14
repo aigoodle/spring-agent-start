@@ -65,7 +65,7 @@ public class QuestionClassifierNodeExecutor implements NodeExecutor {
                 node.getString("query", "{{#sys.query#}}"), context.getPool());
 
         var messages = new ArrayList<org.springframework.ai.chat.messages.Message>();
-        messages.add(new SystemMessage(promptBuilder.build(node, categorySet)));
+        messages.add(new SystemMessage(context.withResourceTenant(() -> promptBuilder.build(node, categorySet))));
         messages.addAll(WorkflowMemoryMessages.load(memoryManager, node, context));
         messages.add(new UserMessage(query));
         ChatClient.ChatClientRequestSpec request = chatClient.prompt().messages(messages);

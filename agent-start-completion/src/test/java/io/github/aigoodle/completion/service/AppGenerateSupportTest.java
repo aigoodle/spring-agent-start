@@ -16,6 +16,37 @@ import static org.mockito.Mockito.when;
 class AppGenerateSupportTest {
 
     @Test
+    void sharedChatKeepsCallerTenantAndIdentity() {
+        AppEntity app = new AppEntity(); app.setId("shared-app"); app.setTenantId("owner");
+        var caller = io.github.aigoodle.common.context.CurrentUser.builder()
+                .tenantId("consumer").userId("consumer-user").departmentId("dept").build();
+        UserContextHolder.runAs(caller, () -> AppGenerateService.callWithUser(app, "consumer-user", () -> {
+            assertThat(UserContextHolder.currentTenantId()).isEqualTo("consumer");
+            assertThat(UserContextHolder.currentDepartmentId()).isEqualTo("dept");
+            assertThat(UserContextHolder.currentAppId()).isEqualTo("shared-app");
+            return null;
+        }));
+        assertThat(UserContextHolder.get()).isNull();
+    }
+
+    @Test
+    void preservesTrustedDepartmentAndRolesWhenBindingSameChatUser() {
+        AppEntity app = new AppEntity(); app.setId("app-1"); app.setTenantId("t1");
+        var caller = io.github.aigoodle.common.context.CurrentUser.builder()
+                .userId("u1").tenantId("t1").departmentId("team")
+                .roleIds(java.util.Set.of("role-1")).build();
+        UserContextHolder.runAs(caller, () -> {
+            AppGenerateService.callWithUser(app, "u1", () -> {
+                assertThat(UserContextHolder.currentDepartmentId()).isEqualTo("team");
+                assertThat(UserContextHolder.currentRoleIds()).containsExactly("role-1");
+                assertThat(UserContextHolder.currentAppId()).isEqualTo("app-1");
+                return null;
+            });
+            assertThat(UserContextHolder.get()).isSameAs(caller);
+        });
+    }
+
+    @Test
     void recognizesBothSupportedFlowModes() {
         assertThat(AppChatRuntimeRouter.isFlowApplication(applicationWithMode("workflow"))).isTrue();
         assertThat(AppChatRuntimeRouter.isFlowApplication(applicationWithMode("chatflow"))).isTrue();

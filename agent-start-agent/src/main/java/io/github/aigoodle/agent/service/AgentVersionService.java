@@ -17,6 +17,11 @@ import java.util.List;
 
 /** Publication boundary for immutable Agent runtime definitions. */
 public class AgentVersionService {
+    private AppPermissionService appPermissions;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setAppPermissions(AppPermissionService appPermissions) { this.appPermissions = appPermissions; }
+
     private final AgentVersionMapper versions;
     private final AppMapper apps;
     private final AgentDefinitionFactory definitions;
@@ -38,6 +43,7 @@ public class AgentVersionService {
     @Transactional
     public AgentVersionEntity publish(String tenantId, String appId, String actorId, String summary) {
         AppEntity app = requireOwnedAppForUpdate(tenantId, appId);
+        if (appPermissions != null) appPermissions.requireWrite(app);
         AgentDefinition definition = definitions.create(app);
         return createVersion(app, definition, actorId, summary, null);
     }
@@ -46,6 +52,7 @@ public class AgentVersionService {
     public AgentVersionEntity rollback(String tenantId, String appId, String targetVersionId,
                                        String actorId, String summary) {
         AppEntity app = requireOwnedAppForUpdate(tenantId, appId);
+        if (appPermissions != null) appPermissions.requireWrite(app);
         AgentVersionEntity target = requireOwnedVersion(tenantId, appId, targetVersionId);
         AgentDefinition definition = JsonUtils.parse(target.getDefinitionJson(), AgentDefinition.class);
         return createVersion(app, definition, actorId,
@@ -54,6 +61,8 @@ public class AgentVersionService {
 
     @Transactional
     public AgentVersionEntity disable(String tenantId, String appId, String versionId) {
+        AppEntity ownedApp = requireOwnedApp(tenantId, appId);
+        if (appPermissions != null) appPermissions.requireWrite(ownedApp);
         AgentVersionEntity version = requireOwnedVersion(tenantId, appId, versionId);
         boolean wasCurrent = "ACTIVE".equals(version.getStatus());
         version.setStatus("DISABLED");
@@ -76,6 +85,7 @@ public class AgentVersionService {
     }
 
     public AgentVersionEntity requireRunnable(String tenantId, String appId, String versionId) {
+        if (appPermissions != null) requireOwnedApp(tenantId, appId);
         boolean explicitlyPinned = versionId != null && !versionId.isBlank();
         AgentVersionEntity version = explicitlyPinned
                 ? requireOwnedVersion(tenantId, appId, versionId) : current(tenantId, appId);
@@ -93,6 +103,7 @@ public class AgentVersionService {
     }
 
     public AgentVersionEntity current(String tenantId, String appId) {
+        if (appPermissions != null) requireOwnedApp(tenantId, appId);
         return versions.selectOne(new LambdaQueryWrapper<AgentVersionEntity>()
                 .eq(AgentVersionEntity::getTenantId, required(tenantId, "tenantId"))
                 .eq(AgentVersionEntity::getAppId, required(appId, "appId"))
@@ -137,6 +148,7 @@ public class AgentVersionService {
                 .eq(AppEntity::getTenantId, required(tenantId, "tenantId"))
                 .eq(AppEntity::getId, required(appId, "appId")).last("LIMIT 1"));
         if (app == null) throw new PlatformException("app_not_found", "Application not found", null);
+        if (appPermissions != null) appPermissions.requireRead(app);
         return app;
     }
 
@@ -152,6 +164,7 @@ public class AgentVersionService {
                 .eq(AppEntity::getTenantId, required(tenantId, "tenantId"))
                 .eq(AppEntity::getId, required(appId, "appId")).last("LIMIT 1 FOR UPDATE"));
         if (app == null) throw new PlatformException("app_not_found", "Application not found", null);
+        if (appPermissions != null) appPermissions.requireRead(app);
         return app;
     }
 

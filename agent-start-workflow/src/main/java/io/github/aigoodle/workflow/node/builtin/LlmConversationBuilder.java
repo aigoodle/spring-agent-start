@@ -47,7 +47,8 @@ final class LlmConversationBuilder {
     private String resolveSystemPrompt(NodeDef node, ExecutionContext context) {
         String templateId = node.getString("systemPromptTemplateId");
         if (templateId != null && !templateId.isBlank() && promptTemplateService != null) {
-            var template = promptTemplateService.get(templateId);
+            var template = context.withResourceTenant(() -> promptTemplateService.get(
+                    io.github.aigoodle.common.context.UserContextHolder.currentTenantId(), templateId));
             if (template != null) {
                 return promptTemplateService.render(
                         template.getContent(), flattenVariables(context));

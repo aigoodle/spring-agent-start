@@ -156,6 +156,23 @@ public final class UserContextHolder {
         return currentUser == null ? null : currentUser.getUserId();
     }
 
+    public static String currentDepartmentId() {
+        CurrentUser user = HOLDER.get();
+        return user == null ? null : user.getDepartmentId();
+    }
+
+    public static java.util.Set<String> currentDepartmentIds() {
+        CurrentUser user = HOLDER.get();
+        return user == null || user.getDepartmentIds() == null
+                ? java.util.Set.of() : java.util.Collections.unmodifiableSet(user.getDepartmentIds());
+    }
+
+    public static java.util.Set<String> currentRoleIds() {
+        CurrentUser user = HOLDER.get();
+        return user == null || user.getRoleIds() == null
+                ? java.util.Set.of() : java.util.Collections.unmodifiableSet(user.getRoleIds());
+    }
+
     /** 取当前用户名；未登录返回 {@code null}。 */
     public static String currentUsername() {
         CurrentUser currentUser = HOLDER.get();

@@ -1,0 +1,19 @@
+{
+  "id": "example.product-video-python",
+  "version": "1.0.0",
+  "name": "商品视频策划（Python 示例）",
+  "description": "独立 Python 服务查询宿主商品资料后输出视频简报，不生成视频文件。",
+  "category": "media",
+  "configurationSchema": "{\"type\":\"object\",\"properties\":{\"brand\":{\"type\":\"string\",\"title\":\"品牌\"}}}",
+  "actions": [{
+    "id": "prepare",
+    "name": "生成视频简报",
+    "inputSchema": "{\"type\":\"object\",\"required\":[\"productId\"],\"properties\":{\"productId\":{\"type\":\"string\",\"title\":\"商品编号\"},\"style\":{\"type\":\"string\",\"title\":\"视频风格\"},\"modelId\":{\"type\":\"string\",\"title\":\"平台模型 ID\",\"description\":\"可选，选择后通过宿主非流式模型接口生成脚本\"}}}",
+    "outputSchema": "{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\"},\"product\":{\"type\":\"object\"}}}",
+    "idempotent": true,
+    "timeout": "PT15S",
+    "riskLevel": "READ",
+    "metadata": {"uiSchema": {"fields": {"style": {"widget": "textarea"}}}}
+  }],
+  "requestedCapabilities": ["product.read", "model.chat"]
+}

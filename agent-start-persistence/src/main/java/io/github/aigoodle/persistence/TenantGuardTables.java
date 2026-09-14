@@ -8,7 +8,7 @@ public final class TenantGuardTables {
             "goodle_model", "goodle_provider_credential",
             "goodle_provider_model_setting", "goodle_tenant_default_model");
     public static final Set<String> AGENT = Set.of(
-            "goodle_apps", "goodle_agent_versions", "goodle_app_model_configs",
+            "goodle_apps", "goodle_app_permissions", "goodle_agent_versions", "goodle_app_model_configs",
             "goodle_app_annotations", "goodle_app_annotation_settings", "goodle_conversations",
             "goodle_runs", "goodle_run_events", "goodle_api_tokens", "goodle_app_sites",
             "goodle_tags", "goodle_tag_bindings");

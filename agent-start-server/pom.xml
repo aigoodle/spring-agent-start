@@ -15,6 +15,16 @@
     <description>Standalone Spring Boot server: bundles every module and exposes /api/v1 REST + SSE endpoints. Run this to have a working backend without embedding the SDK into your own app.</description>
 
     <dependencies>
+        <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-provider-volcengine</artifactId></dependency>
+        <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-provider-qwen</artifactId></dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-plugin-video</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-plugin-agent</artifactId>
+        </dependency>
         <!-- MVC-style REST surface (CRUD, admin, dataset upload, non-streaming SSE
              via SseEmitter). We pull it in for the endpoints but explicitly EXCLUDE
              spring-boot-starter-web / Tomcat so the server runtime stays Netty-only —

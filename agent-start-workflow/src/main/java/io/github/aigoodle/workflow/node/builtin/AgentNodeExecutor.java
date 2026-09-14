@@ -36,25 +36,30 @@ public class AgentNodeExecutor implements NodeExecutor {
     @Override
     public NodeResult execute(NodeDef node, ExecutionContext context) {
         context.throwIfCancelled();
+        String runtimeType = node.getString("runtimeType", "NATIVE");
+        boolean nativeRuntime = "NATIVE".equalsIgnoreCase(runtimeType);
         String provider = firstNonBlank(node.getString("modelProvider"), node.getString("provider"));
         String model = firstNonBlank(node.getString("modelName"), node.getString("model"));
-        if ((provider == null || model == null) && modelService != null) {
+        if (nativeRuntime && (provider == null || model == null) && modelService != null) {
             String modelId = node.getString("modelId");
             if (modelId != null && !modelId.isBlank()) {
-                String runTenant = firstNonBlank(context.getTenantId(), "default");
-                ModelEntity entity = modelService.require(runTenant, modelId);
+                String runTenant = firstNonBlank(context.resourceTenant(), "default");
+                ModelEntity entity = context.withResourceTenant(() -> modelService.require(runTenant, modelId));
                 provider = entity.getProviderName();
                 model = entity.getModelName();
             }
         }
-        if (provider == null || model == null) {
+        if (nativeRuntime && (provider == null || model == null)) {
             return NodeResult.failure("Agent node requires modelProvider + modelName");
         }
         try {
             AgentDefinition definition = AgentDefinition.builder()
                     .id("workflow:" + node.getId())
                     .tenantId(firstNonBlank(context.getTenantId(), "default"))
+                    .resourceTenantId(context.resourceTenant())
                     .name(firstNonBlank(node.getTitle(), node.getId()))
+                    .runtimeType(runtimeType)
+                    .runtimeRef(node.getString("runtimeRef"))
                     .instructions(VariableResolver.render(node.getString("systemPrompt",
                             "You are a helpful assistant. Use tools when helpful."), context.getPool()))
                     .modelProvider(provider)
@@ -66,8 +71,11 @@ public class AgentNodeExecutor implements NodeExecutor {
                     .memoryWindow(node.getInt("memoryWindow", 20))
                     .build();
             String query = VariableResolver.render(node.getString("query", "{{#sys.query#}}"), context.getPool());
-            AgentResponse response = agentRuntime.run(definition, AgentRequest.builder()
-                    .query(query).conversationId(context.getConversationId()).variables(context.getInputs()).build());
+            AgentResponse response = io.github.aigoodle.common.context.UserContextHolder.callAs(
+                    io.github.aigoodle.common.context.CurrentUser.builder()
+                            .tenantId(definition.getTenantId()).userId(context.getUserId()).build(),
+                    () -> agentRuntime.run(definition, AgentRequest.builder()
+                            .query(query).conversationId(context.getConversationId()).variables(context.getInputs()).build()));
             context.throwIfCancelled();
             if (response.getStatus() != AgentResponse.Status.COMPLETED) {
                 return NodeResult.failure("Agent run ended with status " + response.getStatus());

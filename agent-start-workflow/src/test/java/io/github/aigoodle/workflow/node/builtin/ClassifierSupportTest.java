@@ -53,7 +53,7 @@ class ClassifierSupportTest {
         PromptTemplateService templateService = mock(PromptTemplateService.class);
         PromptTemplateEntity template = new PromptTemplateEntity();
         template.setContent("Choose from:\n{{#categories#}}");
-        when(templateService.get("classifier-template")).thenReturn(template);
+        when(templateService.get("default", "classifier-template")).thenReturn(template);
         when(templateService.render(template.getContent(), Map.of(
                 "categories", "- sales: Sales\n")))
                 .thenReturn("Choose from:\n- sales: Sales\n");

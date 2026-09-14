@@ -109,6 +109,12 @@ public class PromptTemplateService {
         return mapper.selectById(id);
     }
 
+    public PromptTemplateEntity get(String tenantId, String id) {
+        return mapper.selectOne(new LambdaQueryWrapper<PromptTemplateEntity>()
+                .eq(PromptTemplateEntity::getTenantId, defaultTenant(tenantId))
+                .eq(PromptTemplateEntity::getId, id));
+    }
+
     public List<PromptTemplateEntity> list(String tenantId, String category) {
         LambdaQueryWrapper<PromptTemplateEntity> query = new LambdaQueryWrapper<PromptTemplateEntity>()
                 .eq(PromptTemplateEntity::getTenantId, defaultTenant(tenantId))

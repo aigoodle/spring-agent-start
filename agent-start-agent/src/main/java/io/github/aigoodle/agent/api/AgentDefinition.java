@@ -24,6 +24,9 @@ public class AgentDefinition {
     private String id;
     /** Owning tenant used when resolving the configured provider and model. */
     private String tenantId;
+    /** Trusted Java binding for shared workflow model configuration; not client input. */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private String resourceTenantId;
     private String name;
 
     /** NATIVE or an explicit host-provided runtime type. */

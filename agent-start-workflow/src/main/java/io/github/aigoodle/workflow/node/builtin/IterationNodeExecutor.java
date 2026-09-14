@@ -73,7 +73,8 @@ public class IterationNodeExecutor implements NodeExecutor {
             Map<String, Object> iterationInputs = configuration.inputsFor(items.get(index), index);
             WorkflowRunResult iterationResult = workflowEngine.run(
                     subGraph, iterationInputs, context.getConversationId(), null, null,
-                    context.getTenantId());
+                    context.getTenantId(), io.github.aigoodle.workflow.engine.WorkflowRunOptions.defaults()
+                            .withResourceTenantId(context.resourceTenant()));
             if (iterationResult.isSuccess()) {
                 collectedOutputs.add(iterationResult.getOutputs());
                 context.checkpointIteration(node.getId(), Map.of(

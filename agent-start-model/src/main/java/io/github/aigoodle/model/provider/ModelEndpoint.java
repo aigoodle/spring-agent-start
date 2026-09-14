@@ -16,6 +16,7 @@ import java.util.Map;
  */
 @Data
 @Builder
+@lombok.extern.jackson.Jacksonized
 public class ModelEndpoint {
 
     /** Trusted host tenant scope; participates in every reusable runtime cache key. */

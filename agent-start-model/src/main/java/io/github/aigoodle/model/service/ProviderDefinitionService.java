@@ -1,4 +1,5 @@
 package io.github.aigoodle.model.service;
+import io.github.aigoodle.common.util.JsonUtils;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.github.aigoodle.common.exception.PlatformException;
@@ -92,6 +93,18 @@ public class ProviderDefinitionService {
     List<ProviderDefinitionEntity> listOwnedDefinitions(String tenantId) {
         return providerMapper.selectList(new LambdaQueryWrapper<ProviderDefinitionEntity>()
                 .eq(ProviderDefinitionEntity::getTenantId, normalizedTenant(tenantId)));
+    }
+
+    /** Add runtime capability to built-in metadata without rewriting user-owned provider configuration. */
+    @Transactional
+    public void addBuiltinModelType(String providerName, ModelType type) {
+        var existing = listOwnedDefinitions(SYSTEM_TENANT).stream()
+                .filter(row -> providerName.equals(row.getName()) && "builtin".equals(row.getSource())).findFirst().orElse(null);
+        if (existing == null) return;
+        var types = new java.util.HashSet<>(deserializeModelTypes(existing.getSupportedModelTypes()));
+        if (types.add(type)) providerMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<ProviderDefinitionEntity>()
+                .eq(ProviderDefinitionEntity::getId, existing.getId()).eq(ProviderDefinitionEntity::getTenantId, SYSTEM_TENANT)
+                .set(ProviderDefinitionEntity::getSupportedModelTypes, JsonUtils.toJson(types)));
     }
 
     /**

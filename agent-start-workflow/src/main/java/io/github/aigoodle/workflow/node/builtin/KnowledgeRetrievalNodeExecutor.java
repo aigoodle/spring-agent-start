@@ -32,8 +32,8 @@ public class KnowledgeRetrievalNodeExecutor implements NodeExecutor {
             return NodeResult.failure("Knowledge retrieval requires 'datasetIds'");
         }
 
-        List<RetrievedSegment> segments = knowledgeService.retrieve(
-                context.getTenantId(), configuration.datasetIds(), configuration.retrievalRequest());
+        List<RetrievedSegment> segments = context.withResourceTenant(() -> knowledgeService.retrieve(
+                context.resourceTenant(), configuration.datasetIds(), configuration.retrievalRequest()));
         return KnowledgeRetrievalResultMapper.map(segments);
     }
 }

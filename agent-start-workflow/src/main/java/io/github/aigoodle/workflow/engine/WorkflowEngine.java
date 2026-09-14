@@ -83,6 +83,10 @@ public class WorkflowEngine {
         return executorRegistry.get(node.getType()).policy(node, context);
     }
 
+    public void cancelWaiting(NodeDef node, Map<String, Object> savedNamespace) {
+        executorRegistry.get(node.getType()).cancelWaiting(node, savedNamespace);
+    }
+
     public WorkflowRunResult run(WorkflowGraph graph, Map<String, Object> inputs, String conversationId) {
         return run(graph, inputs, conversationId, null, null);
     }
@@ -142,6 +146,7 @@ public class WorkflowEngine {
         context.setTenantId(tenantId == null || tenantId.isBlank()
                 ? UserContextHolder.currentTenantId() : tenantId);
         context.setUserId(UserContextHolder.currentUserId());
+        context.setResourceTenantId(options.resourceTenantId());
         context.getPool().setSystem("tenant_id", context.getTenantId());
         context.getPool().setSystem("user_id", context.getUserId());
         WorkflowRunResult result = WorkflowRunResult.forRun(context.getRunId(), context.getSteps());
@@ -316,8 +321,12 @@ public class WorkflowEngine {
             }
 
             if (nodeResult.isWaiting()) {
-                run.waitRequest.compareAndSet(null, nodeResult.getWaitRequest());
-                run.waitingNodeId.compareAndSet(null, node.getId());
+                synchronized (run) {
+                    if (run.waitRequest.get() == null) {
+                        run.waitingNodeId.set(node.getId());
+                        run.waitRequest.set(nodeResult.getWaitRequest());
+                    }
+                }
                 run.observer.nodeFinished(node, NodeExecutionStatus.WAITING, nodeResult,
                         attempt, run.context);
                 return;

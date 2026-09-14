@@ -50,7 +50,7 @@ public class AppApiTokenController {
 
     @GetMapping
     public ApiResponse<List<TokenView>> list(@PathVariable String appId) {
-        apps.require(currentTenantId(), appId);
+        apps.requireWritable(currentTenantId(), appId);
         return ApiResponse.ok(service.listByApp(currentTenantId(), appId).stream()
                 .map(row -> TokenView.of(row, false)).toList());
     }
@@ -60,21 +60,21 @@ public class AppApiTokenController {
                                               @RequestBody(required = false) Map<String, String> body) {
         String name = body == null ? null : body.get("name");
         String type = body == null ? null : body.get("type");
-        apps.require(currentTenantId(), appId);
+        apps.requireWritable(currentTenantId(), appId);
         return ApiResponse.ok(TokenView.of(service.create(appId, currentTenantId(), name, type), true));
     }
 
     @PostMapping("/{id}/rename")
     public ApiResponse<TokenView> rename(@PathVariable String appId, @PathVariable String id,
                                               @RequestBody Map<String, String> body) {
-        apps.require(currentTenantId(), appId);
+        apps.requireWritable(currentTenantId(), appId);
         return ApiResponse.ok(TokenView.of(
                 service.rename(currentTenantId(), appId, id, body.get("name")), false));
     }
 
     @DeleteMapping("/{id}")
     public ApiResponse<Void> delete(@PathVariable String appId, @PathVariable String id) {
-        apps.require(currentTenantId(), appId);
+        apps.requireWritable(currentTenantId(), appId);
         service.delete(currentTenantId(), appId, id);
         return ApiResponse.ok();
     }

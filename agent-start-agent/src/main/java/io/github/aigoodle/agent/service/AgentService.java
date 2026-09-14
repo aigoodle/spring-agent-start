@@ -61,6 +61,21 @@ public class AgentService implements AgentRuntime {
     private static final int MAX_HISTORY_SIZE = 500;
 
     private final AppMapper appMapper;
+    private AppPermissionService appPermissions;
+
+    /** Spring 注入；保留已有手动构造运行时的兼容性。 */
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setAppPermissions(AppPermissionService appPermissions) {
+        this.appPermissions = appPermissions;
+    }
+
+    public void requireWritable(AppEntity app) {
+        if (appPermissions != null) appPermissions.requireWrite(app);
+    }
+
+    private List<AppEntity> readable(List<AppEntity> apps) {
+        return appPermissions == null ? apps : appPermissions.filterReadable(apps);
+    }
     private final AppModelConfigService modelConfigService;
     private final ModelService modelService;
     private final AgentStrategyRegistry strategyRegistry;
@@ -140,6 +155,7 @@ public class AgentService implements AgentRuntime {
         AppEntity agent = new AppEntity();
         agent.setTenantId(valueOrDefault(request.getTenantId(), DEFAULT_TENANT_ID));
         catalogUpdater.applyRequest(request, agent);
+        agent.setDataAccessMode("ALL");
         appMapper.insert(agent);
         saveModelConfig(agent, request);
         return agent;
@@ -154,21 +170,22 @@ public class AgentService implements AgentRuntime {
                 .eq(AppEntity::getTenantId, valueOrDefault(tenantId, DEFAULT_TENANT_ID))
                 .eq(AppEntity::getId, agentId).last("LIMIT 1"));
         if (agent == null) throw new PlatformException("app_not_found", "Application not found", null);
+        if (appPermissions != null) appPermissions.requireRead(agent);
         return agent;
     }
 
     public List<AppEntity> list(String tenantId) {
         String effectiveTenant = valueOrDefault(tenantId, DEFAULT_TENANT_ID);
-        return appMapper.selectList(new LambdaQueryWrapper<AppEntity>()
+        return readable(appMapper.selectList(new LambdaQueryWrapper<AppEntity>()
                 .eq(AppEntity::getTenantId, effectiveTenant)
                 .orderByDesc(AppEntity::getCreatedAt)
-                .orderByDesc(AppEntity::getId));
+                .orderByDesc(AppEntity::getId)));
     }
 
     /** Published workflow-mode applications available to tenant-scoped selectors. */
     public List<AppEntity> listPublishedWorkflowApps(String tenantId) {
         String effectiveTenant = valueOrDefault(tenantId, DEFAULT_TENANT_ID);
-        return appMapper.selectList(new LambdaQueryWrapper<AppEntity>()
+        return readable(appMapper.selectList(new LambdaQueryWrapper<AppEntity>()
                 .eq(AppEntity::getTenantId, effectiveTenant)
                 .eq(AppEntity::getMode, "workflow")
                 .eq(AppEntity::getPublished, true)
@@ -176,7 +193,7 @@ public class AgentService implements AgentRuntime {
                 .ne(AppEntity::getWorkflowId, "")
                 .orderByAsc(AppEntity::getName)
                 .orderByDesc(AppEntity::getUpdatedAt)
-                .orderByDesc(AppEntity::getId));
+                .orderByDesc(AppEntity::getId)));
     }
 
     /** Resolve an internal app by stable code, preferring a tenant-owned override. */
@@ -192,10 +209,30 @@ public class AgentService implements AgentRuntime {
             return requireRunnable(owned);
         }
         String root = valueOrDefault(rootTenantId, "root");
-        AppEntity shared = findByTenantAndCode(root, code);
+        AppEntity shared = io.github.aigoodle.persistence.TenantSqlScope.bypass(() ->
+                appMapper.selectOne(new LambdaQueryWrapper<AppEntity>()
+                        .eq(AppEntity::getTenantId, root)
+                        .eq(AppEntity::getAppCode, code)
+                        .eq(AppEntity::getVisibility, "GLOBAL").last("LIMIT 1")));
         if (shared == null || !"GLOBAL".equalsIgnoreCase(shared.getVisibility())) {
             throw new PlatformException("app_not_found", "应用不存在或无权访问", null);
         }
+        return requireRunnable(shared);
+    }
+
+    /** Chat-only lookup; ordinary require/update APIs remain tenant-owned. */
+    public AppEntity requireForChat(String tenantId, String appId) {
+        AppEntity owned = appMapper.selectOne(new LambdaQueryWrapper<AppEntity>()
+                .eq(AppEntity::getTenantId, tenantId).eq(AppEntity::getId, appId));
+        if (owned != null) {
+            if (appPermissions != null) appPermissions.requireRead(owned);
+            return owned;
+        }
+        AppEntity shared = io.github.aigoodle.persistence.TenantSqlScope.bypass(() ->
+                appMapper.selectOne(new LambdaQueryWrapper<AppEntity>()
+                        .eq(AppEntity::getId, appId).eq(AppEntity::getVisibility, "GLOBAL")
+                        .eq(AppEntity::getPublished, true)));
+        if (shared == null) throw new PlatformException("app_not_found", "应用不存在或无权访问", null);
         return requireRunnable(shared);
     }
 
@@ -206,7 +243,8 @@ public class AgentService implements AgentRuntime {
                 .last("LIMIT 1"));
     }
 
-    private static AppEntity requireRunnable(AppEntity app) {
+    private AppEntity requireRunnable(AppEntity app) {
+        if (appPermissions != null) appPermissions.requireRead(app);
         if (!Boolean.TRUE.equals(app.getPublished())
                 || "disabled".equalsIgnoreCase(app.getStatus())) {
             throw new PlatformException("app_unavailable", "应用尚未发布或已停用", null);
@@ -222,6 +260,7 @@ public class AgentService implements AgentRuntime {
     @Transactional
     public AppEntity update(String tenantId, String agentId, SaveAppRequest request) {
         AppEntity agent = require(tenantId, agentId);
+        requireWritable(agent);
         request.setTenantId(agent.getTenantId());
         catalogUpdater.applyRequest(request, agent);
         appMapper.update(agent, new LambdaUpdateWrapper<AppEntity>()
@@ -238,6 +277,8 @@ public class AgentService implements AgentRuntime {
     @Transactional
     public void delete(String tenantId, String agentId) {
         AppEntity owned = require(tenantId, agentId);
+        requireWritable(owned);
+        if (appPermissions != null) appPermissions.deleteForApp(owned.getTenantId(), owned.getId());
         modelConfigService.deleteByAppId(owned.getTenantId(), owned.getId());
         appMapper.delete(new LambdaQueryWrapper<AppEntity>()
                 .eq(AppEntity::getTenantId, owned.getTenantId()).eq(AppEntity::getId, owned.getId()));
@@ -264,6 +305,7 @@ public class AgentService implements AgentRuntime {
     @Transactional
     public AppEntity bindWorkflowId(String tenantId, String appId, String workflowId) {
         AppEntity agent = require(tenantId, appId);
+        requireWritable(agent);
         agent.setWorkflowId(workflowId);
         appMapper.update(agent, new LambdaUpdateWrapper<AppEntity>()
                 .eq(AppEntity::getTenantId, agent.getTenantId()).eq(AppEntity::getId, agent.getId()));
@@ -278,6 +320,7 @@ public class AgentService implements AgentRuntime {
     @Transactional
     public AppEntity bindPublishedWorkflow(String tenantId, String appId, String workflowId) {
         AppEntity agent = require(tenantId, appId);
+        requireWritable(agent);
         agent.setWorkflowId(workflowId);
         agent.setPublished(true);
         appMapper.update(agent, new LambdaUpdateWrapper<AppEntity>()
@@ -567,7 +610,12 @@ public class AgentService implements AgentRuntime {
                     "Agent '" + definition.getName() + "' has no model configured (provider + name required)",
                     null);
         }
-        return modelService.getChatClient(definition.getTenantId(), provider, modelName);
+        String resourceTenant = valueOrDefault(definition.getResourceTenantId(), definition.getTenantId());
+        if (resourceTenant.equals(UserContextHolder.currentTenantId()))
+            return modelService.getChatClient(resourceTenant, provider, modelName);
+        return UserContextHolder.callAs(io.github.aigoodle.common.context.CurrentUser.builder()
+                        .tenantId(resourceTenant).userId(UserContextHolder.currentUserId()).build(),
+                () -> modelService.getChatClient(resourceTenant, provider, modelName));
     }
 
     private void rememberCompletedExchange(AgentDefinition definition, AgentRequest request,

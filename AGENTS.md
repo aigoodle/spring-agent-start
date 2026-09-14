@@ -65,10 +65,17 @@ common → { model, memory } → { knowledge, tools } → agent → workflow →
 | `agent-start-provider/` | Aggregator for optional native-SDK `ModelProvider` starters; each child upgrades the matching built-in OpenAI-compat preset. |
 | ` └── …-zhipu` | Official spring-ai-zhipuai SDK (GLM-4V vision, native chat/embedding). |
 | ` └── …-deepseek` | Official spring-ai-deepseek SDK (reasoner mode). Chat only. |
-| ` └── …-volcengine` | Volcengine Ark / Doubao; adds an explicit `endpointId` (ep-xxx) credential. |
+| ` └── …-volcengine` | Volcengine Ark / Doubao chat and Seedance video via ModelProvider. |
+| ` └── …-qwen` | Qwen chat/embedding plus native Wan 2.6 video protocol. |
 | `agent-start-knowledge` | Datasets → documents → chunks, template chunking, hybrid (vector+keyword) retrieval, `DocumentReader`/`Chunker`/`Reranker` SPIs, optional RabbitMQ async ingestion |
 | `agent-start-store/` | Aggregator for optional `VectorStoreFactory` starters (`-pgvector`, `-elasticsearch`, `-milvus`). |
 | `agent-start-tools` | `Tool` SPI, `ToolRegistry`, `ToolProvider` plug-point, Spring AI `ToolCallback` adapter, **MCP client** (`McpToolProvider`) |
+| `agent-start-plugin` | Business Plugin SPI, Java Bean / remote HTTP runtimes, manifest, scoped host capabilities and invocation tokens; projected into Connector catalog and gateway. |
+| `agent-start-plugin-agent` | PLUGIN Agent runtime, non-streaming `model.chat` host capability, registered-tool/MCP bridge, progressive plugin skill tools. |
+| `agent-start-plugins/` | Aggregator for business plugin starters; YAML manifests live under each child's `resources/plugins/<name>/`. |
+| ` └── agent-start-plugin-example` | Product-video-brief teaching example with a packaged skill; independent Python/Docker example remains under `examples/plugins/python-video`. |
+| ` └── agent-start-plugin-video` | Generic video business plugin; unified VIDEO model selection, encrypted endpoint snapshots, durable leased tasks and workflow waits. Owns `plugin_video_task`. |
+| ` └── agent-start-plugin-seedance` | Legacy standalone Ark video plugin, retained for existing workflows; not bundled by default. |
 | `agent-start-memory` | Layered WORKING / SHORT_TERM / LONG_TERM memory, TTL, importance promotion, hybrid relevance-recency ranking, JDBC `MemoryStore` and replaceable persistence SPI |
 | `agent-start-agent` | Public `AgentRuntime`, `AgentStrategy` implementations, multi-agent delegation and human-in-the-loop approval; all state delegates to `agent-start-memory` |
 | `agent-start-workflow` | DAG `WorkflowEngine`, `NodeExecutor` nodes, workflow persistence |

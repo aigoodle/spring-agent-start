@@ -29,9 +29,6 @@ import java.util.List;
  */
 public class LlmNodeExecutor implements NodeExecutor {
 
-    private static final String MISSING_MODEL_MESSAGE =
-            "LLM node requires modelProvider + modelName";
-
     private final ModelService modelService;
     private final LlmConversationBuilder conversationBuilder;
     private final MemoryManager conversationMemory;
@@ -76,7 +73,7 @@ public class LlmNodeExecutor implements NodeExecutor {
         try {
             chatModel = NodeModelResolver.resolveModel(node, context, modelService);
         } catch (IllegalArgumentException exception) {
-            return NodeResult.failure(MISSING_MODEL_MESSAGE);
+            return NodeResult.failure("LLM model initialization failed: " + exception.getMessage());
         }
 
         Prompt prompt = new Prompt(messages, resolveChatOptions(node, chatModel));
@@ -96,7 +93,7 @@ public class LlmNodeExecutor implements NodeExecutor {
         try {
             chatClient = NodeModelResolver.resolve(node, context, modelService);
         } catch (IllegalArgumentException exception) {
-            return NodeResult.failure(MISSING_MODEL_MESSAGE);
+            return NodeResult.failure("LLM model initialization failed: " + exception.getMessage());
         }
 
         ChatClient.ChatClientRequestSpec request = chatClient.prompt().messages(messages);

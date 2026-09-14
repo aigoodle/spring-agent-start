@@ -92,6 +92,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<?>> handleStatus(ResponseStatusException ex) {
         HttpStatus status = HttpStatus.valueOf(ex.getStatusCode().value());
         ApiErrorCode code = switch (status) {
+            case BAD_REQUEST -> ApiErrorCode.BAD_REQUEST;
             case UNAUTHORIZED -> ApiErrorCode.UNAUTHORIZED;
             case FORBIDDEN -> ApiErrorCode.FORBIDDEN;
             case NOT_FOUND -> ApiErrorCode.NOT_FOUND;

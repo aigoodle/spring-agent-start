@@ -48,6 +48,21 @@ public class ConnectorConnectionService {
         return codec.decode(entity.getTenantId(), entity.getEncryptedCredentials());
     }
 
+    /** Decrypted configuration for a provider after validating its installation binding. */
+    public ResolvedConnection resolve(String id, String tenantId, String installationId) {
+        ConnectorConnectionEntity entity = requireOwned(id, tenant(tenantId));
+        if (!java.util.Objects.equals(entity.getInstallationId(), installationId))
+            throw new ConnectorException("connector_connection_mismatch", "Connection belongs to another installation");
+        if (!"CONFIGURED".equals(entity.getStatus()))
+            throw new ConnectorException("connector_connection_invalid", "Connection is not configured");
+        return new ResolvedConnection(codec.decode(entity.getTenantId(), entity.getEncryptedConfig()),
+                codec.decode(entity.getTenantId(), entity.getEncryptedCredentials()));
+    }
+
+    public record ResolvedConnection(Map<String, Object> configuration, Map<String, Object> credentials) {
+        @Override public String toString() { return "ResolvedConnection[<redacted>]"; }
+    }
+
     /** Validates ownership and decryptability without leaking any secret value. */
     public ConnectionTestResult test(String id, String tenantId) {
         ConnectorConnectionEntity entity = requireOwned(id, tenant(tenantId));

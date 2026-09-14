@@ -22,6 +22,11 @@
     <dependencies>
         <dependency>
             <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-plugin</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
             <artifactId>agent-start-model</artifactId>
         </dependency>
         <dependency>
