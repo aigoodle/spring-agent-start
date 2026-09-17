@@ -4,6 +4,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * Configures MCP servers whose tools should be exposed to agents
@@ -13,6 +15,10 @@ import java.util.List;
 public class McpProperties {
 
     private List<Server> servers = new ArrayList<>();
+    /** JSON file used by the admin API for durable runtime-managed servers. */
+    private String configFile = "./data/mcp-servers.json";
+    /** Separate secret for encrypting MCP child-process environment variables at rest. */
+    private String encryptionSecret = "spring-agent-start-mcp-demo-secret-change-me";
 
     public List<Server> getServers() {
         return servers;
@@ -21,6 +27,10 @@ public class McpProperties {
     public void setServers(List<Server> servers) {
         this.servers = servers;
     }
+    public String getConfigFile() { return configFile; }
+    public void setConfigFile(String configFile) { this.configFile = configFile; }
+    public String getEncryptionSecret() { return encryptionSecret; }
+    public void setEncryptionSecret(String encryptionSecret) { this.encryptionSecret = encryptionSecret; }
 
     public static class Server {
         /** Logical name (used for logging / tool grouping). */
@@ -34,6 +44,9 @@ public class McpProperties {
         /** http: the MCP server base URL. */
         private String url;
         private int requestTimeoutSeconds = 30;
+        /** stdio: environment variables supplied only to the child process. */
+        private Map<String, String> env = new LinkedHashMap<>();
+        private boolean enabled = true;
 
         public String getName() {
             return name;
@@ -82,5 +95,10 @@ public class McpProperties {
         public void setRequestTimeoutSeconds(int requestTimeoutSeconds) {
             this.requestTimeoutSeconds = requestTimeoutSeconds;
         }
+
+        public Map<String, String> getEnv() { return env; }
+        public void setEnv(Map<String, String> env) { this.env = env == null ? new LinkedHashMap<>() : env; }
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
     }
 }

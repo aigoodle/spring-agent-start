@@ -16,7 +16,7 @@ include the runtime node whenever two sidecars can expose different state.
 | In-memory Agent run/event stream | `tenantId + runId` | `InMemoryAgentRunStore.RunKey`; an imported/custom run id may safely repeat across tenants and legacy tenant-less lookup fails when ambiguous |
 | Active Agent execution thread | `tenantId + runId` | cancellation can only interrupt the execution registered for the trusted tenant |
 
-The OpenClaw connector-definition fallback cache and MCP client/tool discovery are deliberately
+Connector-definition fallback caches and MCP client/tool discovery are deliberately
 deployment-scoped, not tenant-owned caches: their configuration is supplied by the host process and
 contains no tenant account credentials. A future feature that permits tenants to configure MCP servers
 must introduce `tenantId + runtimeNodeId + serverId` managers instead of reusing the deployment-scoped

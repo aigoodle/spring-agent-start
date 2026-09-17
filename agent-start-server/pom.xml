@@ -74,6 +74,13 @@
             <groupId>io.github.aigoodle</groupId>
             <artifactId>agent-start-tools</artifactId>
         </dependency>
+        <!-- agent-start-tools keeps MCP optional for embedders; the standalone server
+             exposes MCP administration, so it must opt in to the SDK explicitly. -->
+        <dependency>
+            <groupId>io.modelcontextprotocol.sdk</groupId>
+            <artifactId>mcp</artifactId>
+            <version>${mcp.version}</version>
+        </dependency>
         <dependency>
             <groupId>io.github.aigoodle</groupId>
             <artifactId>agent-start-connector</artifactId>
@@ -86,6 +93,7 @@
             <groupId>io.github.aigoodle</groupId>
             <artifactId>agent-start-connector-tools</artifactId>
         </dependency>
+        <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-connector-bundle</artifactId></dependency>
         <dependency>
             <groupId>io.github.aigoodle</groupId>
             <artifactId>agent-start-trigger</artifactId>

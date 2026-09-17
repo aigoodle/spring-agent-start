@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <parent><groupId>io.github.aigoodle</groupId><artifactId>spring-agent-start</artifactId><version>0.1.0</version></parent>
+  <artifactId>agent-start-connectors</artifactId><packaging>pom</packaging>
+  <name>agent-start-connectors</name>
+  <description>Lightweight bot-channel SPI, platform-neutral runtime and independent connectors.</description>
+  <modules>
+    <module>agent-start-connector-api</module>
+    <module>agent-start-connector-core</module>
+    <module>agent-start-connector-testkit</module>
+    <module>agent-start-connector-runtime</module>
+    <module>agent-start-connector-qqbot</module>
+    <module>agent-start-connector-wecom</module>
+    <module>agent-start-connector-feishu</module>
+    <module>agent-start-connector-dingtalk</module>
+    <module>agent-start-connector-email</module>
+    <module>agent-start-connector-webhook</module>
+    <module>agent-start-connector-bundle</module>
+  </modules>
+</project>

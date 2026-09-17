@@ -29,6 +29,9 @@ public class McpToolProvider implements ToolProvider {
         this.clientManager = clientManager;
     }
 
+    /** Invalidates discovery after an administrator changes the server catalog. */
+    public synchronized void refresh() { discoveredTools = null; }
+
     @Override
     public List<ToolDefinition> getTools() {
         if (discoveredTools != null) {
@@ -45,11 +48,12 @@ public class McpToolProvider implements ToolProvider {
     private List<ToolDefinition> discoverTools() {
         List<ToolDefinition> tools = new ArrayList<>();
         for (McpProperties.Server server : clientManager.servers()) {
+            if (!server.isEnabled()) continue;
             try {
                 McpSyncClient client = clientManager.client(server);
                 List<McpSchema.Tool> serverTools = client.listTools().tools();
                 serverTools.stream()
-                        .map(tool -> toAgentTool(client, tool))
+                        .map(tool -> toAgentTool(client, server.getName(), tool))
                         .forEach(tools::add);
                 logger.info("MCP server '{}' contributed {} tool(s)",
                         server.getName(), serverTools.size());
@@ -61,11 +65,11 @@ public class McpToolProvider implements ToolProvider {
         return List.copyOf(tools);
     }
 
-    private static ToolDefinition toAgentTool(McpSyncClient client, McpSchema.Tool tool) {
+    private static ToolDefinition toAgentTool(McpSyncClient client, String serverId, McpSchema.Tool tool) {
         String inputSchema = tool.inputSchema() == null
                 ? null
                 : JsonUtils.toJson(tool.inputSchema());
         return new McpToolDefinition(
-                client, tool.name(), tool.description(), inputSchema);
+                client, serverId, tool.name(), tool.description(), inputSchema);
     }
 }

@@ -55,5 +55,8 @@ openclaw/agent-start-bridge/dist/
 .mvn/central-deploy.log
 .mvn/central-deploy.err.log
 
+# Runtime-managed MCP server configuration (may contain encrypted credentials)
+/data/mcp-servers.json
+
 /docker/volumes/hermes/*
 /docker/volumes/openclaw/*

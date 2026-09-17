@@ -70,6 +70,7 @@ common → { model, memory } → { knowledge, tools } → agent → workflow →
 | `agent-start-knowledge` | Datasets → documents → chunks, template chunking, hybrid (vector+keyword) retrieval, `DocumentReader`/`Chunker`/`Reranker` SPIs, optional RabbitMQ async ingestion |
 | `agent-start-store/` | Aggregator for optional `VectorStoreFactory` starters (`-pgvector`, `-elasticsearch`, `-milvus`). |
 | `agent-start-tools` | `Tool` SPI, `ToolRegistry`, `ToolProvider` plug-point, Spring AI `ToolCallback` adapter, **MCP client** (`McpToolProvider`) |
+| `agent-start-connectors/` | Lightweight channel SPI and platform-neutral account/callback/Outbox runtime. QQBot, WeCom, Feishu, DingTalk, Email and Webhook are separate Maven modules; `-bundle` is only the optional all-platform convenience artifact. |
 | `agent-start-plugin` | Business Plugin SPI, Java Bean / remote HTTP runtimes, manifest, scoped host capabilities and invocation tokens; projected into Connector catalog and gateway. |
 | `agent-start-plugin-agent` | PLUGIN Agent runtime, non-streaming `model.chat` host capability, registered-tool/MCP bridge, progressive plugin skill tools. |
 | `agent-start-plugins/` | Aggregator for business plugin starters; YAML manifests live under each child's `resources/plugins/<name>/`. |

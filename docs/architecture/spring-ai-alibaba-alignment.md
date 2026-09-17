@@ -21,7 +21,7 @@ Agent Start 是可嵌入宿主 Spring Boot 系统的业务 Agent SDK 与 Connect
 | 多 Agent | Sequential/Parallel/Routing/Loop | Strategy 与 delegation | 补正式组合 Agent 模型 |
 | 人工介入 | Graph interrupt/HITL hook | ApprovalGate、消息 HANDOFF | 统一为可持久化暂停/恢复协议 |
 | 前端 | Studio 调试 UI + Admin 完整平台 | 可嵌入 Vue 组件、业务 Hub | 不复制 Admin；加强 SDK props/events/slots 与宿主路由集成 |
-| Connector/渠道 | MCP、Nacos、云生态为主 | OpenClaw/Hermes、企业消息账号和路由 | 继续作为差异化核心 |
+| Connector/渠道 | MCP、Nacos、云生态为主 | 原生 Bot/Email/Webhook、企业消息账号和路由 | 继续作为差异化核心 |
 
 ## 集成策略
 
@@ -88,7 +88,7 @@ HTTP 同步入口由宿主过滤器写入 `UserContextHolder`；WebFlux 使用 R
      角色和 scope。Reactor、消息消费或作业系统可替换 `ToolExecutionContextProvider`，不要求采用本项目
      的登录或组织模型。
 3. 会话状态机、接管人、处理组、租约锁、内部备注、暂停/恢复 Agent。
-4. Hermes Bridge 与 OpenClaw 达到相同的入站、出站、健康和重连契约。
+4. QQBot、飞书、钉钉、企业微信、Email 与 Webhook 通过统一轻量 SPI 满足入站、出站、健康和重连契约。
 
 ### P2 Native Runtime 强化
 
@@ -108,7 +108,7 @@ HTTP 同步入口由宿主过滤器写入 `UserContextHolder`；WebFlux 使用 R
 - 消息重复回调不重复运行 Agent；人工重复提交不重复发送。
 - 每条出站消息都有发送人、触发消息、会话、幂等键和平台消息 ID。
 - 进程在发送任意阶段退出后可以恢复，不丢消息且可判定是否重发。
-- OpenClaw 与 Hermes 通过同一组运行时契约测试。
+- 六种原生消息通道通过同一组运行时、回调幂等和 Outbox 契约测试。
 - 发布新 Agent 版本后，已有会话继续使用首次命中的快照，新会话使用最新活动版本；显式停用后旧会话必须走配置的降级策略或失败关闭。
 - UI 只依赖 SDK client 和宿主传入上下文，不内置登录、员工或租户管理系统。
 

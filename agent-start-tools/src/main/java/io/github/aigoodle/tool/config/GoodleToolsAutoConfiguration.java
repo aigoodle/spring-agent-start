@@ -101,12 +101,13 @@ public class GoodleToolsAutoConfiguration {
         @Bean(destroyMethod = "close")
         @ConditionalOnMissingBean
         public McpClientManager mcpClientManager(McpProperties properties) {
-            return new McpClientManager(properties.getServers());
+            return new McpClientManager(properties.getServers(), properties.getConfigFile(),
+                    properties.getEncryptionSecret());
         }
 
         @Bean
         @ConditionalOnMissingBean(name = "mcpToolProvider")
-        public ToolProvider mcpToolProvider(McpClientManager clientManager) {
+        public McpToolProvider mcpToolProvider(McpClientManager clientManager) {
             return new McpToolProvider(clientManager);
         }
     }

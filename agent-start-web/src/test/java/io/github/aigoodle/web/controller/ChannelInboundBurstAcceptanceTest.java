@@ -35,11 +35,11 @@ class ChannelInboundBurstAcceptanceTest {
     void callbackBurstIsDurableAndDuplicateReplaysAreAcknowledgedExactlyOnce() throws Exception {
         Assumptions.assumeTrue(Boolean.parseBoolean(env("CHANNEL_INBOUND_BURST_ENABLED", "false")));
         String endpoint = env("CHANNEL_INBOUND_BURST_URL",
-                "http://127.0.0.1:18090/agent-start/channel-events/openclaw");
+                "http://127.0.0.1:18090/agent-start/channel-events/native/webhook/account-1");
         String token = required("CHANNEL_INBOUND_BURST_TOKEN");
-        String provider = env("CHANNEL_INBOUND_BURST_PROVIDER", "openclaw");
+        String provider = env("CHANNEL_INBOUND_BURST_PROVIDER", "native");
         String runtimeNode = env("CHANNEL_INBOUND_BURST_RUNTIME_NODE", provider + "-default");
-        String channel = env("CHANNEL_INBOUND_BURST_CHANNEL", "qqbot");
+        String channel = env("CHANNEL_INBOUND_BURST_CHANNEL", "webhook");
         String account = required("CHANNEL_INBOUND_BURST_ACCOUNT_ID");
         int messages = integer("CHANNEL_INBOUND_BURST_MESSAGES", 200);
         int concurrency = integer("CHANNEL_INBOUND_BURST_CONCURRENCY", 32);

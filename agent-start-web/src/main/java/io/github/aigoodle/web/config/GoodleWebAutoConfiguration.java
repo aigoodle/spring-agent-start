@@ -50,7 +50,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
         "io.github.aigoodle.tool.config.GoodleToolsAutoConfiguration",
         "io.github.aigoodle.connector.config.GoodleConnectorAutoConfiguration",
         "io.github.aigoodle.plugin.config.PluginAutoConfiguration",
-        "io.github.aigoodle.connector.openclaw.config.GoodleOpenClawConnectorAutoConfiguration",
+        "io.github.aigoodle.connectors.nativebot.NativeConnectorAutoConfiguration",
         "io.github.aigoodle.agent.config.AgentRuntimeAutoConfiguration",
         "io.github.aigoodle.knowledge.config.GoodleKnowledgeAutoConfiguration",
         "io.github.aigoodle.workflow.config.GoodleWorkflowAutoConfiguration",
@@ -124,7 +124,7 @@ public class GoodleWebAutoConfiguration {
                     String basePath = normalizedBasePath(properties.getBasePath());
                     if (!basePath.isEmpty()) {
                         configurer.addPathPrefix(basePath,
-                                c -> c.getPackageName().startsWith("io.github.aigoodle.web.controller"));
+                                GoodleWebAutoConfiguration::isAgentStartController);
                     }
                 }
             };
@@ -175,7 +175,7 @@ public class GoodleWebAutoConfiguration {
                     String basePath = normalizedBasePath(properties.getBasePath());
                     if (!basePath.isEmpty()) {
                         configurer.addPathPrefix(basePath,
-                                c -> c.getPackageName().startsWith("io.github.aigoodle.web.controller"));
+                                GoodleWebAutoConfiguration::isAgentStartController);
                     }
                 }
             };
@@ -202,6 +202,18 @@ public class GoodleWebAutoConfiguration {
                 }
             };
         }
+    }
+
+    /**
+     * Controllers contributed by connector starters are part of the same public API namespace as
+     * the controllers declared in agent-start-web. Keeping this predicate in one place prevents a
+     * callback URL advertised by the UI from differing from the route actually registered by the
+     * host application.
+     */
+    private static boolean isAgentStartController(Class<?> type) {
+        String packageName = type.getPackageName();
+        return packageName.startsWith("io.github.aigoodle.web.controller")
+                || packageName.startsWith("io.github.aigoodle.connectors.nativebot");
     }
 
     static String normalizedBasePath(String basePath) {

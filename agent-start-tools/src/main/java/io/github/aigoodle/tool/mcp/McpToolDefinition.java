@@ -1,6 +1,7 @@
 package io.github.aigoodle.tool.mcp;
 
 import io.github.aigoodle.tool.ToolDefinition;
+import io.github.aigoodle.tool.ToolMetadata;
 import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.spec.McpSchema;
 
@@ -12,18 +13,34 @@ import java.util.stream.Collectors;
  * be used by agents and workflows exactly like a built-in tool. Calls are proxied to the
  * MCP server over the manager's client.
  */
-public class McpToolDefinition implements ToolDefinition {
+public class McpToolDefinition implements ToolDefinition, ToolMetadata {
 
     private final McpSyncClient client;
     private final String name;
     private final String description;
     private final String inputSchema;
+    private final String serverId;
 
+    /** Backward-compatible constructor for applications that create MCP tools directly. */
     public McpToolDefinition(McpSyncClient client, String name, String description, String inputSchema) {
+        this(client, "mcp", name, description, inputSchema);
+    }
+
+    public McpToolDefinition(McpSyncClient client, String serverId, String name, String description, String inputSchema) {
         this.client = client;
+        this.serverId = serverId;
         this.name = name;
         this.description = description == null ? name : description;
         this.inputSchema = inputSchema;
+    }
+
+    @Override
+    public Map<String, Object> metadata() {
+        return Map.of(
+                "source", "MCP",
+                "category", "MCP",
+                "provider", serverId,
+                "mcpServerId", serverId);
     }
 
     @Override

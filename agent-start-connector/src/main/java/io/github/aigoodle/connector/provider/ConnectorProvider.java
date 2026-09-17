@@ -5,7 +5,7 @@ import io.github.aigoodle.connector.execution.ConnectorExecutionRequest;
 import io.github.aigoodle.connector.execution.ConnectorResult;
 import java.util.List;
 
-/** Adapter boundary for native, OpenClaw, MCP, n8n and future ecosystems. */
+/** Adapter boundary for native channels, MCP, n8n and future connector ecosystems. */
 public interface ConnectorProvider {
     String type();
     List<ConnectorDefinition> discover();

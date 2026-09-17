@@ -68,17 +68,6 @@ spring-agent:
   connector:
     encryption-secret: ${CONNECTOR_SECRET:${AGENT_SECRET:demo-secret-change-me}}
     channel-catalog-cache-ttl: ${CHANNEL_CATALOG_CACHE_TTL:10m}
-    openclaw:
-      enabled: ${OPENCLAW_ENABLED:false}
-      base-url: ${OPENCLAW_BASE_URL:http://127.0.0.1:18789}
-      service-token: ${OPENCLAW_SERVICE_TOKEN:}
-      agent-id: ${OPENCLAW_AGENT_ID:main}
-      timeout: ${OPENCLAW_TIMEOUT:60s}
-    hermes:
-      enabled: ${HERMES_ENABLED:false}
-      base-url: ${HERMES_BASE_URL:http://127.0.0.1:9119}
-      api-token: ${HERMES_API_TOKEN:}
-      timeout: ${HERMES_TIMEOUT:15s}
   web:
     # CORS wide open by default so the local vite dev server can hit it.
     allowed-origins: ["*"]

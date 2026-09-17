@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <parent><groupId>io.github.aigoodle</groupId><artifactId>agent-start-connectors</artifactId><version>0.1.0</version></parent>
+  <artifactId>agent-start-connector-bundle</artifactId><name>agent-start-connector-bundle</name>
+  <description>Optional convenience bundle containing all built-in channel connectors.</description>
+  <dependencies>
+    <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-connector-qqbot</artifactId></dependency>
+    <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-connector-wecom</artifactId></dependency>
+    <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-connector-feishu</artifactId></dependency>
+    <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-connector-dingtalk</artifactId></dependency>
+    <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-connector-email</artifactId></dependency>
+    <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-connector-webhook</artifactId></dependency>
+    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
+  </dependencies>
+</project>

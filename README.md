@@ -252,7 +252,7 @@ spring-agent:
 The standalone `agent-start-server` adds a fail-fast production guard without changing the
 embedded starters' host-owned security model. Activating the `prod` or `production` profile (or
 setting `AGENT_PRODUCTION_GUARD=true`) refuses startup while demo identity/debugging, wildcard CORS,
-default database credentials, weak encryption roots, or demo OpenClaw/Hermes bridge tokens remain.
+default database credentials, weak encryption roots, or demo connector credentials remain.
 Embedded applications continue to supply tenant/user identity and secret policy through their own
 trusted runtime context and SPI beans.
 

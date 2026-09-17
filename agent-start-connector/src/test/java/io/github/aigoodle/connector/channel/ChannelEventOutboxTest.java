@@ -304,13 +304,16 @@ class ChannelEventOutboxTest {
         ChannelConnectionService connections = mock(ChannelConnectionService.class);
         ChannelInboundDispatcher dispatcher = mock(ChannelInboundDispatcher.class);
         ChannelRuntimeProvider runtime = mock(ChannelRuntimeProvider.class);
-        when(runtime.type()).thenReturn("openclaw");
+        when(runtime.type()).thenReturn("native");
         when(runtime.sendWithResult(any())).thenReturn(new ChannelSendResult("qq-message-9", Map.of()));
         ChannelEventLogService service = new ChannelEventLogService(mapper, connections, dispatcher,
                 new ChannelRuntimeRegistry(List.of(runtime)), new ConnectorProperties());
 
         ChannelEventEntity source = source();
-        when(mapper.selectOne(any())).thenReturn(source, (ChannelEventEntity) null);
+        source.setProvider("native");
+        source.setMessageId("qq-inbound-message-1");
+        source.setContentJson("{\"conversationType\":\"GROUP\"}");
+        when(mapper.selectOne(any())).thenReturn(source, null, source);
         doAnswer(invocation -> {
             ChannelEventEntity inserted = invocation.getArgument(0);
             inserted.setId("outbound-1");
@@ -335,6 +338,11 @@ class ChannelEventOutboxTest {
         ArgumentCaptor<ChannelOutboundMessage> message = ArgumentCaptor.forClass(ChannelOutboundMessage.class);
         verify(runtime).sendWithResult(message.capture());
         assertThat(message.getValue().targetId()).isEqualTo("external-user-1");
+        assertThat(message.getValue().metadata())
+                .containsEntry("sourceEventId", "inbound-1")
+                .containsEntry("replyToPlatformMessageId", "qq-inbound-message-1")
+                .containsEntry("conversationType", "GROUP")
+                .containsEntry("idempotencyKey", "request-1");
         // exhausted-lease recovery sweep, claim, then SENT acknowledgement
         verify(mapper, times(3)).update(isNull(), any());
     }

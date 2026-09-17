@@ -463,6 +463,15 @@ public class ChannelEventLogService {
         return manualReply(tenantId, eventId, content, null, "EMPLOYEE", null);
     }
 
+    /** Queues a workflow reply using the original platform message as its routing source. */
+    public View workflowReply(ChannelInboundEvent event, String content, String idempotencyKey) {
+        ChannelConnectionService.Ownership owner = ownership(event);
+        ChannelEventEntity source = findInbound(event, owner);
+        if (source == null) throw new IllegalStateException("inbound channel event was not persisted");
+        return manualReply(source.getTenantId(), source.getId(), content, idempotencyKey,
+                "SYSTEM", null);
+    }
+
     public View manualReply(String tenantId, String eventId, String content, String idempotencyKey,
                             String senderType, String senderActorId) {
         return manualReply(tenantId, eventId, content, "TEXT", List.of(), java.util.Map.of(),
@@ -640,8 +649,11 @@ public class ChannelEventLogService {
             ChannelEventEntity source = mapper.selectOne(new LambdaQueryWrapper<ChannelEventEntity>()
                     .eq(ChannelEventEntity::getTenantId, event.getTenantId())
                     .eq(ChannelEventEntity::getId, event.getReplyToEventId()).last("LIMIT 1"));
-            if (source != null && source.getMessageId() != null)
-                values.put("replyToPlatformMessageId", source.getMessageId());
+            if (source != null) {
+                if (source.getMessageId() != null) values.put("replyToPlatformMessageId", source.getMessageId());
+                Object conversationType = contentPayload(source).get("conversationType");
+                if (conversationType != null) values.put("conversationType", conversationType);
+            }
         }
         return values;
     }

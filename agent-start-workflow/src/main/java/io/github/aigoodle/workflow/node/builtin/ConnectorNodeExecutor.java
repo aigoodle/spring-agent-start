@@ -23,7 +23,7 @@ import io.github.aigoodle.workflow.node.WorkflowWaitRequest;
 import java.time.Instant;
 import java.util.UUID;
 
-/** Provider-neutral connector node; OpenClaw is one provider, not a workflow type. */
+/** Provider-neutral connector node; a connector provider is transport infrastructure, not a workflow type. */
 public class ConnectorNodeExecutor implements NodeExecutor {
     private final ConnectorExecutionGateway gateway;
     private final ChannelConnectionService channelConnections;

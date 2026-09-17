@@ -6,7 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Resolves channel runtime providers without coupling callers to OpenClaw or another ecosystem. */
+/** Resolves channel runtime providers without coupling callers to a concrete transport implementation. */
 public class ChannelRuntimeRegistry {
     private final Map<String, Map<String, ChannelRuntimeProvider>> providers;
 

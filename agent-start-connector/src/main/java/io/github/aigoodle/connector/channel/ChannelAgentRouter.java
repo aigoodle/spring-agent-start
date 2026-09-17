@@ -1,6 +1,6 @@
 package io.github.aigoodle.connector.channel;
 
-/** Resolves a managed channel message without ever falling back to an OpenClaw default Agent. */
+/** Resolves a managed channel message without silently falling back to a transport-specific Agent. */
 public class ChannelAgentRouter {
     public enum Source { CONNECTION, EMPLOYEE, TENANT_DEFAULT, TENANT_FALLBACK, NONE }
     public enum UnboundPolicy { SILENT }

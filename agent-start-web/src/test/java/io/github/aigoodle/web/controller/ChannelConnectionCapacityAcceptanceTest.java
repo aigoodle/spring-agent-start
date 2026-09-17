@@ -32,7 +32,7 @@ class ChannelConnectionCapacityAcceptanceTest {
     void configuredConnectionFleetMeetsAvailabilityAndLatencyBudget() throws Exception {
         Assumptions.assumeTrue(Boolean.parseBoolean(env("CHANNEL_CAPACITY_ENABLED", "false")));
         String baseUrl = env("CHANNEL_CAPACITY_BACKEND_URL", "http://127.0.0.1:18090/agent-start");
-        String provider = env("CHANNEL_CAPACITY_PROVIDER", "openclaw");
+        String provider = env("CHANNEL_CAPACITY_PROVIDER", "native");
         String channel = env("CHANNEL_CAPACITY_CHANNEL", "qqbot");
         int expected = integer("CHANNEL_CAPACITY_EXPECTED_CONNECTIONS", 200);
         int concurrency = integer("CHANNEL_CAPACITY_CONCURRENCY", 32);
