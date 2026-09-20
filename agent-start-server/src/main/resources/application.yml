@@ -44,6 +44,7 @@ spring:
         - classpath:db/knowledge-schema.sql
         - classpath:db/workflow-schema.sql
         - classpath:db/agent-schema.sql
+        - classpath:db/skill-schema.sql
         - classpath:db/memory-schema.sql
         - classpath:db/trigger-schema.sql
         - classpath:db/observability-schema.sql
@@ -62,9 +63,13 @@ spring-agent:
     production-guard:
       enabled: ${AGENT_PRODUCTION_GUARD:false}
   demo:
-    # Standalone server is a sandbox, so no full login system is required.
-    # Set AGENT_DEMO_ENABLED=false in production hosts and provide ChatAccessPolicy.
+    # Downloadable demo only: /auth/login returns a front-end state marker, while
+    # DemoCurrentUserWebFilter restores this trusted identity on every request.
+    # No user/tenant table, JWT validation or Redis session is involved.
+    # Set AGENT_DEMO_ENABLED=false in a host system and provide its JWT/session/SSO bridge.
     enabled: ${AGENT_DEMO_ENABLED:true}
+    login-username: ${AGENT_DEMO_LOGIN_USERNAME:admin}
+    login-password: ${AGENT_DEMO_LOGIN_PASSWORD:123456}
     user-id: ${AGENT_DEMO_USER_ID:demo-user}
     username: ${AGENT_DEMO_USERNAME:Demo Administrator}
     tenant-id: ${AGENT_DEMO_TENANT:default}

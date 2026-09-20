@@ -79,7 +79,7 @@ public class DeepSeekModelProvider extends AbstractModelProvider {
         }
         return DeepSeekChatModel.builder()
                 .deepSeekApi(api)
-                .defaultOptions(options.build())
+                .options(options.build())
                 .build();
     }
 

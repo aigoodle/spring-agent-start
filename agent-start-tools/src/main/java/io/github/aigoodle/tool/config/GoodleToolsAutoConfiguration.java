@@ -5,6 +5,7 @@ import io.github.aigoodle.tool.ToolDefinition;
 import io.github.aigoodle.tool.ToolProvider;
 import io.github.aigoodle.tool.ToolRegistry;
 import io.github.aigoodle.tool.adapter.ToolDefinitionCallback;
+import io.github.aigoodle.tool.annotation.AnnotatedToolProvider;
 import io.github.aigoodle.tool.builtin.CalculatorTool;
 import io.github.aigoodle.tool.builtin.CurrentTimeTool;
 import io.github.aigoodle.tool.builtin.HttpGetTool;
@@ -18,6 +19,8 @@ import io.github.aigoodle.tool.execution.ToolExecutionGateway;
 import io.github.aigoodle.tool.execution.ToolExecutionListener;
 import io.github.aigoodle.tool.execution.ToolExecutionPolicy;
 import io.github.aigoodle.tool.execution.ToolExecutionProperties;
+import io.github.aigoodle.tool.custom.CustomToolManager;
+import io.github.aigoodle.tool.custom.CustomToolProperties;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
@@ -42,8 +45,19 @@ import org.springframework.context.annotation.Configuration;
  * turned off with {@code spring-agent.tools.builtin=false}.
  */
 @AutoConfiguration(after = GoodleModelAutoConfiguration.class)
-@EnableConfigurationProperties(ToolExecutionProperties.class)
+@EnableConfigurationProperties({ToolExecutionProperties.class, CustomToolProperties.class})
 public class GoodleToolsAutoConfiguration {
+
+    @Bean
+    public static AnnotatedToolProvider annotatedToolProvider(ObjectProvider<ToolRegistry> registryProvider) {
+        return new AnnotatedToolProvider(registryProvider);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public CustomToolManager customToolManager(CustomToolProperties properties) {
+        return new CustomToolManager(properties);
+    }
 
     @Bean(destroyMethod = "close")
     @ConditionalOnMissingBean

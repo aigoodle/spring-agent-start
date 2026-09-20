@@ -10,10 +10,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
-import org.springframework.ai.openai.OpenAiChatModel;
-import org.springframework.retry.support.RetryTemplate;
-
-import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -88,14 +84,6 @@ public class ModelConnectionTester {
     private ChatModel fastFailChatModel(ModelEndpoint endpoint) {
         ChatModel chatModel = providerRegistry.get(endpoint.getProviderName())
                 .createChatModel(endpoint);
-        if (chatModel instanceof OpenAiChatModel openAiChatModel) {
-            return openAiChatModel.mutate()
-                    .retryTemplate(RetryTemplate.builder()
-                            .maxAttempts(2)
-                            .fixedBackoff(Duration.ofMillis(500))
-                            .build())
-                    .build();
-        }
         return chatModel;
     }
 

@@ -85,6 +85,12 @@ public class ChannelConnectionService {
       LocalDateTime lastTestedAt,
       long configVersion) {}
 
+  /** Safe edit projection: write-only values are never returned to clients. */
+  public record EditConfiguration(
+      Map<String, Object> credentials,
+      Map<String, Object> config,
+      List<String> configuredSecretFields) {}
+
   public record Route(String connectionId, String tenantId, String ownerId, String agentId) {}
 
   public record Ownership(
@@ -124,22 +130,34 @@ public class ChannelConnectionService {
         request.id() == null ? new ChannelConnectionEntity() : requireOwned(request.id(), tenantId);
     boolean creating = entity.getId() == null;
     entity.setTenantId(tenantId);
-    entity.setOwnerType(defaulted(request.ownerType(), "USER"));
-    entity.setOwnerId(required(request.ownerId(), "ownerId"));
+    String ownerType = defaulted(request.ownerType(), "USER").toUpperCase(java.util.Locale.ROOT);
+    entity.setOwnerType(ownerType);
+    // Tenant accounts are owned by the authenticated tenant boundary, not by
+    // the administrator who happened to create them. Keep owner_id non-null
+    // for existing schemas and routing code by storing the trusted tenant id.
+    entity.setOwnerId(
+        "TENANT".equals(ownerType) ? tenantId : required(request.ownerId(), "ownerId"));
     entity.setProvider(required(request.provider(), "provider"));
     entity.setChannelId(required(request.channelId(), "channelId"));
+    if (creating) requireInstanceCapacity(tenantId, entity.getProvider(), entity.getChannelId());
     entity.setName(required(request.name(), "name"));
-    // Native bot credentials belong to an employee. Applications/workflows subscribe to the
-    // channel separately and must never be embedded into an employee account record.
+    // Native channel credentials belong to either an employee or the tenant. Applications and
+    // workflows subscribe separately and must never be embedded into an account record.
     boolean nativeChannel = "native".equalsIgnoreCase(entity.getProvider());
     entity.setAgentId(nativeChannel ? null : trimToNull(request.agentId()));
     entity.setAgentVersionId(nativeChannel ? null : trimToNull(request.agentVersionId()));
     if (creating)
       entity.setRuntimeNodeId(selectNode(entity.getProvider(), request.runtimeNodeId()));
-    if (request.credentials() != null)
-      entity.setEncryptedCredentials(codec.encode(tenantId, request.credentials()));
-    if (request.config() != null)
-      entity.setEncryptedConfig(codec.encode(tenantId, request.config()));
+    if (request.credentials() != null) {
+      Map<String, Object> existing =
+          creating ? Map.of() : codec.decode(tenantId, entity.getEncryptedCredentials());
+      entity.setEncryptedCredentials(codec.encode(tenantId, mergeValues(existing, request.credentials())));
+    }
+    if (request.config() != null) {
+      Map<String, Object> existing =
+          creating ? Map.of() : codec.decode(tenantId, entity.getEncryptedConfig());
+      entity.setEncryptedConfig(codec.encode(tenantId, mergeValues(existing, request.config())));
+    }
     entity.setDesiredStatus(Boolean.FALSE.equals(request.enabled()) ? "DISABLED" : "ACTIVE");
     entity.setRuntimeStatus("PENDING");
     entity.setReconcileAttempts(0);
@@ -185,6 +203,28 @@ public class ChannelConnectionService {
     }
     updateOwned(entity);
     return view(entity);
+  }
+
+  private void requireInstanceCapacity(String tenantId, String provider, String channelId) {
+    boolean single =
+        runtimes.discover().stream()
+            .filter(item -> provider.equals(item.provider()) && channelId.equals(item.channelId()))
+            .map(ChannelDefinition::metadata)
+            .map(metadata -> metadata.get("accountModel"))
+            .filter(Map.class::isInstance)
+            .map(Map.class::cast)
+            .map(model -> model.get("instancePolicy"))
+            .anyMatch(value -> "SINGLE".equalsIgnoreCase(String.valueOf(value)));
+    if (!single) return;
+    Long count =
+        mapper.selectCount(
+            new LambdaQueryWrapper<ChannelConnectionEntity>()
+                .eq(ChannelConnectionEntity::getTenantId, tenantId)
+                .eq(ChannelConnectionEntity::getProvider, provider)
+                .eq(ChannelConnectionEntity::getChannelId, channelId));
+    if (count != null && count > 0)
+      throw new ConnectorException(
+          "channel_instance_limit", "Only one " + channelId + " account is allowed per tenant");
   }
 
   /** Cross-tenant scan is restricted to the trusted embedded reconciler. */
@@ -420,6 +460,26 @@ public class ChannelConnectionService {
     return view(requireOwned(id, tenant(tenantId)));
   }
 
+  public EditConfiguration editConfiguration(String id, String tenantId) {
+    ChannelConnectionEntity entity = requireOwned(id, tenant(tenantId));
+    ChannelDefinition definition =
+        runtimes
+            .require(entity.getProvider(), entity.getRuntimeNodeId())
+            .discoverChannels().stream()
+            .filter(item -> entity.getChannelId().equals(item.channelId()))
+            .findFirst()
+            .orElseThrow(
+                () -> new ConnectorException(
+                    "channel_definition_not_found", "Channel definition not found"));
+    Map<String, Object> credentials =
+        codec.decode(entity.getTenantId(), entity.getEncryptedCredentials());
+    Map<String, Object> config = codec.decode(entity.getTenantId(), entity.getEncryptedConfig());
+    List<String> secrets = new java.util.ArrayList<>();
+    redactWriteOnly(credentials, definition.credentialSchema(), secrets);
+    redactWriteOnly(config, definition.configurationSchema(), secrets);
+    return new EditConfiguration(Map.copyOf(credentials), Map.copyOf(config), List.copyOf(secrets));
+  }
+
   public View test(String id, String tenantId) {
     ChannelConnectionEntity entity = requireOwned(id, tenant(tenantId));
     try {
@@ -523,6 +583,31 @@ public class ChannelConnectionService {
         new LinkedHashMap<>(codec.decode(entity.getTenantId(), entity.getEncryptedConfig()));
     values.putAll(codec.decode(entity.getTenantId(), entity.getEncryptedCredentials()));
     return values;
+  }
+
+  private static Map<String, Object> mergeValues(
+      Map<String, Object> existing, Map<String, Object> patch) {
+    Map<String, Object> merged = new LinkedHashMap<>(existing == null ? Map.of() : existing);
+    patch.forEach(
+        (key, value) -> {
+          if (value == null) merged.remove(key);
+          else if (!(value instanceof String text) || !text.isBlank()) merged.put(key, value);
+        });
+    return merged;
+  }
+
+  @SuppressWarnings("unchecked")
+  private static void redactWriteOnly(
+      Map<String, Object> values, String schemaJson, List<String> configuredSecrets) {
+    Map<String, Object> schema = JsonUtils.parseMap(schemaJson);
+    Object rawProperties = schema.get("properties");
+    if (!(rawProperties instanceof Map<?, ?> properties)) return;
+    for (Map.Entry<?, ?> entry : properties.entrySet()) {
+      if (!(entry.getKey() instanceof String name) || !(entry.getValue() instanceof Map<?, ?> field))
+        continue;
+      if (Boolean.TRUE.equals(field.get("writeOnly")) && values.remove(name) != null)
+        configuredSecrets.add(name);
+    }
   }
 
   private ChannelConnectionEntity requireOwned(String id, String tenantId) {

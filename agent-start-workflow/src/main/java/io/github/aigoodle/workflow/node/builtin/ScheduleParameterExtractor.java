@@ -105,7 +105,7 @@ final class ScheduleParameterExtractor {
         ChatClient.ChatClientRequestSpec request = client.prompt().messages(
                 List.of(new SystemMessage(systemPrompt), new UserMessage(input)));
         ChatOptions options = NodeModelResolver.perNodeOptions(node);
-        if (options != null) request = request.options(options);
+        if (options != null) request = request.options(options.mutate());
         String response = request.call().content();
         Map<String, Object> schedule = new LinkedHashMap<>(
                 JsonUtils.parseMap(ScheduleTriggerNodeExecutor.stripCodeFence(response)));

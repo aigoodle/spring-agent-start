@@ -53,6 +53,7 @@ import io.github.aigoodle.tool.ToolRegistry;
 import io.github.aigoodle.tool.execution.ToolExecutionGateway;
 import io.github.aigoodle.tool.execution.ToolExecutionListener;
 import io.github.aigoodle.tool.config.GoodleToolsAutoConfiguration;
+import io.github.aigoodle.skill.service.SkillResolver;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -156,10 +157,11 @@ public class AgentRuntimeAutoConfiguration {
                                      AgentRunStore runStore,
                                      ToolExecutionGateway toolExecutionGateway,
                                      AgentContextEngine contextEngine,
-                                     List<AgentRunObserver> runObservers) {
+                                     List<AgentRunObserver> runObservers,
+                                     SkillResolver skillResolver) {
         return new AgentService(appMapper, modelConfigService, modelService, toolRegistry,
                 strategyRegistry, memory, approvalGate, runStore, toolExecutionGateway,
-                contextEngine, runObservers);
+                contextEngine, runObservers, skillResolver);
     }
 
     @Bean

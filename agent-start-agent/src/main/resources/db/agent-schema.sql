@@ -110,6 +110,7 @@ CREATE TABLE IF NOT EXISTS goodle_app_model_configs (
     agent_mode                        TEXT,
     strategy                          VARCHAR(32),
     tool_names_json                   TEXT,
+    skill_ids_json                    TEXT,
     approval_tools_json               TEXT,
     delegate_agent_ids_json           TEXT,
     max_iterations                    INT,
@@ -136,6 +137,7 @@ ALTER TABLE goodle_app_model_configs ADD COLUMN IF NOT EXISTS runtime_type VARCH
 ALTER TABLE goodle_app_model_configs ADD COLUMN IF NOT EXISTS runtime_ref VARCHAR(255);
 ALTER TABLE goodle_app_model_configs ADD COLUMN IF NOT EXISTS max_model_calls INT;
 ALTER TABLE goodle_app_model_configs ADD COLUMN IF NOT EXISTS max_tool_calls INT;
+ALTER TABLE goodle_app_model_configs ADD COLUMN IF NOT EXISTS skill_ids_json TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_app_model_config_app ON goodle_app_model_configs (app_id);
 

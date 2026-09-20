@@ -15,7 +15,7 @@ import io.github.aigoodle.model.video.VideoModelService;
 import io.github.aigoodle.model.service.CredentialCodec;
 import java.io.IOException;
 
-@AutoConfiguration(afterName = "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration")
+@AutoConfiguration(afterName = "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration")
 @org.springframework.scheduling.annotation.EnableScheduling
 @MapperScan("io.github.aigoodle.plugin.video.mapper")
 public class VideoPluginAutoConfiguration {

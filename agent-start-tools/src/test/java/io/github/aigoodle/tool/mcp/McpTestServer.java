@@ -1,6 +1,7 @@
 package io.github.aigoodle.tool.mcp;
 
 import io.modelcontextprotocol.json.McpJsonMapper;
+import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.server.McpServer;
 import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.server.transport.StdioServerTransportProvider;
@@ -16,7 +17,8 @@ public final class McpTestServer {
     }
 
     public static void main(String[] args) throws InterruptedException {
-        McpJsonMapper mapper = McpJsonMapper.getDefault();
+        McpJsonMapper mapper = new JacksonMcpJsonMapper(
+                tools.jackson.databind.json.JsonMapper.builder().build());
         StdioServerTransportProvider transport = new StdioServerTransportProvider(mapper);
 
         McpSchema.Tool greet = McpSchema.Tool.builder()

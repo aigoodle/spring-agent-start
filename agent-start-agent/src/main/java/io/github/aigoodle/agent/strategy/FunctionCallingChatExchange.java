@@ -37,7 +37,7 @@ final class FunctionCallingChatExchange {
         ChatClient.ChatClientRequestSpec request = context.getChatClient().prompt();
         org.springframework.ai.chat.prompt.ChatOptions chatOptions = AgentChatOptionsFactory.build(definition);
         if (chatOptions != null) {
-            request = request.options(chatOptions);
+            request = request.options(chatOptions.mutate());
         }
         if (definition.getInstructions() != null && !definition.getInstructions().isBlank()) {
             request = request.system(definition.getInstructions());

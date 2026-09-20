@@ -115,6 +115,9 @@ public final class PlatformMessages {
       case "callbackToken" -> "回调 Token";
       case "webhookUrl" -> "群机器人 Webhook URL（可选）";
       case "corpId" -> "Corp ID";
+      case "botId" -> "Bot ID";
+      case "secret" -> "Secret";
+      case "wsUrl" -> "长连接地址（私有化部署可选）";
       case "corpSecret" -> "Corp Secret";
       case "agentId" -> "Agent ID";
       case "token" -> "回调 Token";

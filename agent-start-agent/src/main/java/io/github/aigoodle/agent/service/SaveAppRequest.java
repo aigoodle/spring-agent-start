@@ -1,8 +1,11 @@
 package io.github.aigoodle.agent.service;
 
 import io.github.aigoodle.agent.api.AgentStrategyType;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.util.List;
 import java.util.Set;
@@ -12,6 +15,8 @@ import java.util.Set;
  */
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor(access = AccessLevel.PACKAGE)
 public class SaveAppRequest {
 
     private String tenantId;
@@ -49,6 +54,8 @@ public class SaveAppRequest {
     private AgentStrategyType strategy = AgentStrategyType.REACT;
     @Builder.Default
     private List<String> toolNames = List.of();
+    @Builder.Default
+    private List<String> skillIds = List.of();
     @Builder.Default
     private Set<String> approvalRequiredTools = Set.of();
     @Builder.Default

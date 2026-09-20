@@ -99,7 +99,7 @@ public class LlmNodeExecutor implements NodeExecutor {
         ChatClient.ChatClientRequestSpec request = chatClient.prompt().messages(messages);
         ChatOptions nodeOptions = NodeModelResolver.perNodeOptions(node);
         if (nodeOptions != null) {
-            request = request.options(nodeOptions);
+            request = request.options(nodeOptions.mutate());
         }
         ChatResponse response = request.call().chatResponse();
         String content = response == null ? request.call().content() : extractContent(response);
@@ -142,7 +142,7 @@ public class LlmNodeExecutor implements NodeExecutor {
 
     private static ChatOptions resolveChatOptions(NodeDef node, ChatModel chatModel) {
         ChatOptions nodeOptions = NodeModelResolver.perNodeOptions(node);
-        return nodeOptions != null ? nodeOptions : chatModel.getDefaultOptions();
+        return nodeOptions != null ? nodeOptions : chatModel.getOptions();
     }
 
     private static String extractDelta(ChatResponse response) {

@@ -19,6 +19,17 @@ import org.springframework.web.bind.annotation.RestController;
       "io.github.aigoodle.connectors.core.ChannelConnectorAutoConfiguration"
     })
 public class NativeConnectorAutoConfiguration {
+  /**
+   * Connector implementations still use Jackson 2 while Spring Boot 4 auto-configures a
+   * Jackson 3 {@code tools.jackson.databind.ObjectMapper}. Keep the connector mapper separate
+   * from Boot's HTTP codec mapper until the connector API is migrated to Jackson 3.
+   */
+  @Bean
+  @ConditionalOnMissingBean(ObjectMapper.class)
+  ObjectMapper connectorObjectMapper() {
+    return new ObjectMapper().findAndRegisterModules();
+  }
+
   @Bean
   @ConditionalOnMissingBean
   NativeAccountStore nativeAccountStore(

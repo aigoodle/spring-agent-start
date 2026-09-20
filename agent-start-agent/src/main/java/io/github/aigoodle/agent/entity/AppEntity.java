@@ -144,6 +144,8 @@ public class AppEntity extends BaseEntity {
     /** Mirror of {@link AppModelConfigEntity#getToolNamesJson()}. */
     @TableField(exist = false)
     private String toolNamesJson;
+    @com.baomidou.mybatisplus.annotation.TableField(exist = false)
+    private String skillIdsJson;
 
     /** Mirror of {@link AppModelConfigEntity#getApprovalToolsJson()}. */
     @TableField(exist = false)

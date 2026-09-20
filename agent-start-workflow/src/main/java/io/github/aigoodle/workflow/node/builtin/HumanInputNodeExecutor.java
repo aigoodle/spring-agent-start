@@ -108,7 +108,7 @@ public final class HumanInputNodeExecutor extends AbstractWaitNodeExecutor {
         ChatClient.ChatClientRequestSpec request = client.prompt().messages(
                 new SystemMessage(FORM_SYSTEM_PROMPT), new UserMessage(businessPrompt));
         var options = NodeModelResolver.perNodeOptions(node);
-        if (options != null) request = request.options(options);
+        if (options != null) request = request.options(options.mutate());
         String response = request.call().content();
         return JsonUtils.parseMap(extractJson(response));
     }

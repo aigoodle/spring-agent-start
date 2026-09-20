@@ -27,7 +27,7 @@ class SeedanceVideoPluginTest {
     @BeforeEach void start() throws Exception {
         source = new DriverManagerDataSource("jdbc:h2:mem:" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1", "sa", "");
         new ResourceDatabasePopulator(new ClassPathResource("db/plugin-seedance-schema.sql")).execute(source);
-        var factory = new com.baomidou.mybatisplus.extension.spring.MybatisSqlSessionFactoryBean();
+        var factory = new com.baomidou.mybatisplus.spring.MybatisSqlSessionFactoryBean();
         factory.setDataSource(source);
         var sessions = factory.getObject();
         sessions.getConfiguration().addMapper(io.github.aigoodle.plugin.seedance.mapper.SeedanceSubmissionMapper.class);
@@ -81,7 +81,7 @@ class SeedanceVideoPluginTest {
                 .withConfiguration(org.springframework.boot.autoconfigure.AutoConfigurations.of(
                         SeedanceAutoConfiguration.class, io.github.aigoodle.plugin.config.PluginAutoConfiguration.class,
                         com.baomidou.mybatisplus.autoconfigure.MybatisPlusAutoConfiguration.class,
-                        org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration.class))
+                        org.springframework.boot.jdbc.autoconfigure.DataSourceTransactionManagerAutoConfiguration.class))
                 .withBean(javax.sql.DataSource.class, () -> source)
                 .withBean(io.github.aigoodle.plugin.runtime.PluginConnectionResolver.class,
                         () -> request -> new io.github.aigoodle.connector.connection.ConnectorConnectionService.ResolvedConnection(

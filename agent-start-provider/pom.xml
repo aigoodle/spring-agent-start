@@ -20,7 +20,6 @@
 
     <modules>
         <module>agent-start-provider-qwen</module>
-        <module>agent-start-provider-zhipu</module>
         <module>agent-start-provider-deepseek</module>
         <module>agent-start-provider-volcengine</module>
     </modules>

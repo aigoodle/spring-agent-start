@@ -31,6 +31,7 @@ public final class WebhookConnector implements NativeChannelConnector<WebhookCon
         "通用 HTTP JSON 双向消息通道",
         "1",
         ChannelCapabilities.text(),
+        ChannelAccountModel.tenant(null),
         Map.of("icon", "Webhook"));
   }
 

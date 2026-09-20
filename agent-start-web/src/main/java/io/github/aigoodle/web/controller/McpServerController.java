@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 /** Runtime MCP catalog. Secrets are accepted for stdio child-process env and never returned. */
 @RestController
@@ -32,6 +33,7 @@ public class McpServerController {
                              String status, Integer toolCount, String lastError) {}
     public record SaveServer(String id, String name, String transport, Boolean enabled, String url,
                              String command, List<String> args, Map<String, String> env) {}
+    public record TestResult(boolean success, String status, Integer toolCount, String message, long durationMs) {}
 
     @GetMapping
     public ApiResponse<List<ServerView>> list() {
@@ -41,8 +43,8 @@ public class McpServerController {
     @PostMapping
     public ApiResponse<ServerView> save(@RequestBody SaveServer request) {
         McpClientManager clients = clientManager();
-        if (request.id() != null && !request.id().isBlank() && !request.id().equals(request.name())) clients.remove(request.id());
         McpProperties.Server server = new McpProperties.Server();
+        server.setId(request.id());
         server.setName(request.name()); server.setType(request.transport() == null ? "stdio" : request.transport().toLowerCase());
         server.setEnabled(request.enabled() == null || request.enabled()); server.setUrl(request.url());
         server.setCommand(request.command()); server.setArgs(request.args() == null ? List.of() : request.args());
@@ -55,11 +57,34 @@ public class McpServerController {
     public ApiResponse<Void> delete(@PathVariable String id) { clientManager().remove(id); refreshTools(); return ApiResponse.ok(null); }
 
     @PostMapping("/{id}/test")
-    public ApiResponse<ServerView> test(@PathVariable String id) {
-        McpClientManager clients = clientManager();
-        int count = clients.test(id); refreshTools();
-        McpProperties.Server server = clients.servers().stream().filter(item -> item.getName().equals(id)).findFirst().orElseThrow();
-        ServerView value = view(server); return ApiResponse.ok(new ServerView(value.id(), value.name(), value.transport(), value.enabled(), value.url(), value.command(), value.args(), value.envConfigured(), "CONNECTED", count, null));
+    public CompletableFuture<ApiResponse<TestResult>> test(@PathVariable String id) {
+        return CompletableFuture.supplyAsync(() -> testBlocking(id));
+    }
+
+    private ApiResponse<TestResult> testBlocking(String id) {
+        long startedAt = System.nanoTime();
+        try {
+            int count = clientManager().test(id);
+            refreshTools();
+            return ApiResponse.ok(new TestResult(true, "CONNECTED", count,
+                    "连接成功，发现 " + count + " 个工具", elapsedMs(startedAt)));
+        } catch (RuntimeException failure) {
+            return ApiResponse.ok(new TestResult(false, "ERROR", null,
+                    diagnosticMessage(failure), elapsedMs(startedAt)));
+        }
+    }
+
+    private static long elapsedMs(long startedAt) {
+        return (System.nanoTime() - startedAt) / 1_000_000;
+    }
+
+    private static String diagnosticMessage(Throwable failure) {
+        Throwable cause = failure;
+        while (cause.getCause() != null && cause.getCause() != cause) cause = cause.getCause();
+        String message = cause.getMessage();
+        if (message == null || message.isBlank()) message = failure.getMessage();
+        if (message == null || message.isBlank()) message = failure.getClass().getSimpleName();
+        return message.length() > 600 ? message.substring(0, 600) + "…" : message;
     }
 
     private McpClientManager clientManager() {
@@ -70,7 +95,7 @@ public class McpServerController {
         tools.getObject().refresh();
     }
     private ServerView view(McpProperties.Server server) {
-        return new ServerView(server.getName(), server.getName(), server.getType().toUpperCase(), server.isEnabled(),
+        return new ServerView(server.getId(), server.getName(), server.getType().toUpperCase(), server.isEnabled(),
                 server.getUrl(), server.getCommand(), server.getArgs(), !server.getEnv().isEmpty(), "CONFIGURED", null, null);
     }
 }

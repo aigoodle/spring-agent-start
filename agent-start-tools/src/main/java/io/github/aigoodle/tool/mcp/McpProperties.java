@@ -33,9 +33,11 @@ public class McpProperties {
     public void setEncryptionSecret(String encryptionSecret) { this.encryptionSecret = encryptionSecret; }
 
     public static class Server {
+        /** Stable opaque identifier used by administration APIs. */
+        private String id;
         /** Logical name (used for logging / tool grouping). */
         private String name;
-        /** {@code stdio} (spawn a process) or {@code http} (connect to an SSE endpoint). */
+        /** {@code stdio}, Streamable {@code http}, or legacy HTTP {@code sse}. */
         private String type = "stdio";
         /** stdio: the executable, e.g. {@code npx} or {@code java}. */
         private String command;
@@ -47,6 +49,9 @@ public class McpProperties {
         /** stdio: environment variables supplied only to the child process. */
         private Map<String, String> env = new LinkedHashMap<>();
         private boolean enabled = true;
+
+        public String getId() { return id; }
+        public void setId(String id) { this.id = id; }
 
         public String getName() {
             return name;

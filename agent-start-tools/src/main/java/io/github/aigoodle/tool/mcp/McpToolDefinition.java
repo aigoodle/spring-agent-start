@@ -2,6 +2,8 @@ package io.github.aigoodle.tool.mcp;
 
 import io.github.aigoodle.tool.ToolDefinition;
 import io.github.aigoodle.tool.ToolMetadata;
+import io.github.aigoodle.tool.ContextualToolDefinition;
+import io.github.aigoodle.tool.execution.ToolExecutionContext;
 import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.spec.McpSchema;
 
@@ -13,7 +15,7 @@ import java.util.stream.Collectors;
  * be used by agents and workflows exactly like a built-in tool. Calls are proxied to the
  * MCP server over the manager's client.
  */
-public class McpToolDefinition implements ToolDefinition, ToolMetadata {
+public class McpToolDefinition implements ContextualToolDefinition, ToolMetadata {
 
     private final McpSyncClient client;
     private final String name;
@@ -55,13 +57,23 @@ public class McpToolDefinition implements ToolDefinition, ToolMetadata {
 
     @Override
     public String inputSchema() {
-        return inputSchema == null ? ToolDefinition.super.inputSchema() : inputSchema;
+        return inputSchema == null ? ContextualToolDefinition.super.inputSchema() : inputSchema;
     }
 
     @Override
     public Object execute(Map<String, Object> arguments) {
+        return execute(arguments, ToolExecutionContext.anonymous());
+    }
+
+    @Override
+    public Object execute(Map<String, Object> arguments, ToolExecutionContext context) {
         McpSchema.CallToolRequest request = new McpSchema.CallToolRequest(name, arguments);
-        McpSchema.CallToolResult callResult = client.callTool(request);
+        Object authorization = context == null ? null
+                : context.metadata().get(McpInvocationHeaders.AUTHORIZATION);
+        McpSchema.CallToolResult callResult;
+        try (McpInvocationHeaders.Scope ignored = McpInvocationHeaders.withAuthorization(authorization)) {
+            callResult = client.callTool(request);
+        }
         String responseText = callResult.content().stream()
                 .filter(McpSchema.TextContent.class::isInstance)
                 .map(McpSchema.TextContent.class::cast)

@@ -60,8 +60,8 @@ public final class ChatOptionsFactory {
         String provider = providerName == null ? "" : providerName.toLowerCase(Locale.ROOT);
         ChatSettingValues values = new ChatSettingValues(settings);
         ChatOptions options = "ollama".equals(provider)
-                ? buildOllama(values)
-                : buildOpenAiCompatible(provider, values);
+                ? buildOllama(modelName, values)
+                : buildOpenAiCompatible(provider, modelName, values);
         if (logger.isDebugEnabled()) {
             logger.debug("Built ChatOptions for provider={} model={} settings={} → {}",
                     provider, modelName, settings, describe(options));
@@ -86,7 +86,8 @@ public final class ChatOptionsFactory {
     /** Compact one-liner for the debug log — full toString is noisy. */
     private static String describe(ChatOptions options) {
         StringBuilder description = new StringBuilder("{");
-        description.append("temp=").append(options.getTemperature());
+        description.append("model=").append(options.getModel());
+        description.append(", temp=").append(options.getTemperature());
         description.append(", topP=").append(options.getTopP());
         description.append(", maxTokens=").append(options.getMaxTokens());
         if (options instanceof OpenAiChatOptions openAiOptions
@@ -100,8 +101,12 @@ public final class ChatOptionsFactory {
 
     // ---------------------------------------------------------------- OpenAI
 
-    private static ChatOptions buildOpenAiCompatible(String provider, ChatSettingValues settings) {
+    private static ChatOptions buildOpenAiCompatible(String provider, String modelName,
+                                                     ChatSettingValues settings) {
         OpenAiChatOptions.Builder builder = OpenAiChatOptions.builder();
+        if (modelName != null && !modelName.isBlank()) {
+            builder.model(modelName);
+        }
         applyCommonOpenAiOptions(builder, settings);
         Map<String, Object> extraBody = buildExtraBody(provider, settings, builder);
         if (extraBody != null && !extraBody.isEmpty()) {
@@ -194,8 +199,11 @@ public final class ChatOptionsFactory {
 
     // ---------------------------------------------------------------- Ollama
 
-    private static ChatOptions buildOllama(ChatSettingValues settings) {
+    private static ChatOptions buildOllama(String modelName, ChatSettingValues settings) {
         OllamaChatOptions.Builder builder = OllamaChatOptions.builder();
+        if (modelName != null && !modelName.isBlank()) {
+            builder.model(modelName);
+        }
         Double temperature = settings.decimal("temperature");
         if (temperature != null) builder.temperature(temperature);
         Double topP = settings.decimal("topP", "top_p");

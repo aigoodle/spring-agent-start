@@ -7,8 +7,8 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 `spring-agent-start` is a set of **embeddable Spring Boot starter libraries** that repackage
 Dify/n8n/RAGFlow ideas — model management, knowledge/RAG, tools, an agent runtime, a workflow DAG
 engine, triggers, and LLMOps metering — as independently-importable modules, plus two REST layers
-(MVC admin CRUD and a reactive OpenAI/Dify-compatible chat surface). Stack: Spring Boot 3.5.6,
-Spring AI 1.1.2, MyBatis-Plus 3.5.10, Lombok, Java 21.
+(MVC admin CRUD and a reactive OpenAI/Dify-compatible chat surface). Stack: Spring Boot 4.1.1,
+Spring AI 2.0.1, MyBatis-Plus 3.5.17, Lombok, Java 21.
 
 `CLAUDE.md` is a sibling mirror of this file for Claude Code — keep the two in sync when editing either.
 
@@ -63,7 +63,6 @@ common → { model, memory } → { knowledge, tools } → agent → workflow →
 | `agent-start-common` | JSON utils, AES-GCM `TextEncryptor`, base entity, `PlatformException` |
 | `agent-start-model` | `ModelProvider` SPI, `ChatModelDecorator` SPI, encrypted credentials, `ModelInstanceFactory`, `ModelService` (returns Spring AI `ChatClient`/`EmbeddingModel`). Built-in OpenAI-compatible presets (openai, deepseek, zhipu, moonshot, qwen, volcengine, siliconflow) + Ollama. |
 | `agent-start-provider/` | Aggregator for optional native-SDK `ModelProvider` starters; each child upgrades the matching built-in OpenAI-compat preset. |
-| ` └── …-zhipu` | Official spring-ai-zhipuai SDK (GLM-4V vision, native chat/embedding). |
 | ` └── …-deepseek` | Official spring-ai-deepseek SDK (reasoner mode). Chat only. |
 | ` └── …-volcengine` | Volcengine Ark / Doubao chat and Seedance video via ModelProvider. |
 | ` └── …-qwen` | Qwen chat/embedding plus native Wan 2.6 video protocol. |

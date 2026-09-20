@@ -50,6 +50,11 @@ public class DemoCurrentUserWebFilter implements WebFilter {
                 .roles(defaultRoles)
                 .principalType(PrincipalType.USER)
                 .build();
+        String authorization = exchange.getRequest().getHeaders().getFirst("X-MCP-Authorization");
+        if (authorization == null || authorization.isBlank()) {
+            authorization = exchange.getRequest().getHeaders().getFirst("Authorization");
+        }
+        if (authorization != null && !authorization.isBlank()) user.put("authorization", authorization);
         return Mono.defer(() -> {
                     UserContextHolder.set(user);
                     return chain.filter(exchange);
@@ -58,7 +63,7 @@ public class DemoCurrentUserWebFilter implements WebFilter {
                 .doFinally(signal -> UserContextHolder.clear());
     }
 
-    private static Set<String> roles(String value) {
+    static Set<String> roles(String value) {
         if (value == null || value.isBlank()) return Set.of();
         return Arrays.stream(value.split(",")).map(String::trim).filter(role -> !role.isEmpty())
                 .collect(Collectors.toUnmodifiableSet());

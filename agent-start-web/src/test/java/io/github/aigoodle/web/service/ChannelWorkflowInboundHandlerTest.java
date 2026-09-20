@@ -12,6 +12,7 @@ import io.github.aigoodle.connector.channel.ChannelEventLogService;
 import io.github.aigoodle.connector.channel.ChannelIdentityService;
 import io.github.aigoodle.connector.channel.ChannelInboundEvent;
 import io.github.aigoodle.connector.channel.ChannelInboundResult;
+import io.github.aigoodle.connector.channel.ChannelReplyStream;
 import io.github.aigoodle.trigger.api.TriggerType;
 import io.github.aigoodle.trigger.dispatch.DispatchResult;
 import io.github.aigoodle.trigger.entity.TriggerEntity;
@@ -24,6 +25,46 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 class ChannelWorkflowInboundHandlerTest {
+  @Test
+  void streamsWorkflowChunksBackThroughLiveChannelReply() {
+    TriggerService triggers = mock(TriggerService.class);
+    ChannelConnectionService connections = mock(ChannelConnectionService.class);
+    ChannelEventLogService events = mock(ChannelEventLogService.class);
+    ChannelReplyStream stream = mock(ChannelReplyStream.class);
+    ChannelWorkflowInboundHandler handler =
+        new ChannelWorkflowInboundHandler(triggers, connections, events);
+    ChannelInboundEvent event = eventWithStream(stream);
+    TriggerEntity trigger = trigger("trigger-stream", "workflow-stream");
+    when(connections.ownership("native", null, "wecom", "account-1"))
+        .thenReturn(new ChannelConnectionService.Ownership(
+            "connection-1", "tenant-1", "user-1", null));
+    when(connections.get("connection-1", "tenant-1")).thenReturn(connection("wecom"));
+    when(triggers.listEnabledByType("tenant-1", TriggerType.CHANNEL_MESSAGE))
+        .thenReturn(List.of(trigger));
+    when(triggers.config(trigger)).thenReturn(
+        Map.of("provider", "native", "channelId", "wecom", "replyMode", "ASYNC"));
+    when(triggers.fireAsynchronouslyAs(
+            eq("tenant-1"), eq("user-1"), org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+        .thenAnswer(invocation -> {
+          java.util.function.Consumer<String> chunks = invocation.getArgument(3);
+          java.util.function.Consumer<DispatchResult> completion = invocation.getArgument(4);
+          chunks.accept("你好");
+          completion.accept(DispatchResult.ok("run-1", Map.of("answer", "你好，世界")));
+          return "invocation-1";
+        });
+
+    ChannelInboundResult result = handler.tryHandle(event).orElseThrow();
+
+    assertThat(result.code()).isEqualTo("workflow_trigger_accepted");
+    verify(stream).start();
+    verify(stream).push("你好");
+    verify(stream).complete("你好，世界");
+    org.mockito.Mockito.verify(events, org.mockito.Mockito.never())
+        .workflowReply(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any());
+  }
+
   @Test
   void sharedWorkflowRunsAsVerifiedEmployeeResolvedFromPlatformSender() {
     TriggerService triggers = mock(TriggerService.class);
@@ -111,6 +152,31 @@ class ChannelWorkflowInboundHandlerTest {
         .containsEntry("userId", "employee-2")
         .containsEntry("accountOwnerId", "account-owner")
         .containsEntry("senderId", "qq-openid-employee-2");
+  }
+
+  private static ChannelInboundEvent eventWithStream(ChannelReplyStream stream) {
+    return new ChannelInboundEvent(
+        "native", "wecom", "account-1", "message-1", "sender-1", "conversation-1", "你好",
+        "TEXT", List.of(), Map.of(), Instant.now(), false,
+        Map.of("replyTargetId", "sender-1", ChannelReplyStream.METADATA_KEY, stream));
+  }
+
+  private static TriggerEntity trigger(String id, String workflowId) {
+    TriggerEntity trigger = new TriggerEntity();
+    trigger.setId(id);
+    trigger.setTenantId("tenant-1");
+    trigger.setType(TriggerType.CHANNEL_MESSAGE);
+    trigger.setTargetType("workflow");
+    trigger.setTargetId(workflowId);
+    trigger.setEnabled(true);
+    return trigger;
+  }
+
+  private static ChannelConnectionService.View connection(String channelId) {
+    return new ChannelConnectionService.View(
+        "connection-1", "tenant-1", "USER", "user-1", "native", channelId, "企业微信",
+        "ACTIVE", "ONLINE", "account-1", null, null, null, Map.of(), true,
+        null, null, 1L);
   }
 
   @Test

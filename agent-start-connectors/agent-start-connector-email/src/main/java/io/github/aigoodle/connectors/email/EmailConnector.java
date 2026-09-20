@@ -39,6 +39,9 @@ public final class EmailConnector implements NativeChannelConnector<EmailConnect
         "1",
         new ChannelCapabilities(
             Set.of(MessageType.TEXT), Set.of(MessageType.TEXT), false, true, false, false),
+        ChannelAccountModel.tenant(
+            new ChannelAccountModel.IdentityBridge(
+                true, "DIRECTORY", "邮件地址", "企业员工", "可按企业通讯录将发件人地址关联到员工。")),
         Map.of("icon", "Email"));
   }
 

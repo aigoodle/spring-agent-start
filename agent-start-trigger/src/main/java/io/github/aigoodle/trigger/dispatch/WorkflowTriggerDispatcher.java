@@ -2,9 +2,11 @@ package io.github.aigoodle.trigger.dispatch;
 
 import io.github.aigoodle.common.context.UserContextHolder;
 import io.github.aigoodle.workflow.engine.WorkflowRunResult;
+import io.github.aigoodle.workflow.chat.ChatStreamSink;
 import io.github.aigoodle.workflow.service.WorkflowService;
 
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * Default dispatcher: runs a stored workflow by id with the trigger payload as inputs.
@@ -26,8 +28,15 @@ public class WorkflowTriggerDispatcher implements TriggerDispatcher {
 
     @Override
     public DispatchResult dispatch(String targetId, Map<String, Object> inputs, String conversationId) {
+        return dispatch(targetId, inputs, conversationId, null);
+    }
+
+    @Override
+    public DispatchResult dispatch(String targetId, Map<String, Object> inputs,
+                                   String conversationId, Consumer<String> textConsumer) {
         WorkflowRunResult result = workflowService.runForTenant(
-                targetId, inputs, conversationId, UserContextHolder.currentTenantId());
+                targetId, inputs, conversationId, UserContextHolder.currentTenantId(),
+                textConsumer == null ? null : new ChatStreamSink(textConsumer));
         if (result.isSuccess()) {
             return DispatchResult.ok(result.getRunId(), result.getOutputs());
         }

@@ -3,6 +3,7 @@ package io.github.aigoodle.tool;
 import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.tool.adapter.ToolDefinitionCallback;
 import io.github.aigoodle.tool.execution.ToolExecutionContextProvider;
+import io.github.aigoodle.tool.execution.ToolExecutionContext;
 import io.github.aigoodle.tool.execution.ToolExecutionGateway;
 import org.springframework.ai.tool.ToolCallback;
 
@@ -49,6 +50,23 @@ public class ToolRegistry {
         this.toolsByName = Collections.unmodifiableMap(registeredTools);
     }
 
+    /** Registers or replaces a runtime-created tool (for example an HTTP API tool). */
+    public synchronized void register(ToolDefinition tool) {
+        Objects.requireNonNull(tool, "tool");
+        Map<String, ToolDefinition> updated = new LinkedHashMap<>(toolsByName);
+        updated.put(tool.name(), tool);
+        this.toolsByName = Collections.unmodifiableMap(updated);
+    }
+
+    /** Removes a runtime-created tool. Statically declared tools return after {@link #refresh()}. */
+    public synchronized boolean unregister(String toolName) {
+        if (!toolsByName.containsKey(toolName)) return false;
+        Map<String, ToolDefinition> updated = new LinkedHashMap<>(toolsByName);
+        updated.remove(toolName);
+        this.toolsByName = Collections.unmodifiableMap(updated);
+        return true;
+    }
+
     public ToolDefinition get(String toolName) {
         ToolDefinition tool = toolsByName.get(toolName);
         if (tool == null) {
@@ -71,8 +89,12 @@ public class ToolRegistry {
     }
 
     public Object execute(String toolName, Map<String, Object> arguments) {
+        return execute(toolName, arguments, contextProvider.currentContext());
+    }
+
+    public Object execute(String toolName, Map<String, Object> arguments, ToolExecutionContext context) {
         return executionGateway.execute(get(toolName), arguments == null ? Map.of() : arguments,
-                contextProvider.currentContext());
+                context == null ? ToolExecutionContext.anonymous() : context);
     }
 
     /** All tools adapted to Spring AI callbacks, for handing to a ChatClient/agent. */

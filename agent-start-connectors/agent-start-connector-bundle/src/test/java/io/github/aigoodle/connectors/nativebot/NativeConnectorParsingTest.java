@@ -190,6 +190,18 @@ class NativeConnectorParsingTest {
   }
 
   @Test
+  void weComMigratesBotCredentialsStoredInLegacyFieldsWithoutCallingCorpTokenApi() {
+    WeComConnector connector = new WeComConnector(json);
+    WeComConnector.Config legacyUiRecord =
+        new WeComConnector.Config("aib-example", "bot-secret", "1", null, null, "acc");
+
+    ConnectionTestResult result = connector.test(legacyUiRecord);
+
+    assertTrue(result.success());
+    assertEquals("websocket", connector.descriptor().metadata().get("transport"));
+  }
+
+  @Test
   void webhookRequiresConfiguredToken() {
     WebhookConnector c = new WebhookConnector(json);
     WebhookConnector.Config cfg =
@@ -238,6 +250,48 @@ class NativeConnectorParsingTest {
   }
 
   @Test
+  void everyBundledChannelPackagesAVersionedYamlManifest() {
+    assertEquals(
+        Set.of("qqbot", "feishu", "dingtalk", "wecom", "email", "webhook"),
+        ChannelManifestCatalog.load().keySet());
+    assertTrue(
+        ChannelManifestCatalog.load().values().stream()
+            .allMatch(item -> item.schemaVersion() == 1));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void runtimePublishesAccountOwnershipAndIdentityContracts() throws Exception {
+    NativeChannelRuntimeProvider runtime =
+        new NativeChannelRuntimeProvider(
+            List.of(new QQBotConnector(json), new WeComConnector(json), new EmailConnector()), json);
+    Map<String, ChannelDefinition> channels =
+        runtime.discoverChannels().stream()
+            .collect(java.util.stream.Collectors.toMap(ChannelDefinition::channelId, item -> item));
+
+    Map<String, Object> qq = (Map<String, Object>) channels.get("qqbot").metadata().get("accountModel");
+    Map<String, Object> wecom =
+        (Map<String, Object>) channels.get("wecom").metadata().get("accountModel");
+    Map<String, Object> bridge = (Map<String, Object>) wecom.get("identityBridge");
+    assertEquals("PERSONAL", qq.get("scope"));
+    assertEquals(true, qq.get("ownerRequired"));
+    assertEquals("TENANT", wecom.get("scope"));
+    assertEquals(false, wecom.get("ownerRequired"));
+    assertEquals("HOST", bridge.get("mode"));
+    assertEquals("TENANT", ((Map<?, ?>) channels.get("email").metadata().get("accountModel")).get("scope"));
+    assertEquals(1, channels.get("wecom").metadata().get("manifestVersion"));
+    assertEquals("classpath-yaml", channels.get("wecom").metadata().get("formSource"));
+    assertTrue(
+        json.readTree(channels.get("wecom").credentialSchema())
+            .path("properties").path("secret").path("description").asText()
+            .contains("不是自建应用 Secret"));
+    assertEquals(
+        "password",
+        ((Map<?, ?>) ((Map<?, ?>) channels.get("wecom").uiSchema().get("fields")).get("secret"))
+            .get("widget"));
+  }
+
+  @Test
   void everyNativeChannelPublishesItsCompleteConfigurationContract() {
     List<NativeChannelConnector<?>> connectors =
         List.of(
@@ -253,7 +307,7 @@ class NativeConnectorParsingTest {
             "feishu",
                 Set.of("appId", "appSecret", "verificationToken", "encryptKey", "transport"),
             "dingtalk", Set.of("clientId", "clientSecret", "webhookUrl", "callbackToken"),
-            "wecom", Set.of("corpId", "corpSecret", "agentId", "token", "encodingAesKey"),
+            "wecom", Set.of("botId", "secret", "wsUrl"),
             "email",
                 Set.of(
                     "smtpHost",

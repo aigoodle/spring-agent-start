@@ -343,6 +343,12 @@ public class WorkflowService {
 
     public WorkflowRunResult runForTenant(String workflowId, Map<String, Object> data,
                                           String conversationId, String tenantId,
+                                          ChatStreamSink chatSink) {
+        return executeStored(workflowId, data, conversationId, null, chatSink, tenantId);
+    }
+
+    public WorkflowRunResult runForTenant(String workflowId, Map<String, Object> data,
+                                          String conversationId, String tenantId,
                                           Consumer<StepRecord> stepListener) {
         return executeStored(workflowId, data, conversationId, stepListener, null, tenantId);
     }

@@ -125,6 +125,9 @@ public class AppModelConfigEntity extends BaseEntity {
     /** JSON array of tool names this agent may use (empty/null = all). */
     private String toolNamesJson;
 
+    /** JSON array of published declarative Skill ids enabled for this app. */
+    private String skillIdsJson;
+
     /** JSON array of tool names requiring human approval. */
     private String approvalToolsJson;
 

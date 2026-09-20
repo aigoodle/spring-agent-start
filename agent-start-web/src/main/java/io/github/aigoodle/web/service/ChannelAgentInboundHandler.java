@@ -90,8 +90,10 @@ public class ChannelAgentInboundHandler implements ChannelInboundHandler {
                     "connectionId", route.connectionId(), "routeSource", route.source().name(),
                     "agentPaused", true, "pauseReason", "human_handoff", "managed", true));
         }
+        ChannelIdentityService.Identity identity = identities.resolve(route.tenantId(), event);
+        String executionEmployeeId = trusted(identity) ? identity.enterpriseUserId() : route.employeeId();
         String conversationId = String.join(":", event.provider(), route.connectionId(),
-                route.employeeId(), event.group() ? "group" : "user", event.conversationId());
+                executionEmployeeId, event.group() ? "group" : "user", event.conversationId());
         EffectiveAgent effective;
         boolean fallbackUsed = false;
         try {
@@ -114,15 +116,15 @@ public class ChannelAgentInboundHandler implements ChannelInboundHandler {
         }
         Map<String, Object> variables = new LinkedHashMap<>();
         putIfPresent(variables, "tenantId", route.tenantId());
-        putIfPresent(variables, "employeeId", route.employeeId());
+        putIfPresent(variables, "employeeId", executionEmployeeId);
+        putIfPresent(variables, "channelAccountOwnerId", route.employeeId());
         putIfPresent(variables, "channelId", event.channelId());
         putIfPresent(variables, "channelAccountId", event.accountId());
         putIfPresent(variables, "senderId", event.senderId());
         String externalMemoryScope = event.group() || event.senderId() == null || event.senderId().isBlank()
                 ? event.conversationId() : event.senderId();
-        variables.put("memoryOwnerId", String.join(":", "channel", route.employeeId(), event.provider(),
+        variables.put("memoryOwnerId", String.join(":", "channel", executionEmployeeId, event.provider(),
                 event.accountId(), externalMemoryScope));
-        ChannelIdentityService.Identity identity = identities.resolve(route.tenantId(), event);
         if (identity != null) {
             putIfPresent(variables, "enterpriseUserId", identity.enterpriseUserId());
             putIfPresent(variables, "externalIdentityStatus", identity.verificationStatus());
@@ -144,7 +146,8 @@ public class ChannelAgentInboundHandler implements ChannelInboundHandler {
         String effectiveAgentId = effective.agentId();
         String effectiveVersionId = effective.versionId();
         String executionRouteReason = effective.reason();
-        try { response = runAsChannelPrincipal(route, event, effectiveAgentId, effectiveVersionId, request); }
+        try { response = runAsChannelPrincipal(route, event, executionEmployeeId,
+                effectiveAgentId, effectiveVersionId, request); }
         catch (RuntimeException primaryFailure) {
             if (fallbackUsed || !hasFallback(route)) {
                 return agentError(route, primaryFailure, fallbackUsed, executionRouteReason);
@@ -158,7 +161,8 @@ public class ChannelAgentInboundHandler implements ChannelInboundHandler {
                 markFallback(variables, executionRouteReason, effectiveAgentId, effectiveVersionId);
                 promoteFallbackRoute(route, event, effective.agentId(), effectiveAgentId, effectiveVersionId,
                         executionRouteReason, effective.routingPolicyVersion());
-                response = runAsChannelPrincipal(route, event, effectiveAgentId, effectiveVersionId, request);
+                response = runAsChannelPrincipal(route, event, executionEmployeeId,
+                        effectiveAgentId, effectiveVersionId, request);
             } catch (RuntimeException fallbackFailure) {
                 return agentError(route, fallbackFailure, true, executionRouteReason);
             }
@@ -174,7 +178,8 @@ public class ChannelAgentInboundHandler implements ChannelInboundHandler {
                     markFallback(variables, executionRouteReason, effectiveAgentId, effectiveVersionId);
                     promoteFallbackRoute(route, event, effective.agentId(), effectiveAgentId, effectiveVersionId,
                             executionRouteReason, effective.routingPolicyVersion());
-                    response = runAsChannelPrincipal(route, event, effectiveAgentId, effectiveVersionId, request);
+                    response = runAsChannelPrincipal(route, event, executionEmployeeId,
+                            effectiveAgentId, effectiveVersionId, request);
                 } catch (RuntimeException fallbackFailure) {
                     return agentError(route, fallbackFailure, true, executionRouteReason);
                 }
@@ -200,10 +205,11 @@ public class ChannelAgentInboundHandler implements ChannelInboundHandler {
     }
 
     private AgentResponse runAsChannelPrincipal(ChannelAgentRouter.Result route, ChannelInboundEvent event,
-                                                String agentId, String versionId, AgentRequest request) {
+                                                String executionEmployeeId, String agentId,
+                                                String versionId, AgentRequest request) {
         CurrentUser principal = CurrentUser.builder()
                 .tenantId(route.tenantId())
-                .userId(route.employeeId() == null ? event.senderId() : route.employeeId())
+                .userId(executionEmployeeId)
                 .username(event.senderId())
                 .principalType(PrincipalType.CHAT_SESSION)
                 .roles(java.util.Set.of("CHANNEL_USER"))
@@ -225,6 +231,12 @@ public class ChannelAgentInboundHandler implements ChannelInboundHandler {
             return runtimes == null ? agents.runDefinition(definition, request)
                     : runtimes.run(definition, request, null, null);
         });
+    }
+
+    private static boolean trusted(ChannelIdentityService.Identity identity) {
+        return identity != null && identity.enabled()
+                && "VERIFIED".equalsIgnoreCase(identity.verificationStatus())
+                && identity.enterpriseUserId() != null && !identity.enterpriseUserId().isBlank();
     }
 
     private EffectiveAgent effectiveAgent(ChannelAgentRouter.Result route, ChannelInboundEvent event) {

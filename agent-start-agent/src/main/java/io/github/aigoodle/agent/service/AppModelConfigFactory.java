@@ -46,6 +46,7 @@ final class AppModelConfigFactory {
                                                 AppModelConfigEntity sidecar) {
         sidecar.setStrategy(strategyName(request.getStrategy()));
         sidecar.setToolNamesJson(toJson(request.getToolNames()));
+        sidecar.setSkillIdsJson(toJson(request.getSkillIds()));
         sidecar.setApprovalToolsJson(toJson(request.getApprovalRequiredTools()));
         sidecar.setDelegateAgentIdsJson(toJson(request.getDelegateAgentIds()));
         sidecar.setMaxIterations(positiveOrNull(request.getMaxIterations()));

@@ -99,6 +99,14 @@ public class ChannelConnectionController {
         return ApiResponse.ok(tested);
     }
 
+    @GetMapping("/{id}/configuration")
+    public ApiResponse<ChannelConnectionService.EditConfiguration> editConfiguration(
+            @PathVariable String id) {
+        View current = connections.get(id, currentTenantId());
+        requireAccess(current.ownerType(), current.ownerId());
+        return ApiResponse.ok(connections.editConfiguration(id, currentTenantId()));
+    }
+
     @DeleteMapping("/{id}")
     public ApiResponse<Void> delete(@PathVariable String id) {
         View current = connections.get(id, currentTenantId());

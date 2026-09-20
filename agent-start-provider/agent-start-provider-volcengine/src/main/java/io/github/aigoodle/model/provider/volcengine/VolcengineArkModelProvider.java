@@ -8,15 +8,17 @@ import io.github.aigoodle.model.provider.CredentialSchema;
 import io.github.aigoodle.model.provider.ModelEndpoint;
 import io.github.aigoodle.model.provider.PredefinedModel;
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.document.MetadataMode;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.OpenAiEmbeddingModel;
 import org.springframework.ai.openai.OpenAiEmbeddingOptions;
-import org.springframework.ai.openai.api.OpenAiApi;
+import org.springframework.ai.openai.setup.OpenAiSetup;
+import io.micrometer.observation.ObservationRegistry;
 
+import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -97,9 +99,11 @@ public class VolcengineArkModelProvider extends AbstractModelProvider {
         if (maxTokens != null) {
             options.maxTokens(maxTokens);
         }
+        var clients = buildClients(endpoint);
         return OpenAiChatModel.builder()
-                .openAiApi(buildApi(endpoint))
-                .defaultOptions(options.build())
+                .openAiClient(clients.sync())
+                .openAiClientAsync(clients.async())
+                .options(options.build())
                 .build();
     }
 
@@ -116,15 +120,22 @@ public class VolcengineArkModelProvider extends AbstractModelProvider {
         if (dimensions != null) {
             options.dimensions(dimensions);
         }
-        return new OpenAiEmbeddingModel(buildApi(endpoint), MetadataMode.EMBED, options.build());
+        return OpenAiEmbeddingModel.builder()
+                .openAiClient(buildClients(endpoint).sync())
+                .options(options.build())
+                .build();
     }
 
-    private static OpenAiApi buildApi(ModelEndpoint endpoint) {
+    private static OpenAiClients buildClients(ModelEndpoint endpoint) {
         String baseUrl = endpoint.resolveBaseUrl(DEFAULT_BASE_URL);
-        return OpenAiApi.builder()
-                .apiKey(endpoint.getApiKey())
-                .baseUrl(baseUrl)
-                .build();
+        Duration timeout = Duration.ofSeconds(300);
+        var sync = OpenAiSetup.setupSyncClient(baseUrl, endpoint.getApiKey(), null,
+                null, null, null, false, false, effectiveModel(endpoint), timeout, 3,
+                null, Map.of(), ObservationRegistry.NOOP, null, List.of());
+        var async = OpenAiSetup.setupAsyncClient(baseUrl, endpoint.getApiKey(), null,
+                null, null, null, false, false, effectiveModel(endpoint), timeout, 3,
+                null, Map.of(), ObservationRegistry.NOOP, null, List.of());
+        return new OpenAiClients(sync, async);
     }
 
     /** Endpoint id trumps the model name when set — that is how Ark identifies models. */
@@ -145,5 +156,8 @@ public class VolcengineArkModelProvider extends AbstractModelProvider {
         return PredefinedModel.builder().model(model).label(model).modelType(ModelType.TEXT_EMBEDDING)
                 .dimensions(dim).build();
     }
+
+    private record OpenAiClients(com.openai.client.OpenAIClient sync,
+                                 com.openai.client.OpenAIClientAsync async) { }
 
 }

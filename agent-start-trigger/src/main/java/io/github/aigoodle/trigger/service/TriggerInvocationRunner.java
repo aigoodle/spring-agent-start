@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /** Owns the persistence lifecycle of one trigger invocation. */
 public final class TriggerInvocationRunner {
@@ -54,6 +55,14 @@ public final class TriggerInvocationRunner {
                            TriggerInvocationEntity invocation,
                            Map<String, Object> payload,
                            String executionUserId) {
+        return execute(trigger, invocation, payload, executionUserId, null);
+    }
+
+    DispatchResult execute(TriggerEntity trigger,
+                           TriggerInvocationEntity invocation,
+                           Map<String, Object> payload,
+                           String executionUserId,
+                           Consumer<String> textConsumer) {
         invocation.markRunning();
         save(invocation);
         try {
@@ -66,7 +75,8 @@ public final class TriggerInvocationRunner {
                     () -> dispatcherRegistry.get(trigger.getTargetType())
                             .dispatch(trigger.getTargetId(), payload,
                                     invocation.getConversationId() == null
-                                            ? invocation.getId() : invocation.getConversationId()));
+                                            ? invocation.getId() : invocation.getConversationId(),
+                                    textConsumer));
             recordResult(invocation, dispatchResult);
             return dispatchResult;
         } catch (RuntimeException dispatchFailure) {

@@ -27,6 +27,7 @@ public final class NativeChannelRuntimeProvider implements ChannelRuntimeProvide
   private final ObjectMapper json;
   private final NativeAccountStore store;
   private final InboundMessageSink sink;
+  private final Map<String, ChannelManifestCatalog.Manifest> manifests;
 
   public NativeChannelRuntimeProvider(List<NativeChannelConnector<?>> values, ObjectMapper json) {
     this(values, json, null, null);
@@ -45,6 +46,7 @@ public final class NativeChannelRuntimeProvider implements ChannelRuntimeProvide
     this.json = json;
     this.store = store;
     this.sink = sink;
+    this.manifests = ChannelManifestCatalog.load();
   }
 
   public String type() {
@@ -54,22 +56,51 @@ public final class NativeChannelRuntimeProvider implements ChannelRuntimeProvide
   public List<ChannelDefinition> discoverChannels() {
     return connectors.values().stream()
         .map(
-            c ->
-                new ChannelDefinition(
+            c -> {
+                ChannelManifestCatalog.Manifest manifest = manifests.get(c.id());
+                Map<String, Object> credentials =
+                    manifest == null || manifest.credentialSchema().isEmpty()
+                        ? c.credentialSchema() : manifest.credentialSchema();
+                Map<String, Object> configuration =
+                    manifest == null || manifest.configurationSchema().isEmpty()
+                        ? c.configurationSchema() : manifest.configurationSchema();
+                return new ChannelDefinition(
                     PROVIDER,
                     c.id(),
-                    c.descriptor().name(),
-                    c.descriptor().description(),
-                    c.descriptor().version(),
+                    value(manifest == null ? null : manifest.name(), c.descriptor().name()),
+                    value(manifest == null ? null : manifest.description(), c.descriptor().description()),
+                    value(manifest == null ? null : manifest.version(), c.descriptor().version()),
                     true,
                     true,
                     "UP",
-                    write(c.credentialSchema()),
-                    write(c.configurationSchema()),
-                    Map.of(),
+                    write(credentials),
+                    write(configuration),
+                    manifest == null ? Map.of() : manifest.uiSchema(),
                     capabilities(c.descriptor().capabilities()),
-                    c.descriptor().metadata()))
+                    catalogMetadata(c.descriptor(), manifest));
+              })
         .toList();
+  }
+
+  private static Map<String, Object> catalogMetadata(
+      ChannelDescriptor descriptor, ChannelManifestCatalog.Manifest manifest) {
+    Map<String, Object> metadata = new LinkedHashMap<>(descriptor.metadata());
+    if (manifest != null) {
+      metadata.putAll(manifest.metadata());
+      metadata.put("manifestVersion", manifest.schemaVersion());
+      metadata.put("formSource", "classpath-yaml");
+    }
+    // The typed SPI is authoritative; do not require every frontend to infer
+    // ownership semantics from channel ids or platform names.
+    metadata.put(
+        "accountModel",
+        manifest == null || manifest.accountModel().isEmpty()
+            ? descriptor.accountModel().toMetadata() : manifest.accountModel());
+    return Map.copyOf(metadata);
+  }
+
+  private static String value(String preferred, String fallback) {
+    return preferred == null || preferred.isBlank() ? fallback : preferred;
   }
 
   public List<ChannelAccount> accounts(String channelId) {

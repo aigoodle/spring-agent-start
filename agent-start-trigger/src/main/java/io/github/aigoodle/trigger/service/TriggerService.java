@@ -2,6 +2,8 @@ package io.github.aigoodle.trigger.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import io.github.aigoodle.common.context.UserContextHolder;
 import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.common.util.JsonUtils;
@@ -133,6 +135,26 @@ public class TriggerService {
     return triggerMapper.selectList(
         new LambdaQueryWrapper<TriggerEntity>()
             .eq(TriggerEntity::getTenantId, tenantId == null ? "default" : tenantId));
+  }
+
+  public IPage<TriggerEntity> page(
+      String tenantId, long page, long pageSize, String keyword, String category) {
+    LambdaQueryWrapper<TriggerEntity> query = new LambdaQueryWrapper<TriggerEntity>()
+        .eq(TriggerEntity::getTenantId, tenantId == null ? "default" : tenantId)
+        .orderByDesc(TriggerEntity::getCreatedAt);
+    if ("APPLICATION".equalsIgnoreCase(category)) {
+      query.like(TriggerEntity::getConfigJson, "\"sourceWorkflowKey\"");
+    } else if ("USER".equalsIgnoreCase(category)) {
+      query.and(wrapper -> wrapper.isNull(TriggerEntity::getConfigJson)
+          .or().notLike(TriggerEntity::getConfigJson, "\"sourceWorkflowKey\""));
+    }
+    if (keyword != null && !keyword.isBlank()) {
+      query.and(wrapper -> wrapper.like(TriggerEntity::getName, keyword.trim())
+          .or().like(TriggerEntity::getType, keyword.trim())
+          .or().like(TriggerEntity::getTargetType, keyword.trim())
+          .or().like(TriggerEntity::getTargetId, keyword.trim()));
+    }
+    return triggerMapper.selectPage(new Page<>(page, pageSize), query);
   }
 
   public List<TriggerEntity> listEnabledByType(TriggerType type) {
@@ -387,9 +409,18 @@ public class TriggerService {
             null);
       }
       Map<String, Object> config = new java.util.LinkedHashMap<>();
-      // A published workflow subscribes to the channel capability, not to one employee's
-      // credentials. Every active employee-owned account of that channel can invoke it.
-      copy(designer, config, "provider", "channelId", "channelName", "messageTypes", "replyMode");
+      // An empty connectionId subscribes to every active account of this channel; when present,
+      // the inbound handler limits the workflow to that exact configured account.
+      copy(
+          designer,
+          config,
+          "provider",
+          "channelId",
+          "channelName",
+          "connectionId",
+          "connectionName",
+          "messageTypes",
+          "replyMode");
       config.put("sourceWorkflowKey", sourceKey);
       return create(
           CreateTriggerRequest.builder()
@@ -495,6 +526,16 @@ public class TriggerService {
       String executionUserId,
       TriggerInvocationRequest request,
       java.util.function.Consumer<DispatchResult> completion) {
+    return fireAsynchronouslyAs(tenantId, executionUserId, request, null, completion);
+  }
+
+  /** Fires asynchronously while forwarding workflow text chunks to a live channel reply. */
+  public String fireAsynchronouslyAs(
+      String tenantId,
+      String executionUserId,
+      TriggerInvocationRequest request,
+      java.util.function.Consumer<String> textConsumer,
+      java.util.function.Consumer<DispatchResult> completion) {
     TriggerEntity trigger = requireEnabled(tenantId, request.triggerId());
     TriggerInvocationEntity invocation =
         invocationRunner.open(InvocationDraft.initial(request), trigger.getTenantId());
@@ -508,7 +549,8 @@ public class TriggerService {
                     request.payload(),
                     executionUserId == null || executionUserId.isBlank()
                         ? trigger.getUserId()
-                        : executionUserId);
+                        : executionUserId,
+                    textConsumer);
             completion.accept(result);
           } catch (Exception exception) {
             // Persistence infrastructure failures can still escape the runner.
@@ -517,6 +559,11 @@ public class TriggerService {
                 request.triggerId(),
                 exception.getMessage(),
                 exception);
+            try {
+              completion.accept(DispatchResult.failed(exception.getMessage()));
+            } catch (RuntimeException callbackFailure) {
+              logger.debug("Async trigger failure callback failed: {}", callbackFailure.getMessage());
+            }
           }
         });
     return invocation.getId();

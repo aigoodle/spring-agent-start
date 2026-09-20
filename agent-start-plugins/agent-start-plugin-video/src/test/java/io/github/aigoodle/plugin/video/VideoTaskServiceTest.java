@@ -12,7 +12,7 @@ import org.springframework.core.io.ClassPathResource;
 import io.github.aigoodle.plugin.video.entity.VideoTaskEntity;
 import io.github.aigoodle.plugin.video.mapper.VideoTaskMapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import com.baomidou.mybatisplus.extension.spring.MybatisSqlSessionFactoryBean;
+import com.baomidou.mybatisplus.spring.MybatisSqlSessionFactoryBean;
 import org.mybatis.spring.SqlSessionTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
@@ -68,7 +68,7 @@ class VideoTaskServiceTest {
                 .withConfiguration(org.springframework.boot.autoconfigure.AutoConfigurations.of(
                         VideoPluginAutoConfiguration.class,
                         com.baomidou.mybatisplus.autoconfigure.MybatisPlusAutoConfiguration.class,
-                        org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration.class))
+                        org.springframework.boot.jdbc.autoconfigure.DataSourceTransactionManagerAutoConfiguration.class))
                 .withBean(javax.sql.DataSource.class, () -> source)
                 .withBean(VideoModelService.class, () -> models)
                 .withBean(CredentialCodec.class, () -> codec);

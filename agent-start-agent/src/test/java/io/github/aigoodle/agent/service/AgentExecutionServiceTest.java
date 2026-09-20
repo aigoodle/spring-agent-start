@@ -33,7 +33,7 @@ class AgentExecutionServiceTest {
                         AgentRequest.builder().query("hello").build(), null, null);
 
         assertThat(actual).isSameAs(expected);
-        verifyNoInteractions(drafts);
+        verify(drafts).require("tenant-a", "agent-1");
     }
 
     @Test void draftPreviewLoadsTheDraftThroughTenantScopedLookup() {

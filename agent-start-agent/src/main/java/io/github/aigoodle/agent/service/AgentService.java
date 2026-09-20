@@ -38,6 +38,8 @@ import io.github.aigoodle.memory.MemoryManager;
 import io.github.aigoodle.memory.MemoryRole;
 import io.github.aigoodle.tool.ToolRegistry;
 import io.github.aigoodle.tool.execution.ToolExecutionGateway;
+import io.github.aigoodle.skill.service.SkillResolution;
+import io.github.aigoodle.skill.service.SkillResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -87,6 +89,7 @@ public class AgentService implements AgentRuntime {
     private final AgentRunStore runStore;
     private final ToolExecutionGateway toolExecutionGateway;
     private final AgentContextEngine contextEngine;
+    private final SkillResolver skillResolver;
     private final List<AgentRunObserver> runObservers;
     private record ActiveRunKey(String tenantId, String runId) {}
     private final ConcurrentHashMap<ActiveRunKey, Thread> activeRuns = new ConcurrentHashMap<>();
@@ -97,7 +100,7 @@ public class AgentService implements AgentRuntime {
                         ApprovalGate approvalGate) {
         this(appMapper, modelConfigService, modelService, toolRegistry, strategyRegistry,
                 memory, approvalGate, new InMemoryAgentRunStore(), ToolExecutionGateway.direct(),
-                new DefaultAgentContextEngine(memory, new AgentProperties()), List.of());
+                new DefaultAgentContextEngine(memory, new AgentProperties()), List.of(), SkillResolver.none());
     }
 
     public AgentService(AppMapper appMapper, AppModelConfigService modelConfigService,
@@ -106,7 +109,7 @@ public class AgentService implements AgentRuntime {
                         ApprovalGate approvalGate, AgentRunStore runStore) {
         this(appMapper, modelConfigService, modelService, toolRegistry, strategyRegistry,
                 memory, approvalGate, runStore, ToolExecutionGateway.direct(),
-                new DefaultAgentContextEngine(memory, new AgentProperties()), List.of());
+                new DefaultAgentContextEngine(memory, new AgentProperties()), List.of(), SkillResolver.none());
     }
 
     public AgentService(AppMapper appMapper, AppModelConfigService modelConfigService,
@@ -116,7 +119,7 @@ public class AgentService implements AgentRuntime {
                         ToolExecutionGateway toolExecutionGateway) {
         this(appMapper, modelConfigService, modelService, toolRegistry, strategyRegistry,
                 memory, approvalGate, runStore, toolExecutionGateway,
-                new DefaultAgentContextEngine(memory, new AgentProperties()), List.of());
+                new DefaultAgentContextEngine(memory, new AgentProperties()), List.of(), SkillResolver.none());
     }
 
     public AgentService(AppMapper appMapper, AppModelConfigService modelConfigService,
@@ -126,7 +129,7 @@ public class AgentService implements AgentRuntime {
                         ToolExecutionGateway toolExecutionGateway,
                         AgentContextEngine contextEngine) {
         this(appMapper, modelConfigService, modelService, toolRegistry, strategyRegistry,
-                memory, approvalGate, runStore, toolExecutionGateway, contextEngine, List.of());
+                memory, approvalGate, runStore, toolExecutionGateway, contextEngine, List.of(), SkillResolver.none());
     }
 
     public AgentService(AppMapper appMapper, AppModelConfigService modelConfigService,
@@ -135,6 +138,17 @@ public class AgentService implements AgentRuntime {
                         ApprovalGate approvalGate, AgentRunStore runStore,
                         ToolExecutionGateway toolExecutionGateway,
                         AgentContextEngine contextEngine, List<AgentRunObserver> runObservers) {
+        this(appMapper, modelConfigService, modelService, toolRegistry, strategyRegistry, memory,
+                approvalGate, runStore, toolExecutionGateway, contextEngine, runObservers, SkillResolver.none());
+    }
+
+    public AgentService(AppMapper appMapper, AppModelConfigService modelConfigService,
+                        ModelService modelService, ToolRegistry toolRegistry,
+                        AgentStrategyRegistry strategyRegistry, MemoryManager memory,
+                        ApprovalGate approvalGate, AgentRunStore runStore,
+                        ToolExecutionGateway toolExecutionGateway,
+                        AgentContextEngine contextEngine, List<AgentRunObserver> runObservers,
+                        SkillResolver skillResolver) {
         this.appMapper = appMapper;
         this.modelConfigService = modelConfigService;
         this.modelService = modelService;
@@ -145,6 +159,7 @@ public class AgentService implements AgentRuntime {
         this.toolExecutionGateway = toolExecutionGateway;
         this.contextEngine = contextEngine;
         this.runObservers = runObservers == null ? List.of() : List.copyOf(runObservers);
+        this.skillResolver = skillResolver == null ? SkillResolver.none() : skillResolver;
         this.catalogUpdater = new AppCatalogUpdater();
         this.definitionFactory = new AgentDefinitionFactory(modelConfigService);
         this.toolResolver = new AgentToolResolver(appMapper, modelConfigService, toolRegistry);
@@ -394,6 +409,7 @@ public class AgentService implements AgentRuntime {
     @Override
     public AgentResponse run(AgentDefinition definition, AgentRequest request,
                              Consumer<AgentStep> stepListener, Consumer<String> tokenListener) {
+        definition = applySkills(definition);
         String tenantId = valueOrDefault(definition.getTenantId(), DEFAULT_TENANT_ID);
         String conversationId = conversationIdOf(request);
         String runId = UUID.randomUUID().toString();
@@ -429,6 +445,18 @@ public class AgentService implements AgentRuntime {
         } finally {
             activeRuns.remove(activeRunKey);
         }
+    }
+
+    private AgentDefinition applySkills(AgentDefinition definition) {
+        SkillResolution resolved = skillResolver.resolve(
+                valueOrDefault(definition.getTenantId(), DEFAULT_TENANT_ID), definition.getSkillIds());
+        if ((resolved.prompt() == null || resolved.prompt().isBlank()) && resolved.toolNames().isEmpty()) return definition;
+        String base = definition.getInstructions() == null ? "" : definition.getInstructions().trim();
+        String instructions = resolved.prompt() == null || resolved.prompt().isBlank()
+                ? base : (base.isBlank() ? resolved.prompt() : base + "\n\n" + resolved.prompt());
+        java.util.LinkedHashSet<String> tools = new java.util.LinkedHashSet<>(definition.getToolNames());
+        tools.addAll(resolved.toolNames());
+        return definition.toBuilder().instructions(instructions).toolNames(List.copyOf(tools)).build();
     }
 
     @Override

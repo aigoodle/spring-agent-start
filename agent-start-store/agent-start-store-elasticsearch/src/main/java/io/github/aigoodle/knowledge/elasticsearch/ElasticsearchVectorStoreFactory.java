@@ -3,7 +3,7 @@ package io.github.aigoodle.knowledge.elasticsearch;
 import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.knowledge.entity.DatasetEntity;
 import io.github.aigoodle.knowledge.index.VectorStoreFactory;
-import org.elasticsearch.client.RestClient;
+import co.elastic.clients.transport.rest5_client.low_level.Rest5Client;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.elasticsearch.ElasticsearchVectorStore;
@@ -16,10 +16,10 @@ import org.springframework.ai.vectorstore.elasticsearch.ElasticsearchVectorStore
  */
 public class ElasticsearchVectorStoreFactory implements VectorStoreFactory {
 
-    private final RestClient restClient;
+    private final Rest5Client restClient;
     private final ElasticsearchStoreProperties properties;
 
-    public ElasticsearchVectorStoreFactory(RestClient restClient,
+    public ElasticsearchVectorStoreFactory(Rest5Client restClient,
                                            ElasticsearchStoreProperties properties) {
         this.restClient = restClient;
         this.properties = properties;

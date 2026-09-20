@@ -1,7 +1,6 @@
 package io.github.aigoodle.connectors.wecom;
 
 import io.github.aigoodle.connectors.nativebot.NativeConnectorAutoConfiguration;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;

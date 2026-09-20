@@ -38,6 +38,9 @@ public final class DingTalkConnector implements NativeChannelConnector<DingTalkC
         "1",
         new ChannelCapabilities(
             Set.of(MessageType.TEXT), Set.of(MessageType.TEXT), false, true, true, false),
+        ChannelAccountModel.tenant(
+            new ChannelAccountModel.IdentityBridge(
+                true, "OAUTH", "钉钉用户", "企业员工", "运行期间可将钉钉用户关联到租户员工。")),
         Map.of("icon", "钉钉", "transport", "stream"));
   }
 

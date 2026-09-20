@@ -45,6 +45,7 @@ class NativeConnectorAutoConfigurationTest {
         context -> {
           assertThat(context).hasNotFailed();
           assertThat(context).hasSingleBean(NativeChannelRuntimeProvider.class);
+          assertThat(context).hasSingleBean(ObjectMapper.class);
           assertThat(context).hasSingleBean(NativeAccountStore.class);
           assertThat(context).hasSingleBean(NativeInboundBridge.class);
           assertThat(context).hasSingleBean(NativeChannelCallbackController.class);
@@ -61,11 +62,6 @@ class NativeConnectorAutoConfigurationTest {
 
   @Configuration(proxyBeanMethods = false)
   static class HostBeans {
-    @Bean
-    ObjectMapper objectMapper() {
-      return new ObjectMapper();
-    }
-
     @Bean
     ChannelConnectionMapper channelConnectionMapper() {
       return mock(ChannelConnectionMapper.class);

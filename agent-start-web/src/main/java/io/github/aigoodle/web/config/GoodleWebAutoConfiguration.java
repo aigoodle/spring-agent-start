@@ -1,5 +1,7 @@
 package io.github.aigoodle.web.config;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import io.github.aigoodle.common.util.JsonUtils;
 import io.github.aigoodle.web.common.GlobalExceptionHandler;
 import io.github.aigoodle.web.support.ChannelAdministrationPolicy;
 import io.github.aigoodle.web.support.DefaultChannelAdministrationPolicy;
@@ -10,6 +12,7 @@ import io.github.aigoodle.web.support.DefaultChannelRuntimeAdministrationPolicy;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.jackson.autoconfigure.JsonMapperBuilderCustomizer;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
@@ -18,6 +21,9 @@ import org.springframework.web.reactive.config.WebFluxConfigurer;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.PathMatchConfigurer;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import tools.jackson.databind.ValueDeserializer;
+import tools.jackson.databind.ValueSerializer;
+import tools.jackson.databind.module.SimpleModule;
 
 /**
  * Auto-config for the REST web layer. Every controller lives under
@@ -64,6 +70,37 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
         "io.github.aigoodle.web.support"
 })
 public class GoodleWebAutoConfiguration {
+
+    /**
+     * Bridges the Jackson 2 tree model used by persistence/MyBatis-Plus with
+     * Spring Boot 4's Jackson 3 HTTP codecs. Without this bridge, request
+     * bodies containing a workflow graph cannot be decoded and graph responses
+     * are serialized as JsonNode implementation metadata instead of JSON.
+     */
+    @Bean
+    public JsonMapperBuilderCustomizer springAgentJackson2TreeBridge() {
+        return builder -> {
+            SimpleModule bridge = new SimpleModule("spring-agent-jackson2-tree-bridge");
+            bridge.addSerializer(JsonNode.class, new ValueSerializer<>() {
+                @Override
+                public void serialize(JsonNode value, tools.jackson.core.JsonGenerator generator,
+                                      tools.jackson.databind.SerializationContext context)
+                        throws tools.jackson.core.JacksonException {
+                    generator.writeRawValue(value.toString());
+                }
+            });
+            bridge.addDeserializer(JsonNode.class, new ValueDeserializer<>() {
+                @Override
+                public JsonNode deserialize(tools.jackson.core.JsonParser parser,
+                                            tools.jackson.databind.DeserializationContext context)
+                        throws tools.jackson.core.JacksonException {
+                    tools.jackson.databind.JsonNode tree = context.readTree(parser);
+                    return JsonUtils.readTree(tree.toString());
+                }
+            });
+            builder.addModule(bridge);
+        };
+    }
 
     @Bean
     @ConditionalOnMissingBean(ChannelAdministrationPolicy.class)
@@ -213,7 +250,7 @@ public class GoodleWebAutoConfiguration {
     private static boolean isAgentStartController(Class<?> type) {
         String packageName = type.getPackageName();
         return packageName.startsWith("io.github.aigoodle.web.controller")
-                || packageName.startsWith("io.github.aigoodle.connectors.nativebot");
+                || packageName.startsWith("io.github.aigoodle.connectors");
     }
 
     static String normalizedBasePath(String basePath) {

@@ -44,6 +44,7 @@
         <module>agent-start-knowledge</module>
         <module>agent-start-store</module>
         <module>agent-start-tools</module>
+        <module>agent-start-mcp-auth-spring-starter</module>
         <module>agent-start-connectors</module>
         <module>agent-start-connector</module>
         <module>agent-start-plugin</module>
@@ -52,6 +53,7 @@
         <module>agent-start-connector-redis</module>
         <module>agent-start-connector-tools</module>
         <module>agent-start-memory</module>
+        <module>agent-start-skill</module>
         <module>agent-start-agent</module>
         <module>agent-start-workflow</module>
         <module>agent-start-trigger</module>
@@ -69,15 +71,14 @@
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
-        <spring-boot.version>3.5.6</spring-boot.version>
-        <spring-ai.version>1.1.2</spring-ai.version>
-        <mybatis-plus.version>3.5.10.1</mybatis-plus.version>
+        <spring-boot.version>4.1.1</spring-boot.version>
+        <spring-ai.version>2.0.1</spring-ai.version>
+        <mybatis-plus.version>3.5.17</mybatis-plus.version>
         <lombok.version>1.18.34</lombok.version>
         <h2.version>2.3.232</h2.version>
-        <mcp.version>0.17.0</mcp.version>
-        <!-- springdoc-openapi 2.8.x is the family compatible with Spring Boot 3.5.
-             2.6.0 targets Spring Boot 3.3 and breaks classpath resolution here. -->
-        <springdoc.version>2.8.9</springdoc.version>
+        <mcp.version>2.0.0</mcp.version>
+        <!-- springdoc-openapi 3.x is the Spring Boot 4 compatible line. -->
+        <springdoc.version>3.1.1</springdoc.version>
         <!-- Embedded full-text engine for the knowledge keyword index (RAGFlow-style
              term-weighted sparse retrieval). 9.x line, Java 21 compatible. -->
         <lucene.version>9.9.2</lucene.version>
@@ -114,7 +115,7 @@
             <!-- MyBatis-Plus -->
             <dependency>
                 <groupId>com.baomidou</groupId>
-                <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+                <artifactId>mybatis-plus-spring-boot4-starter</artifactId>
                 <version>${mybatis-plus.version}</version>
             </dependency>
 
@@ -170,6 +171,11 @@
             </dependency>
             <dependency>
                 <groupId>io.github.aigoodle</groupId>
+                <artifactId>agent-start-skill</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.aigoodle</groupId>
                 <artifactId>agent-start-common</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -181,11 +187,6 @@
             <dependency>
                 <groupId>io.github.aigoodle</groupId>
                 <artifactId>agent-start-model</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.github.aigoodle</groupId>
-                <artifactId>agent-start-provider-zhipu</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -221,6 +222,11 @@
             <dependency>
                 <groupId>io.github.aigoodle</groupId>
                 <artifactId>agent-start-tools</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.aigoodle</groupId>
+                <artifactId>agent-start-mcp-auth-spring-starter</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

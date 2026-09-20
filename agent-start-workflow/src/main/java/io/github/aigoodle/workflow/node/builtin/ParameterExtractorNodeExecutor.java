@@ -88,7 +88,7 @@ public class ParameterExtractorNodeExecutor implements NodeExecutor {
         ChatClient.ChatClientRequestSpec request = chatClient.prompt().messages(messages);
         ChatOptions nodeOptions = NodeModelResolver.perNodeOptions(node);
         if (nodeOptions != null) {
-            request = request.options(nodeOptions);
+            request = request.options(nodeOptions.mutate());
         }
         return request.call().content();
     }

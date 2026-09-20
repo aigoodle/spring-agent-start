@@ -38,6 +38,7 @@ final class AppModelConfigPatch {
         copyIfPresent(patch::getAgentMode, target::setAgentMode);
         copyIfPresent(patch::getStrategy, target::setStrategy);
         copyIfPresent(patch::getToolNamesJson, target::setToolNamesJson);
+        copyIfPresent(patch::getSkillIdsJson, target::setSkillIdsJson);
         copyIfPresent(patch::getApprovalToolsJson, target::setApprovalToolsJson);
         copyIfPresent(patch::getDelegateAgentIdsJson, target::setDelegateAgentIdsJson);
         copyIfPresent(patch::getMaxIterations, target::setMaxIterations);

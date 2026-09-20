@@ -1,6 +1,8 @@
 package io.github.aigoodle.plugin.video;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import io.github.aigoodle.plugin.video.entity.VideoTaskEntity;
 import io.github.aigoodle.plugin.video.mapper.VideoTaskMapper;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -8,6 +10,7 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.dao.DuplicateKeyException;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.*;
 
 /** Durable submission reservation plus leased polling/cancellation queue. */
@@ -45,24 +48,80 @@ public final class VideoTaskStore {
     }
     public void accepted(String tenant, String id, String vendorId) {
         tx.executeWithoutResult(status -> {
-            if (mapper.accept(tenant, id, vendorId, Instant.now()) != 1) throw new IllegalStateException("Submission reservation changed");
+            Instant now = Instant.now();
+            int updated = mapper.update(null, new LambdaUpdateWrapper<VideoTaskEntity>()
+                    .eq(VideoTaskEntity::getTenantId, tenant)
+                    .eq(VideoTaskEntity::getId, id)
+                    .eq(VideoTaskEntity::getStatus, "SUBMITTING")
+                    .set(VideoTaskEntity::getVendorTaskId, vendorId)
+                    .set(VideoTaskEntity::getStatus, "QUEUED")
+                    .set(VideoTaskEntity::getNextPollAt, now)
+                    .set(VideoTaskEntity::getUpdatedAt, LocalDateTime.now()));
+            if (updated != 1) throw new IllegalStateException("Submission reservation changed");
         });
     }
-    public void unknown(String tenant, String id) { tx.executeWithoutResult(status -> mapper.markUnknown(tenant, id)); }
-    public void requestCancel(String tenant, String id) { tx.executeWithoutResult(status -> mapper.requestCancel(tenant, id, Instant.now())); }
+    public void unknown(String tenant, String id) {
+        tx.executeWithoutResult(status -> mapper.update(null, new LambdaUpdateWrapper<VideoTaskEntity>()
+                .eq(VideoTaskEntity::getTenantId, tenant)
+                .eq(VideoTaskEntity::getId, id)
+                .eq(VideoTaskEntity::getStatus, "SUBMITTING")
+                .set(VideoTaskEntity::getStatus, "UNKNOWN")
+                .set(VideoTaskEntity::getLastError, "submission_outcome_unknown")
+                .set(VideoTaskEntity::getUpdatedAt, LocalDateTime.now())));
+    }
+    public void requestCancel(String tenant, String id) {
+        tx.executeWithoutResult(status -> mapper.update(null, new LambdaUpdateWrapper<VideoTaskEntity>()
+                .eq(VideoTaskEntity::getTenantId, tenant)
+                .eq(VideoTaskEntity::getId, id)
+                .in(VideoTaskEntity::getStatus, "QUEUED", "RUNNING")
+                .set(VideoTaskEntity::getCancelRequested, 1)
+                .set(VideoTaskEntity::getNextPollAt, Instant.now())
+                .set(VideoTaskEntity::getUpdatedAt, LocalDateTime.now())));
+    }
     public List<Task> due(int limit) {
         return tx.execute(status -> {
             Instant now = Instant.now();
-            mapper.expireSubmissions(now);
-            return mapper.selectDue(now, Math.max(1, Math.min(limit, 100))).stream().map(VideoTaskStore::task).toList();
+            mapper.update(null, new LambdaUpdateWrapper<VideoTaskEntity>()
+                    .eq(VideoTaskEntity::getStatus, "SUBMITTING")
+                    .lt(VideoTaskEntity::getNextPollAt, now)
+                    .set(VideoTaskEntity::getStatus, "UNKNOWN")
+                    .set(VideoTaskEntity::getLastError, "submission_outcome_unknown")
+                    .set(VideoTaskEntity::getUpdatedAt, LocalDateTime.now()));
+            var query = new LambdaQueryWrapper<VideoTaskEntity>()
+                    .in(VideoTaskEntity::getStatus, "QUEUED", "RUNNING")
+                    .le(VideoTaskEntity::getNextPollAt, now)
+                    .and(lease -> lease.isNull(VideoTaskEntity::getLeaseUntil)
+                            .or().lt(VideoTaskEntity::getLeaseUntil, now))
+                    .orderByAsc(VideoTaskEntity::getNextPollAt);
+            var page = new Page<VideoTaskEntity>(1, Math.max(1, Math.min(limit, 100)), false);
+            return mapper.selectPage(page, query).getRecords().stream().map(VideoTaskStore::task).toList();
         });
     }
     public String claim(Task task) {
         String token = UUID.randomUUID().toString(); Instant now = Instant.now();
-        return tx.execute(status -> mapper.claim(task.tenant(), task.id(), token, now, now.plusSeconds(150)) == 1 ? token : null);
+        return tx.execute(status -> mapper.update(null, new LambdaUpdateWrapper<VideoTaskEntity>()
+                .eq(VideoTaskEntity::getTenantId, task.tenant())
+                .eq(VideoTaskEntity::getId, task.id())
+                .in(VideoTaskEntity::getStatus, "QUEUED", "RUNNING")
+                .le(VideoTaskEntity::getNextPollAt, now)
+                .and(lease -> lease.isNull(VideoTaskEntity::getLeaseUntil)
+                        .or().lt(VideoTaskEntity::getLeaseUntil, now))
+                .set(VideoTaskEntity::getLeaseToken, token)
+                .set(VideoTaskEntity::getLeaseUntil, now.plusSeconds(150))) == 1 ? token : null);
     }
     public void finish(Task task, String token, String status, String result, String error, int delaySeconds) {
-        tx.executeWithoutResult(transaction -> mapper.finish(task.tenant(), task.id(), token, status, result, error, Instant.now().plusSeconds(delaySeconds)));
+        tx.executeWithoutResult(transaction -> mapper.update(null, new LambdaUpdateWrapper<VideoTaskEntity>()
+                .eq(VideoTaskEntity::getTenantId, task.tenant())
+                .eq(VideoTaskEntity::getId, task.id())
+                .eq(VideoTaskEntity::getLeaseToken, token)
+                .set(VideoTaskEntity::getStatus, status)
+                .set(VideoTaskEntity::getResultJson, result)
+                .set(VideoTaskEntity::getLastError, error)
+                .setIncrBy(VideoTaskEntity::getAttempts, 1)
+                .set(VideoTaskEntity::getNextPollAt, Instant.now().plusSeconds(delaySeconds))
+                .set(VideoTaskEntity::getLeaseToken, null)
+                .set(VideoTaskEntity::getLeaseUntil, null)
+                .set(VideoTaskEntity::getUpdatedAt, LocalDateTime.now())));
     }
     private static Task task(VideoTaskEntity row) {
         return row == null ? null : new Task(row.getId(), row.getTenantId(), row.getOwnerId(), row.getRequestHash(), row.getEndpointCipher(),

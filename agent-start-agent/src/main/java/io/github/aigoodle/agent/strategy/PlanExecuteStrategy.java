@@ -94,7 +94,7 @@ public class PlanExecuteStrategy implements AgentStrategy {
         messages.add(new UserMessage(userText));
         var spec = client.prompt().messages(messages);
         if (perApp != null) {
-            spec = spec.options(perApp);
+            spec = spec.options(perApp.mutate());
         }
         String content = spec.call().content();
         return content == null ? "" : content;

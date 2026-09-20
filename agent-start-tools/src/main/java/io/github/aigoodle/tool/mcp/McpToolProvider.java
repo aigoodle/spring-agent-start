@@ -53,7 +53,7 @@ public class McpToolProvider implements ToolProvider {
                 McpSyncClient client = clientManager.client(server);
                 List<McpSchema.Tool> serverTools = client.listTools().tools();
                 serverTools.stream()
-                        .map(tool -> toAgentTool(client, server.getName(), tool))
+                        .map(tool -> toAgentTool(client, server.getId(), tool))
                         .forEach(tools::add);
                 logger.info("MCP server '{}' contributed {} tool(s)",
                         server.getName(), serverTools.size());

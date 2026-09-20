@@ -13,7 +13,7 @@ import java.util.Set;
 
 /** Resolved runtime configuration, independent of its persistence representation. */
 @Data
-@Builder
+@Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
 public class AgentDefinition {
@@ -51,6 +51,10 @@ public class AgentDefinition {
     /** Names of tools (from the tool registry) this agent may use. Empty = all. */
     @Builder.Default
     private List<String> toolNames = List.of();
+
+    /** Published business skills whose instructions are resolved at run start. */
+    @Builder.Default
+    private List<String> skillIds = List.of();
 
     /** Tools that require human approval before execution (HITL). */
     @Builder.Default
@@ -99,6 +103,8 @@ public class AgentDefinition {
     public Set<String> getApprovalRequiredTools() {
         return approvalRequiredTools == null ? Set.of() : approvalRequiredTools;
     }
+
+    public List<String> getSkillIds() { return skillIds == null ? List.of() : skillIds; }
 
     public List<String> getDelegateAgentIds() {
         return delegateAgentIds == null ? List.of() : delegateAgentIds;

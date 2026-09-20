@@ -12,6 +12,20 @@ principal bridge. Workflow, prompt-template and provider-credential HTTP DTOs de
 `tenantId` property; the embeddable Java service APIs retain explicit tenant arguments for trusted
 background jobs and host integrations.
 
+The demo exposes `/auth/login`, `/auth/logout`, `/auth/codes` and `/user/info` only to satisfy the
+sample Vben application's login workflow. Its `demo-session` access token is a UI state marker, not
+a credential: the backend neither parses nor trusts it. `DemoCurrentUserWebFilter` reconstructs the
+configured identity for every request. A production host should disable the complete demo facade:
+
+```yaml
+spring-agent:
+  demo:
+    enabled: false
+```
+
+It then authenticates with its existing JWT/session/SSO infrastructure and maps the verified
+principal to `CurrentUser`. Agent Start intentionally owns no user, tenant or password tables.
+
 `agent-start-persistence` adds a MyBatis interceptor with two checks for protected tables:
 
 1. reads, updates and deletes must contain a `tenant_id` predicate; inserts must contain the column;

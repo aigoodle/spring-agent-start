@@ -38,6 +38,8 @@ import io.github.aigoodle.connector.channel.ChannelAgentRouter;
 import io.github.aigoodle.connector.persistence.TenantAgentBindingMapper;
 import io.github.aigoodle.connector.persistence.EmployeeAgentBindingMapper;
 import io.github.aigoodle.connector.channel.ChannelIdentityService;
+import io.github.aigoodle.connector.channel.ChannelIdentityAuthenticator;
+import io.github.aigoodle.connector.channel.ChannelIdentityBindingProvider;
 import io.github.aigoodle.connector.persistence.ChannelIdentityMapper;
 import io.github.aigoodle.connector.persistence.ChannelAuditMapper;
 import io.github.aigoodle.connector.channel.ChannelAuditService;
@@ -103,6 +105,14 @@ public class GoodleConnectorAutoConfiguration {
     @ConditionalOnMissingBean
     public ChannelIdentityService channelIdentityService(ChannelIdentityMapper mapper) {
         return new ChannelIdentityService(mapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ChannelIdentityAuthenticator channelIdentityAuthenticator(
+            ChannelIdentityService identities,
+            ObjectProvider<ChannelIdentityBindingProvider> providers) {
+        return new ChannelIdentityAuthenticator(identities, providers.orderedStream().toList());
     }
 
     @Bean

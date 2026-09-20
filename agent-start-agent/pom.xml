@@ -19,6 +19,10 @@
     <dependencies>
         <dependency>
             <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-skill</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
             <artifactId>agent-start-persistence</artifactId>
         </dependency>
         <dependency>
@@ -42,7 +46,7 @@
 
         <dependency>
             <groupId>com.baomidou</groupId>
-            <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+            <artifactId>mybatis-plus-spring-boot4-starter</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework</groupId>

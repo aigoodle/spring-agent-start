@@ -1,6 +1,7 @@
 package io.github.aigoodle.trigger.dispatch;
 
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * Runs a trigger's target. The built-in dispatcher runs workflows; publish another
@@ -13,4 +14,10 @@ public interface TriggerDispatcher {
     String targetType();
 
     DispatchResult dispatch(String targetId, Map<String, Object> inputs, String conversationId);
+
+    /** Dispatches with an optional live text consumer. Non-streaming targets keep old behavior. */
+    default DispatchResult dispatch(String targetId, Map<String, Object> inputs,
+                                    String conversationId, Consumer<String> textConsumer) {
+        return dispatch(targetId, inputs, conversationId);
+    }
 }

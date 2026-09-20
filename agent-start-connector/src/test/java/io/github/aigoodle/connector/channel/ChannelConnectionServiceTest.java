@@ -20,6 +20,75 @@ import org.mockito.InOrder;
 
 class ChannelConnectionServiceTest {
   @Test
+  void editConfigurationReturnsVisibleValuesAndOnlySecretPresence() {
+    ChannelConnectionMapper mapper = mock(ChannelConnectionMapper.class);
+    ConnectorSecretCodec codec = mock(ConnectorSecretCodec.class);
+    ChannelRuntimeProvider runtime = mock(ChannelRuntimeProvider.class);
+    ChannelConnectionEntity entity = new ChannelConnectionEntity();
+    entity.setId("connection-1");
+    entity.setTenantId("tenant-a");
+    entity.setProvider("native");
+    entity.setChannelId("wecom");
+    entity.setRuntimeNodeId("native-default");
+    entity.setEncryptedCredentials("encrypted-credentials");
+    entity.setEncryptedConfig("encrypted-config");
+    when(mapper.selectOne(any())).thenReturn(entity);
+    when(codec.decode("tenant-a", "encrypted-credentials"))
+        .thenReturn(new java.util.LinkedHashMap<>(Map.of("botId", "visible", "secret", "hidden")));
+    when(codec.decode("tenant-a", "encrypted-config"))
+        .thenReturn(new java.util.LinkedHashMap<>(Map.of("wsUrl", "wss://example.test")));
+    when(runtime.type()).thenReturn("native");
+    when(runtime.nodeId()).thenReturn("native-default");
+    when(runtime.discoverChannels())
+        .thenReturn(
+            List.of(
+                new ChannelDefinition(
+                    "native", "wecom", "WeCom", "WeCom", "1", true, true, "UP",
+                    "{\"type\":\"object\",\"properties\":{\"botId\":{\"type\":\"string\"},\"secret\":{\"type\":\"string\",\"writeOnly\":true}}}",
+                    "{\"type\":\"object\",\"properties\":{\"wsUrl\":{\"type\":\"string\"}}}",
+                    Map.of(), Map.of(), Map.of())));
+    ChannelConnectionService service =
+        new ChannelConnectionService(mapper, codec, new ChannelRuntimeRegistry(List.of(runtime)));
+
+    ChannelConnectionService.EditConfiguration editable =
+        service.editConfiguration("connection-1", "tenant-a");
+
+    assertThat(editable.credentials()).containsExactlyEntriesOf(Map.of("botId", "visible"));
+    assertThat(editable.config()).containsExactlyEntriesOf(Map.of("wsUrl", "wss://example.test"));
+    assertThat(editable.configuredSecretFields()).containsExactly("secret");
+    assertThat(editable.toString()).doesNotContain("hidden");
+  }
+
+  @Test
+  void tenantAccountUsesTrustedTenantAsOwnerWithoutPersonalOwnerId() {
+    ChannelConnectionMapper mapper = mock(ChannelConnectionMapper.class);
+    ConnectorSecretCodec codec = mock(ConnectorSecretCodec.class);
+    ChannelRuntimeProvider runtime = mock(ChannelRuntimeProvider.class);
+    when(runtime.type()).thenReturn("native");
+    when(runtime.discoverChannels()).thenReturn(List.of());
+    when(mapper.insert(any(ChannelConnectionEntity.class))).thenReturn(1);
+    when(runtime.saveAccount(any()))
+        .thenAnswer(
+            invocation -> {
+              SaveChannelAccountRequest request = invocation.getArgument(0);
+              return new ChannelAccount(
+                  "native", "wecom", request.accountId(), request.name(), true, true, true, true,
+                  null, null, Map.of());
+            });
+    ChannelConnectionService service =
+        new ChannelConnectionService(mapper, codec, new ChannelRuntimeRegistry(List.of(runtime)));
+
+    ChannelConnectionService.View saved =
+        service.save(
+            new ChannelConnectionService.SaveRequest(
+                null, "tenant-a", "TENANT", null, "native", "wecom", "总部企业微信",
+                null, null, true, null, null));
+
+    assertThat(saved.ownerType()).isEqualTo("TENANT");
+    assertThat(saved.ownerId()).isEqualTo("tenant-a");
+  }
+
+  @Test
   void nativeEmployeeAccountNeverPersistsApplicationBinding() {
     ChannelConnectionMapper mapper = mock(ChannelConnectionMapper.class);
     ConnectorSecretCodec codec = mock(ConnectorSecretCodec.class);

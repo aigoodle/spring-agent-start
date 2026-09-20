@@ -77,7 +77,7 @@ public class OllamaModelProvider extends AbstractModelProvider {
         applyTemperature(endpoint, options);
         return OllamaChatModel.builder()
                 .ollamaApi(buildApi(endpoint))
-                .defaultOptions(options.build())
+                .options(options.build())
                 .build();
     }
 
@@ -88,7 +88,7 @@ public class OllamaModelProvider extends AbstractModelProvider {
                 .build();
         return OllamaEmbeddingModel.builder()
                 .ollamaApi(buildApi(endpoint))
-                .defaultOptions(options)
+                .options(options)
                 .build();
     }
 

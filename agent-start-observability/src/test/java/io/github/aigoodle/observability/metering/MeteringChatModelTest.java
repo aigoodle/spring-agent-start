@@ -5,7 +5,9 @@ import io.github.aigoodle.observability.service.LlmMetricsService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 
@@ -17,6 +19,21 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class MeteringChatModelTest {
+
+    @Test
+    void preservesProviderSpecificOptionsRequiredBySpringAi2ChatClient() {
+        ChatModel delegate = mock(ChatModel.class);
+        LlmMetricsService metricsService = mock(LlmMetricsService.class);
+        OpenAiChatOptions options = OpenAiChatOptions.builder().model("qwen-plus").build();
+        when(delegate.getOptions()).thenReturn(options);
+
+        MeteringChatModel meteredModel = new MeteringChatModel(
+                delegate, "qwen", "qwen-plus", metricsService);
+
+        ChatOptions exposedOptions = meteredModel.getOptions();
+        assertThat(exposedOptions).isSameAs(options);
+        assertThat(exposedOptions.mutate().build()).isInstanceOf(OpenAiChatOptions.class);
+    }
 
     @Test
     void recordsEachStreamSubscriptionIndependently() {

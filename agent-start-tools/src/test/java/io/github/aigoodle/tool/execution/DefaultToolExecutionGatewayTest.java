@@ -83,6 +83,20 @@ class DefaultToolExecutionGatewayTest {
         assertThat(records.getLast().status()).isEqualTo(ToolExecutionRecord.Status.TIMED_OUT);
     }
 
+    @Test
+    void removesAuthorizationFromPublishedAuditContext() {
+        List<ToolExecutionRecord> records = new ArrayList<>();
+        gateway = new DefaultToolExecutionGateway(properties(), List.of(), List.of(records::add));
+        ToolExecutionContext context = new ToolExecutionContext(null, "tenant-a", "user-1", null,
+                Map.of("authorization", "Bearer secret", "trace", "visible"));
+
+        gateway.execute(tool("safe", false, new AtomicInteger(), "ok"), Map.of(), context);
+
+        assertThat(records).singleElement().satisfies(record -> assertThat(record.context().metadata())
+                .doesNotContainKey("authorization")
+                .containsEntry("trace", "visible"));
+    }
+
     private static ToolExecutionProperties properties() {
         ToolExecutionProperties properties = new ToolExecutionProperties();
         properties.setMaxConcurrent(2);

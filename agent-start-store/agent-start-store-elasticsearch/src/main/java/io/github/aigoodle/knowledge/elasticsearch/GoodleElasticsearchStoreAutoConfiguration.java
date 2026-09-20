@@ -2,12 +2,12 @@ package io.github.aigoodle.knowledge.elasticsearch;
 
 import io.github.aigoodle.knowledge.config.GoodleKnowledgeAutoConfiguration;
 import io.github.aigoodle.knowledge.index.VectorStoreFactory;
-import org.apache.http.HttpHost;
-import org.apache.http.auth.AuthScope;
-import org.apache.http.auth.UsernamePasswordCredentials;
-import org.apache.http.impl.client.BasicCredentialsProvider;
-import org.elasticsearch.client.RestClient;
-import org.elasticsearch.client.RestClientBuilder;
+import co.elastic.clients.transport.rest5_client.low_level.Rest5Client;
+import co.elastic.clients.transport.rest5_client.low_level.Rest5ClientBuilder;
+import org.apache.hc.client5.http.auth.AuthScope;
+import org.apache.hc.client5.http.auth.UsernamePasswordCredentials;
+import org.apache.hc.client5.http.impl.auth.BasicCredentialsProvider;
+import org.apache.hc.core5.http.message.BasicHeader;
 import org.springframework.ai.vectorstore.elasticsearch.ElasticsearchVectorStore;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -19,29 +19,28 @@ import org.springframework.context.annotation.Bean;
 /**
  * Registers an Elasticsearch-backed {@link VectorStoreFactory} when
  * {@code spring-agent.knowledge.vector-store=elasticsearch}. Constructs a low-level
- * {@link RestClient} from properties unless the app provides its own bean.
+ * {@link Rest5Client} from properties unless the app provides its own bean.
  */
 @AutoConfiguration(before = GoodleKnowledgeAutoConfiguration.class)
-@ConditionalOnClass({ElasticsearchVectorStore.class, RestClient.class})
+@ConditionalOnClass({ElasticsearchVectorStore.class, Rest5Client.class})
 @ConditionalOnProperty(prefix = "spring-agent.knowledge", name = "vector-store", havingValue = "elasticsearch")
 @EnableConfigurationProperties(ElasticsearchStoreProperties.class)
 public class GoodleElasticsearchStoreAutoConfiguration {
 
     @Bean(destroyMethod = "close")
     @ConditionalOnMissingBean
-    public RestClient agentElasticsearchRestClient(ElasticsearchStoreProperties properties) {
-        HttpHost[] hosts = properties.getUris().stream()
-                .map(HttpHost::create)
-                .toArray(HttpHost[]::new);
-        RestClientBuilder builder = RestClient.builder(hosts);
+    public Rest5Client agentElasticsearchRestClient(ElasticsearchStoreProperties properties) {
+        Rest5ClientBuilder builder = Rest5Client.builder(properties.getUris().stream()
+                .map(java.net.URI::create).toList());
         if (properties.getApiKey() != null && !properties.getApiKey().isBlank()) {
-            builder.setDefaultHeaders(new org.apache.http.Header[]{
-                    new org.apache.http.message.BasicHeader("Authorization", "ApiKey " + properties.getApiKey())
+            builder.setDefaultHeaders(new org.apache.hc.core5.http.Header[]{
+                    new BasicHeader("Authorization", "ApiKey " + properties.getApiKey())
             });
         } else if (properties.getUsername() != null && !properties.getUsername().isBlank()) {
             BasicCredentialsProvider credentials = new BasicCredentialsProvider();
-            credentials.setCredentials(AuthScope.ANY,
-                    new UsernamePasswordCredentials(properties.getUsername(), properties.getPassword()));
+            credentials.setCredentials(new AuthScope(null, -1),
+                    new UsernamePasswordCredentials(properties.getUsername(),
+                            properties.getPassword() == null ? new char[0] : properties.getPassword().toCharArray()));
             builder.setHttpClientConfigCallback(hc -> hc.setDefaultCredentialsProvider(credentials));
         }
         return builder.build();
@@ -49,7 +48,7 @@ public class GoodleElasticsearchStoreAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(VectorStoreFactory.class)
-    public VectorStoreFactory elasticsearchVectorStoreFactory(RestClient restClient,
+    public VectorStoreFactory elasticsearchVectorStoreFactory(Rest5Client restClient,
                                                               ElasticsearchStoreProperties properties) {
         return new ElasticsearchVectorStoreFactory(restClient, properties);
     }

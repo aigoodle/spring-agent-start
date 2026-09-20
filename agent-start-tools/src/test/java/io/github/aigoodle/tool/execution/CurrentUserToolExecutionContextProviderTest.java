@@ -19,14 +19,16 @@ class CurrentUserToolExecutionContextProviderTest {
 
     @Test
     void snapshotsTrustedTenantActorAndAuthorisationMetadata() {
-        UserContextHolder.set(CurrentUser.builder()
+        CurrentUser user = CurrentUser.builder()
                 .tenantId("tenant-a")
                 .userId("employee-7")
                 .appId("host-app")
                 .principalType(PrincipalType.USER)
                 .roles(Set.of("support"))
                 .scopes(Set.of("tool:call"))
-                .build());
+                .build();
+        user.put("authorization", "Bearer user-token");
+        UserContextHolder.set(user);
 
         ToolExecutionContext context = new CurrentUserToolExecutionContextProvider().currentContext();
 
@@ -36,7 +38,8 @@ class CurrentUserToolExecutionContextProviderTest {
                 .containsEntry("principalType", "USER")
                 .containsEntry("appId", "host-app")
                 .containsEntry("roles", Set.of("support"))
-                .containsEntry("scopes", Set.of("tool:call"));
+                .containsEntry("scopes", Set.of("tool:call"))
+                .containsEntry("authorization", "Bearer user-token");
     }
 
     @Test

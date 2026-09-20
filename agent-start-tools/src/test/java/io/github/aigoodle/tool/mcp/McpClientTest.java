@@ -17,6 +17,22 @@ import static org.junit.jupiter.api.Assertions.*;
 class McpClientTest {
 
     @Test
+    void rejectsHttpServerUrlWithoutSchemeBeforeOpeningTransport() {
+        McpProperties.Server server = new McpProperties.Server();
+        server.setName("bad-http-server");
+        server.setType("http");
+        server.setUrl("localhost:3000/mcp");
+
+        McpClientManager manager = new McpClientManager(List.of(server));
+        try {
+            RuntimeException failure = assertThrows(RuntimeException.class, () -> manager.test(server.getId()));
+            assertTrue(failure.getMessage().contains("http:// or https://"));
+        } finally {
+            manager.close();
+        }
+    }
+
+    @Test
     void discoversAndInvokesToolsFromAStdioMcpServer() {
         McpProperties.Server server = new McpProperties.Server();
         server.setName("test-server");

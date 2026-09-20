@@ -118,8 +118,12 @@ public class DefaultToolExecutionGateway implements ToolExecutionGateway, AutoCl
     private static ToolExecutionRecord record(ToolDefinition tool, ToolExecutionContext context,
                                               ToolExecutionRecord.Status status, int attempts,
                                               long started, String error) {
+        Map<String, Object> auditMetadata = new java.util.LinkedHashMap<>(context.metadata());
+        auditMetadata.remove("authorization");
+        ToolExecutionContext auditContext = new ToolExecutionContext(context.executionId(), context.tenantId(),
+                context.ownerId(), context.conversationId(), auditMetadata);
         return new ToolExecutionRecord(context.executionId(), tool.name(), status, attempts,
-                Duration.ofNanos(System.nanoTime() - started), error, context);
+                Duration.ofNanos(System.nanoTime() - started), error, auditContext);
     }
 
     private void publish(ToolExecutionRecord record) {

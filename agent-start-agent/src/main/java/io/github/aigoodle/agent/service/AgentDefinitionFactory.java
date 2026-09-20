@@ -46,6 +46,7 @@ final class AgentDefinitionFactory {
         agent.setRuntimeRef(modelConfig.getRuntimeRef());
         agent.setStrategy(modelConfig.getStrategy());
         agent.setToolNamesJson(modelConfig.getToolNamesJson());
+        agent.setSkillIdsJson(modelConfig.getSkillIdsJson());
         agent.setApprovalToolsJson(modelConfig.getApprovalToolsJson());
         agent.setDelegateAgentIdsJson(modelConfig.getDelegateAgentIdsJson());
         agent.setMaxIterations(modelConfig.getMaxIterations());
@@ -77,6 +78,8 @@ final class AgentDefinitionFactory {
                 .strategy(resolveStrategy(modelConfig))
                 .toolNames(parseStringList(
                         configuredValue(modelConfig, AppModelConfigEntity::getToolNamesJson)))
+                .skillIds(parseStringList(
+                        configuredValue(modelConfig, AppModelConfigEntity::getSkillIdsJson)))
                 .approvalRequiredTools(new HashSet<>(parseStringList(
                         configuredValue(modelConfig, AppModelConfigEntity::getApprovalToolsJson))))
                 .delegateAgentIds(parseStringList(

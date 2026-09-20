@@ -9,14 +9,14 @@ import io.github.aigoodle.model.provider.PredefinedModel;
 import io.github.aigoodle.model.provider.RemoteModel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.document.MetadataMode;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.OpenAiEmbeddingModel;
 import org.springframework.ai.openai.OpenAiEmbeddingOptions;
-import org.springframework.ai.openai.api.OpenAiApi;
+import org.springframework.ai.openai.setup.OpenAiSetup;
+import io.micrometer.observation.ObservationRegistry;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -87,71 +87,30 @@ public class OpenAiCompatibleModelProvider extends AbstractModelProvider {
         return predefinedModels;
     }
 
-    private OpenAiApi buildApi(ModelEndpoint endpoint) {
+    private OpenAiClients buildClients(ModelEndpoint endpoint) {
         requireApiKey(endpoint);
         String baseUrl = endpoint.resolveBaseUrl(defaultBaseUrl);
-        // Boot 3.5's default RestClient picks up ReactorClientHttpRequestFactory
-        // (reactor-netty is on the classpath via spring-boot-starter-webflux) and
-        // that factory hard-codes {@code responseTimeout(Duration.ofSeconds(10))}
-        // — turning any LLM call that needs >10s to first-byte into a
-        // ReadTimeoutException. Real chat completions with tool calls routinely
-        // exceed 10s (qwen3.6-flash, deepseek-reasoner, etc). Swap in a factory
-        // with a 5-min ceiling so the ChatModel behaves like a normal SDK caller.
-        // Override per-endpoint via the {@code readTimeoutSeconds} credential
-        // property if a specific model needs more.
-        RestClient.Builder restClientBuilder = RestClient.builder()
-                .requestFactory(chatRequestFactory(endpoint));
-        OpenAiApi.Builder builder = OpenAiApi.builder()
-                .apiKey(endpoint.getApiKey())
-                .restClientBuilder(restClientBuilder);
-        if (baseUrl != null && !baseUrl.isBlank()) {
-            builder.baseUrl(baseUrl);
-        }
-        // Spring AI's OpenAiApi defaults completionsPath="/v1/chat/completions"
-        // and embeddingsPath="/v1/embeddings". Chinese "OpenAI-compat" vendors
-        // (DashScope, Zhipu, Moonshot, Volcengine Ark, SiliconFlow, DeepSeek)
-        // typically bake the "/v1" into the baseUrl itself
-        // — e.g. https://dashscope.aliyuncs.com/compatible-mode/v1 — so the
-        // untouched default sends requests to ".../v1/v1/chat/completions" and
-        // DashScope answers with a slow-then-never response (real cause of the
-        // "test connection" hang the user hit). Strip the "/v1" prefix from the
-        // paths whenever the baseUrl already ends with "/vN".
-        boolean baseUrlEndsInVersion = baseUrl != null
-                && baseUrl.replaceAll("/+$", "").matches(".+/v\\d+");
-        String completionsPath = endpoint.property("completionsPath");
-        if (completionsPath != null && !completionsPath.isBlank()) {
-            builder.completionsPath(completionsPath);
-        } else if (baseUrlEndsInVersion) {
-            builder.completionsPath("/chat/completions");
-        }
-        String embeddingsPath = endpoint.property("embeddingsPath");
-        if (embeddingsPath != null && !embeddingsPath.isBlank()) {
-            builder.embeddingsPath(embeddingsPath);
-        } else if (baseUrlEndsInVersion) {
-            builder.embeddingsPath("/embeddings");
-        }
-        return builder.build();
+        Integer configuredSeconds = endpoint.intProperty("readTimeoutSeconds");
+        Duration timeout = Duration.ofSeconds(configuredSeconds != null && configuredSeconds > 0
+                ? configuredSeconds : 300);
+        var sync = OpenAiSetup.setupSyncClient(baseUrl, endpoint.getApiKey(), null,
+                null, null, null, false, false, endpoint.getModelName(), timeout, 3,
+                null, Map.of(), ObservationRegistry.NOOP, null, List.of());
+        var async = OpenAiSetup.setupAsyncClient(baseUrl, endpoint.getApiKey(), null,
+                null, null, null, false, false, endpoint.getModelName(), timeout, 3,
+                null, Map.of(), ObservationRegistry.NOOP, null, List.of());
+        return new OpenAiClients(sync, async);
     }
 
     @Override
     public ChatModel createChatModel(ModelEndpoint endpoint) {
         OpenAiChatOptions.Builder options = OpenAiChatOptions.builder().model(endpoint.getModelName());
         applyParameters(endpoint, options);
+        OpenAiClients clients = buildClients(endpoint);
         return OpenAiChatModel.builder()
-                .openAiApi(buildApi(endpoint))
-                .defaultOptions(options.build())
-                // Spring AI's default RetryTemplate is 10 attempts with
-                // exponential backoff up to 3 min per retry — a single vendor
-                // hiccup on a chat request can hang the user for 30+ min. Cap at
-                // 3 attempts with 1s → 5s → 25s backoff so interactive agent
-                // traffic degrades in seconds, not tens of minutes.
-                .retryTemplate(org.springframework.retry.support.RetryTemplate.builder()
-                        .maxAttempts(3)
-                        .exponentialBackoff(java.time.Duration.ofSeconds(1),
-                                5.0, java.time.Duration.ofSeconds(25))
-                        .retryOn(org.springframework.ai.retry.TransientAiException.class)
-                        .retryOn(org.springframework.web.client.ResourceAccessException.class)
-                        .build())
+                .openAiClient(clients.sync())
+                .openAiClientAsync(clients.async())
+                .options(options.build())
                 .build();
     }
 
@@ -179,7 +138,10 @@ public class OpenAiCompatibleModelProvider extends AbstractModelProvider {
         if (dimensions != null) {
             options.dimensions(dimensions);
         }
-        return new OpenAiEmbeddingModel(buildApi(endpoint), MetadataMode.EMBED, options.build());
+        return OpenAiEmbeddingModel.builder()
+                .openAiClient(buildClients(endpoint).sync())
+                .options(options.build())
+                .build();
     }
 
     @Override
@@ -254,22 +216,6 @@ public class OpenAiCompatibleModelProvider extends AbstractModelProvider {
         return requestFactory;
     }
 
-    /**
-     * Request factory used by Spring AI's OpenAiApi for chat / embedding calls.
-     * Reactor's default 10s response timeout is too short for real LLM latency,
-     * so we swap in {@link org.springframework.http.client.JdkClientHttpRequestFactory}
-     * (JDK 11+ built-in HttpClient) and set an explicit multi-minute read timeout.
-     * Callers can override via a {@code readTimeoutSeconds} credential property
-     * for models with unusually long time-to-first-byte.
-     */
-    private static org.springframework.http.client.ClientHttpRequestFactory chatRequestFactory(
-            ModelEndpoint endpoint) {
-        Integer configuredSeconds = endpoint.intProperty("readTimeoutSeconds");
-        Duration readTimeout = Duration.ofSeconds(
-                configuredSeconds != null && configuredSeconds > 0 ? configuredSeconds : 300);
-        org.springframework.http.client.JdkClientHttpRequestFactory requestFactory =
-                new org.springframework.http.client.JdkClientHttpRequestFactory();
-        requestFactory.setReadTimeout(readTimeout);
-        return requestFactory;
-    }
+    private record OpenAiClients(com.openai.client.OpenAIClient sync,
+                                 com.openai.client.OpenAIClientAsync async) { }
 }

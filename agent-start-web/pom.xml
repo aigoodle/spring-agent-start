@@ -22,6 +22,11 @@
     <dependencies>
         <dependency>
             <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-skill</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
             <artifactId>agent-start-plugin</artifactId>
             <optional>true</optional>
         </dependency>
@@ -102,6 +107,12 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Boot 4 split web-stack test support out of starter-test. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webflux-test</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

@@ -8,6 +8,8 @@ import io.github.aigoodle.trigger.service.TriggerInvocationRequest;
 import io.github.aigoodle.trigger.service.TriggerService;
 import io.github.aigoodle.common.util.JsonUtils;
 import io.github.aigoodle.web.common.ApiResponse;
+import io.github.aigoodle.web.common.PageResult;
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -43,6 +45,19 @@ public class TriggerController {
     @GetMapping("/triggers")
     public ApiResponse<List<TriggerEntity>> list() {
         return ApiResponse.ok(triggerService.list(currentTenantId()));
+    }
+
+    @GetMapping("/triggers/page")
+    public ApiResponse<PageResult<TriggerEntity>> page(
+            @RequestParam(defaultValue = "1") long page,
+            @RequestParam(defaultValue = "10") long pageSize,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String category) {
+        IPage<TriggerEntity> result = triggerService.page(
+                currentTenantId(), Math.max(page, 1), Math.min(Math.max(pageSize, 1), 100), keyword,
+                category);
+        return ApiResponse.ok(PageResult.of(result.getRecords(), result.getTotal(),
+                (int) result.getCurrent(), (int) result.getSize()));
     }
 
     @GetMapping("/triggers/{id}")

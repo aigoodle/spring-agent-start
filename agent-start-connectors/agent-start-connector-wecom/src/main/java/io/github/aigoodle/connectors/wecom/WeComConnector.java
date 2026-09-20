@@ -8,15 +8,53 @@ import java.util.*;
 
 public final class WeComConnector implements NativeChannelConnector<WeComConnector.Config> {
   public record Config(
+      String botId,
+      String secret,
+      String wsUrl,
+      String accountId,
       String corpId,
       String corpSecret,
       String agentId,
       String token,
-      String encodingAesKey,
-      String accountId) {}
+      String encodingAesKey) {
+    /** Backward-compatible constructor for legacy enterprise-app callback accounts. */
+    public Config(
+        String corpId,
+        String corpSecret,
+        String agentId,
+        String token,
+        String encodingAesKey,
+        String accountId) {
+      this(null, null, null, accountId, corpId, corpSecret, agentId, token, encodingAesKey);
+    }
+
+    String resolvedBotId() {
+      return trim(present(botId) ? botId : corpId);
+    }
+
+    String resolvedSecret() {
+      return trim(present(secret) ? secret : corpSecret);
+    }
+
+    boolean aiBot() {
+      // Accounts created by the previous UI stored Bot ID/Secret in the legacy
+      // corpId/corpSecret slots. Official AI Bot IDs use the "aib" prefix, so
+      // recognise those records without asking users to recreate the account.
+      return present(botId) || (present(corpId) && corpId.startsWith("aib")) || !present(agentId);
+    }
+
+    private static boolean present(String value) {
+      return value != null && !value.isBlank();
+    }
+
+    private static String trim(String value) {
+      return value == null ? null : value.trim();
+    }
+  }
 
   private final HttpJsonClient http;
   private final AccessTokenCache tokens = new AccessTokenCache();
+  private final Map<String, WeComGatewaySession> sessions = new java.util.concurrent.ConcurrentHashMap<>();
 
   public WeComConnector(ObjectMapper j) {
     http = new HttpJsonClient(j);
@@ -32,23 +70,78 @@ public final class WeComConnector implements NativeChannelConnector<WeComConnect
 
   public ChannelDescriptor descriptor() {
     return new ChannelDescriptor(
-        id(), "企业微信", "企业微信自建应用消息通道", "1", ChannelCapabilities.text(), Map.of("icon", "企微"));
+        id(),
+        "企业微信智能机器人",
+        "企业微信智能机器人 WebSocket 长连接消息通道",
+        "2",
+        new ChannelCapabilities(
+            Set.of(MessageType.TEXT, MessageType.MARKDOWN),
+            Set.of(MessageType.TEXT, MessageType.MARKDOWN),
+            true,
+            true,
+            true,
+            true),
+        ChannelAccountModel.tenant(
+            new ChannelAccountModel.IdentityBridge(
+                true,
+                "OAUTH",
+                "企业微信用户",
+                "企业员工",
+                "首次交互时引导企业微信用户完成员工身份绑定。")),
+        Map.of(
+            "icon", "企微",
+            "platformId", "wecom",
+            "transport", "websocket",
+            "transports", List.of("websocket", "legacy-webhook")));
   }
 
   public Map<String, Object> credentialSchema() {
-    return PlatformMessages.schema("corpId", "string", "corpSecret", "string", "agentId", "string");
+    return PlatformMessages.schema("botId", "string", "secret", "string");
   }
 
   public Map<String, Object> configurationSchema() {
-    return PlatformMessages.optionalSchema("token", "string", "encodingAesKey", "string");
+    return PlatformMessages.optionalSchema("wsUrl", "string");
   }
 
   public ConnectionTestResult test(Config c) {
+    if (c.aiBot()) {
+      if (!present(c.resolvedBotId()) || !present(c.resolvedSecret()))
+        return new ConnectionTestResult(false, "wecom_credentials", "Bot ID 和 Secret 均为必填项", Map.of());
+      WeComGatewaySession session = sessions.get(c.accountId());
+      if (session != null && session.uses(c) && !session.connected()) {
+        String error = session.lastError();
+        return new ConnectionTestResult(
+            false,
+            "wecom_not_connected",
+            error == null ? "企业微信长连接正在认证，请稍后重试" : error,
+            Map.of("transport", "websocket"));
+      }
+      return ConnectionTestResult.ok();
+    }
     token(c);
     return ConnectionTestResult.ok();
   }
 
+  @Override
+  public ChannelSession connect(Config c, InboundMessageSink sink) {
+    if (!c.aiBot()) return null;
+    WeComGatewaySession session = new WeComGatewaySession(c, sink, this::detach);
+    sessions.put(c.accountId(), session);
+    return session;
+  }
+
   public SendResult send(Config c, OutboundMessage m) {
+    if (c.aiBot()) {
+      WeComGatewaySession session = sessions.get(c.accountId());
+      if (session == null || !session.connected())
+        throw new ChannelException(
+            "wecom_not_connected",
+            session == null || session.lastError() == null
+                ? "企业微信智能机器人长连接尚未就绪"
+                : session.lastError(),
+            true);
+      return session.send(m);
+    }
     Map<String, Object> r =
         http.post(
             "https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token=" + token(c),
@@ -125,6 +218,14 @@ public final class WeComConnector implements NativeChannelConnector<WeComConnect
             throw new ChannelException("wecom_auth", String.valueOf(r.get("errmsg")), false);
           return t;
         });
+  }
+
+  private void detach(String accountId, WeComGatewaySession session) {
+    sessions.remove(accountId, session);
+  }
+
+  private static boolean present(String value) {
+    return value != null && !value.isBlank();
   }
 
   private static String signature(String... parts) {

@@ -5,7 +5,7 @@ module you need — model management, a knowledge base (RAG), or workflow/agent
 orchestration — and wire it into your own application. The front end is intentionally
 left to you; these are libraries, not a monolith.
 
-Built on **Spring Boot 3.5 + Spring AI 1.1 + MyBatis-Plus + Java 21**.
+Built on **Spring Boot 4.1 + Spring AI 2.0 + MyBatis-Plus + Java 21**.
 
 ---
 
@@ -26,6 +26,7 @@ ecosystem, so you can drop enterprise-grade agent capabilities into an existing 
 | `agent-start-model` | `io.github.aigoodle:agent-start-model` | common, persistence | Model providers, encrypted credentials, model instance factory, chat/embedding runtime |
 | `agent-start-knowledge` | `io.github.aigoodle:agent-start-knowledge` | model | Datasets, document ingestion, template chunking, vector + keyword hybrid retrieval |
 | `agent-start-tools` | `io.github.aigoodle:agent-start-tools` | model | Tool/connector SPI, built-in tools (calculator, time, HTTP), Spring AI `ToolCallback` adapter, **MCP client** (stdio + HTTP) |
+| `agent-start-mcp-auth-spring-starter` | `io.github.aigoodle:agent-start-mcp-auth-spring-starter` | common | MCP server Token/JWT authentication, AOP role/scope authorization, `UserContextHolder` binding and credential forwarding |
 | `agent-start-connector` | `io.github.aigoodle:agent-start-connector` | common, persistence | Multi-tenant Connector/Channel control plane, durable Outbox and in-memory embedded quota |
 | `agent-start-connector-redis` | `io.github.aigoodle:agent-start-connector-redis` | connector, Spring Data Redis | Optional atomic cluster-wide outbound quota; automatically replaces the memory limiter when Redis is available |
 | `agent-start-memory` | `io.github.aigoodle:agent-start-memory` | common | Layered working, short-term and long-term memory with TTL, promotion and hybrid ranking |
@@ -51,7 +52,9 @@ the wiring you need. Want only the knowledge base? Import `agent-start-knowledge
 Tenant identity remains owned by the embedding host. Set a trusted `CurrentUser` through
 `UserContextHolder` at the request boundary; `agent-start-persistence` rejects protected SQL
 whose bound `tenant_id` differs from that host context. See
-[`docs/architecture/tenant-persistence.md`](docs/architecture/tenant-persistence.md).
+[`docs/architecture/tenant-persistence.md`](docs/architecture/tenant-persistence.md). Tenant,
+department and employee master data can be exposed through the read-only directory SPIs; see
+[`docs/architecture/organization-directory-spi.md`](docs/architecture/organization-directory-spi.md).
 
 ---
 
@@ -293,6 +296,11 @@ long-term recall. Replace its `MemoryStore` SPI to add a vector or remote memory
 **MCP client** is supported too: configure stdio or HTTP MCP servers under
 `spring-agent.tools.mcp.servers[*]` and their tools join the registry automatically
 (`McpToolProvider` → `ToolDefinition`), so agents call them like any built-in tool.
+
+For an **MCP server**, add `agent-start-mcp-auth-spring-starter`, copy the inbound Authorization
+header into the MCP transport context, and annotate tool classes or methods with `@McpAuthorize`.
+Use the built-in shared-secret JWT verifier or publish an `McpTokenAuthenticator` for an existing
+login system. See the [starter guide](agent-start-mcp-auth-spring-starter/README.md).
 
 Planned next:
 

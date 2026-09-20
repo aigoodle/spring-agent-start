@@ -66,6 +66,7 @@ public class AgentNodeExecutor implements NodeExecutor {
                     .modelName(model)
                     .strategy(strategy(node.getString("strategy", "react")))
                     .toolNames(toolNames(node))
+                    .skillIds(stringList(node.get("skillIds")))
                     .maxIterations(node.getInt("maxIterations", 6))
                     .memoryEnabled(booleanValue(node.get("memoryEnabled"), true))
                     .memoryWindow(node.getInt("memoryWindow", 20))
@@ -102,6 +103,12 @@ public class AgentNodeExecutor implements NodeExecutor {
         return list.stream().map(item -> item instanceof java.util.Map<?, ?> map
                         ? firstNonBlank(string(map.get("name")), string(map.get("toolName"))) : string(item))
                 .filter(value -> value != null && !value.isBlank()).toList();
+    }
+
+    private static List<String> stringList(Object value) {
+        if (!(value instanceof List<?> list)) return List.of();
+        return list.stream().map(AgentNodeExecutor::string)
+                .filter(item -> item != null && !item.isBlank()).toList();
     }
 
     private static boolean booleanValue(Object value, boolean fallback) {

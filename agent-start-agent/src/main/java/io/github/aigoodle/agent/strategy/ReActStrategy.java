@@ -178,7 +178,7 @@ public class ReActStrategy implements ResumableAgentStrategy {
         context.claimModelCall();
         var request = context.getChatClient().prompt().messages(messages);
         if (chatOptions != null) {
-            request = request.options(chatOptions);
+            request = request.options(chatOptions.mutate());
         }
         return ReActStreamingResponse.generate(context, request, hideThought);
     }

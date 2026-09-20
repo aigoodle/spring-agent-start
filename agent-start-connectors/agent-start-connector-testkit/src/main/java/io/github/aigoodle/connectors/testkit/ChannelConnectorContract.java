@@ -20,6 +20,7 @@ public interface ChannelConnectorContract<C> {
   default void declaresConfigurationAndCapabilities() {
     assertNotNull(connector().configType());
     assertNotNull(connector().descriptor().capabilities());
+    assertNotNull(connector().descriptor().accountModel());
   }
 
   @Test

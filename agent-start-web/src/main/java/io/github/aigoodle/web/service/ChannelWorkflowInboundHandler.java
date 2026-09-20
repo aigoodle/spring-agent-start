@@ -5,6 +5,7 @@ import io.github.aigoodle.connector.channel.ChannelIdentityService;
 import io.github.aigoodle.connector.channel.ChannelInboundEvent;
 import io.github.aigoodle.connector.channel.ChannelInboundHandler;
 import io.github.aigoodle.connector.channel.ChannelInboundResult;
+import io.github.aigoodle.connector.channel.ChannelReplyStream;
 import io.github.aigoodle.trigger.api.TriggerType;
 import io.github.aigoodle.trigger.entity.TriggerEntity;
 import io.github.aigoodle.trigger.service.TriggerInvocationRequest;
@@ -106,6 +107,11 @@ public class ChannelWorkflowInboundHandler implements ChannelInboundHandler {
   }
 
   private ChannelInboundResult execute(Selection selected, ChannelInboundEvent event) {
+    ChannelReplyStream availableStream = ChannelReplyStream.from(event);
+    String configuredReplyMode = text(triggers.config(selected.trigger).get("replyMode"));
+    ChannelReplyStream replyStream = "NONE".equalsIgnoreCase(configuredReplyMode)
+        ? null : availableStream;
+    if (replyStream != null) replyStream.start();
     Map<String, Object> payload = payload(selected, event);
     String externalConversationId = text(event.conversationId());
     if (externalConversationId == null) externalConversationId = text(event.senderId());
@@ -121,15 +127,19 @@ public class ChannelWorkflowInboundHandler implements ChannelInboundHandler {
         new TriggerInvocationRequest(
             selected.trigger.getId(), payload, "channel_message", conversationId);
     String executionUserId = executionUserId(selected.connection, event);
-    String invocationId =
-        events == null
-            ? triggers.fireAsynchronouslyAs(
-                selected.connection.tenantId(), executionUserId, request)
-            : triggers.fireAsynchronouslyAs(
-                selected.connection.tenantId(),
-                executionUserId,
-                request,
-                result -> replyWhenCompleted(selected, event, result));
+    String invocationId;
+    if (replyStream != null) {
+      invocationId = triggers.fireAsynchronouslyAs(
+          selected.connection.tenantId(), executionUserId, request, replyStream::push,
+          result -> replyWhenCompleted(selected, event, result, replyStream));
+    } else if (events == null) {
+      invocationId = triggers.fireAsynchronouslyAs(
+          selected.connection.tenantId(), executionUserId, request);
+    } else {
+      invocationId = triggers.fireAsynchronouslyAs(
+          selected.connection.tenantId(), executionUserId, request,
+          result -> replyWhenCompleted(selected, event, result, null));
+    }
     Map<String, Object> metadata = new LinkedHashMap<>();
     metadata.put("managed", true);
     metadata.put("routeSource", "WORKFLOW_TRIGGER");
@@ -143,13 +153,22 @@ public class ChannelWorkflowInboundHandler implements ChannelInboundHandler {
   private void replyWhenCompleted(
       Selection selected,
       ChannelInboundEvent event,
-      io.github.aigoodle.trigger.dispatch.DispatchResult result) {
-    if (events == null || !result.isSuccess()) return;
+      io.github.aigoodle.trigger.dispatch.DispatchResult result,
+      ChannelReplyStream replyStream) {
+    if (!result.isSuccess()) {
+      if (replyStream != null) replyStream.fail(result.getError());
+      return;
+    }
     Map<String, Object> config = triggers.config(selected.trigger);
     String replyMode = text(config.get("replyMode"));
     if ("NONE".equalsIgnoreCase(replyMode)) return;
     String content = reply(result.getOutputs());
+    if (replyStream != null) {
+      replyStream.complete(content);
+      return;
+    }
     if (content == null) return;
+    if (events == null) return;
     events.workflowReply(event, content, "workflow-reply:" + result.getRunId());
   }
 
@@ -187,7 +206,9 @@ public class ChannelWorkflowInboundHandler implements ChannelInboundHandler {
     message.put("conversationId", event.conversationId());
     message.put("group", event.group());
     message.put("timestamp", event.timestamp() == null ? null : event.timestamp().toString());
-    message.put("metadata", event.metadata());
+    Map<String, Object> durableMetadata = new LinkedHashMap<>(event.metadata());
+    durableMetadata.remove(ChannelReplyStream.METADATA_KEY);
+    message.put("metadata", Map.copyOf(durableMetadata));
 
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("triggers", trigger);

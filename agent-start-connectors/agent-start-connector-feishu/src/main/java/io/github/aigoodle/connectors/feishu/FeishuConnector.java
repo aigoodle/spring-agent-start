@@ -53,6 +53,9 @@ public final class FeishuConnector implements NativeChannelConnector<FeishuConne
         "1",
         new ChannelCapabilities(
             Set.of(MessageType.TEXT), Set.of(MessageType.TEXT), true, true, true, false),
+        ChannelAccountModel.tenant(
+            new ChannelAccountModel.IdentityBridge(
+                true, "OAUTH", "飞书用户", "企业员工", "运行期间可将飞书用户关联到租户员工。")),
         Map.of(
             "icon", "飞书", "transport", "stream", "transports", List.of("stream", "webhook")));
   }

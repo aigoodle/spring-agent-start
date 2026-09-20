@@ -157,6 +157,23 @@ CREATE TABLE IF NOT EXISTS agent_channel_identity (
     UNIQUE (tenant_id, provider, channel_id, account_id, external_user_id)
 );
 
+CREATE TABLE IF NOT EXISTS agent_external_identity (
+    id VARCHAR(64) PRIMARY KEY,
+    tenant_id VARCHAR(64) NOT NULL,
+    platform VARCHAR(32) NOT NULL,
+    platform_tenant_id VARCHAR(128) NOT NULL,
+    external_user_id VARCHAR(255) NOT NULL,
+    enterprise_user_id VARCHAR(64) NOT NULL,
+    verification_status VARCHAR(32) NOT NULL DEFAULT 'VERIFIED',
+    binding_method VARCHAR(64) NOT NULL,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    bound_at TIMESTAMP,
+    last_login_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (tenant_id, platform, platform_tenant_id, external_user_id)
+);
+
 CREATE TABLE IF NOT EXISTS agent_channel_audit (
     id VARCHAR(64) PRIMARY KEY,
     tenant_id VARCHAR(64) NOT NULL,

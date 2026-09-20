@@ -19,6 +19,10 @@ public final class CurrentUserToolExecutionContextProvider implements ToolExecut
         if (user.getRoles() != null && !user.getRoles().isEmpty()) metadata.put("roles", user.getRoles());
         if (user.getScopes() != null && !user.getScopes().isEmpty()) metadata.put("scopes", user.getScopes());
         if (user.getAppId() != null && !user.getAppId().isBlank()) metadata.put("appId", user.getAppId());
+        Object authorization = user.attr("authorization");
+        if (authorization != null && !authorization.toString().isBlank()) {
+            metadata.put("authorization", authorization.toString());
+        }
         return new ToolExecutionContext(null, user.getTenantId(), user.getUserId(), null, metadata);
     }
 }

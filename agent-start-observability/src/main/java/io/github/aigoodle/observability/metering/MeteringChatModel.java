@@ -95,8 +95,8 @@ public class MeteringChatModel implements ChatModel {
     }
 
     @Override
-    public ChatOptions getDefaultOptions() {
-        return delegate.getDefaultOptions();
+    public ChatOptions getOptions() {
+        return delegate.getOptions();
     }
 
     private void recordSuccess(TokenUsage tokenUsage, long startedAtNanos) {

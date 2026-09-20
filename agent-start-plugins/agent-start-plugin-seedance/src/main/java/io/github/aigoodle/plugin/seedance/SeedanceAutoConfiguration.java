@@ -14,7 +14,7 @@ import javax.sql.DataSource;
 import java.net.URI;
 import java.io.IOException;
 
-@AutoConfiguration(afterName = "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration")
+@AutoConfiguration(afterName = "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration")
 @MapperScan("io.github.aigoodle.plugin.seedance.mapper")
 public class SeedanceAutoConfiguration {
     @Bean
