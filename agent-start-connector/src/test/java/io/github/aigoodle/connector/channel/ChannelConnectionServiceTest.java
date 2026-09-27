@@ -6,7 +6,7 @@ import static org.mockito.Mockito.*;
 
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
-import io.github.aigoodle.connector.connection.ConnectorSecretCodec;
+import io.github.aigoodle.common.crypto.TenantSecretCodec;
 import io.github.aigoodle.connector.persistence.ChannelConnectionEntity;
 import io.github.aigoodle.connector.persistence.ChannelConnectionMapper;
 import java.time.Duration;
@@ -22,7 +22,7 @@ class ChannelConnectionServiceTest {
   @Test
   void editConfigurationReturnsVisibleValuesAndOnlySecretPresence() {
     ChannelConnectionMapper mapper = mock(ChannelConnectionMapper.class);
-    ConnectorSecretCodec codec = mock(ConnectorSecretCodec.class);
+    TenantSecretCodec codec = mock(TenantSecretCodec.class);
     ChannelRuntimeProvider runtime = mock(ChannelRuntimeProvider.class);
     ChannelConnectionEntity entity = new ChannelConnectionEntity();
     entity.setId("connection-1");
@@ -62,7 +62,7 @@ class ChannelConnectionServiceTest {
   @Test
   void tenantAccountUsesTrustedTenantAsOwnerWithoutPersonalOwnerId() {
     ChannelConnectionMapper mapper = mock(ChannelConnectionMapper.class);
-    ConnectorSecretCodec codec = mock(ConnectorSecretCodec.class);
+    TenantSecretCodec codec = mock(TenantSecretCodec.class);
     ChannelRuntimeProvider runtime = mock(ChannelRuntimeProvider.class);
     when(runtime.type()).thenReturn("native");
     when(runtime.discoverChannels()).thenReturn(List.of());
@@ -91,7 +91,7 @@ class ChannelConnectionServiceTest {
   @Test
   void nativeEmployeeAccountNeverPersistsApplicationBinding() {
     ChannelConnectionMapper mapper = mock(ChannelConnectionMapper.class);
-    ConnectorSecretCodec codec = mock(ConnectorSecretCodec.class);
+    TenantSecretCodec codec = mock(TenantSecretCodec.class);
     ChannelRuntimeProvider runtime = mock(ChannelRuntimeProvider.class);
     when(runtime.type()).thenReturn("native");
     when(mapper.insert(any(ChannelConnectionEntity.class))).thenReturn(1);
@@ -167,7 +167,7 @@ class ChannelConnectionServiceTest {
             });
     ChannelConnectionService service =
         new ChannelConnectionService(
-            mapper, mock(ConnectorSecretCodec.class), new ChannelRuntimeRegistry(List.of()));
+            mapper, mock(TenantSecretCodec.class), new ChannelRuntimeRegistry(List.of()));
 
     assertThat(service.ownership("openclaw", "node-b", "qqbot", "shared-account"))
         .extracting(
@@ -193,7 +193,7 @@ class ChannelConnectionServiceTest {
   @Test
   void createsOwnedConnectionAndInjectsCredentialsIntoRuntimeWithoutReturningThem() {
     ChannelConnectionMapper mapper = mock(ChannelConnectionMapper.class);
-    ConnectorSecretCodec codec = mock(ConnectorSecretCodec.class);
+    TenantSecretCodec codec = mock(TenantSecretCodec.class);
     ChannelRuntimeProvider runtime = mock(ChannelRuntimeProvider.class);
     when(runtime.type()).thenReturn("openclaw");
     when(codec.encode("tenant-a", Map.of("appId", "app", "clientSecret", "secret")))
@@ -264,7 +264,7 @@ class ChannelConnectionServiceTest {
         new MapperBuilderAssistant(new MybatisConfiguration(), "connection-reconcile"),
         ChannelConnectionEntity.class);
     ChannelConnectionMapper mapper = mock(ChannelConnectionMapper.class);
-    ConnectorSecretCodec codec = mock(ConnectorSecretCodec.class);
+    TenantSecretCodec codec = mock(TenantSecretCodec.class);
     ChannelRuntimeProvider runtime = mock(ChannelRuntimeProvider.class);
     when(runtime.type()).thenReturn("hermes");
     ChannelConnectionEntity pending = new ChannelConnectionEntity();
@@ -328,7 +328,7 @@ class ChannelConnectionServiceTest {
     when(mapper.update(isNull(), any())).thenReturn(0);
     ChannelConnectionService service =
         new ChannelConnectionService(
-            mapper, mock(ConnectorSecretCodec.class), new ChannelRuntimeRegistry(List.of(runtime)));
+            mapper, mock(TenantSecretCodec.class), new ChannelRuntimeRegistry(List.of(runtime)));
 
     boolean reconciled =
         service.reconcile(
@@ -348,7 +348,7 @@ class ChannelConnectionServiceTest {
         new MapperBuilderAssistant(new MybatisConfiguration(), "connection-update"),
         ChannelConnectionEntity.class);
     ChannelConnectionMapper mapper = mock(ChannelConnectionMapper.class);
-    ConnectorSecretCodec codec = mock(ConnectorSecretCodec.class);
+    TenantSecretCodec codec = mock(TenantSecretCodec.class);
     ChannelRuntimeProvider runtime = mock(ChannelRuntimeProvider.class);
     when(runtime.type()).thenReturn("openclaw");
     ChannelConnectionEntity existing = new ChannelConnectionEntity();
@@ -453,7 +453,7 @@ class ChannelConnectionServiceTest {
                     3)));
     ChannelConnectionService service =
         new ChannelConnectionService(
-            mapper, mock(ConnectorSecretCodec.class), new ChannelRuntimeRegistry(List.of(runtime)));
+            mapper, mock(TenantSecretCodec.class), new ChannelRuntimeRegistry(List.of(runtime)));
 
     ChannelConnectionService.View tested = service.test("connection-health-1", "tenant-a");
     ChannelConnectionService.View reloaded = service.get("connection-health-1", "tenant-a");
@@ -503,7 +503,7 @@ class ChannelConnectionServiceTest {
                 Map.of("callbackWorkerRunning", true, "pendingInboundCallbacks", 0)));
     ChannelConnectionService service =
         new ChannelConnectionService(
-            mapper, mock(ConnectorSecretCodec.class), new ChannelRuntimeRegistry(List.of(runtime)));
+            mapper, mock(TenantSecretCodec.class), new ChannelRuntimeRegistry(List.of(runtime)));
 
     boolean healthy =
         service.refreshHealth(
@@ -528,7 +528,7 @@ class ChannelConnectionServiceTest {
     when(mapper.update(isNull(), any())).thenReturn(0);
     ChannelConnectionService service =
         new ChannelConnectionService(
-            mapper, mock(ConnectorSecretCodec.class), new ChannelRuntimeRegistry(List.of(runtime)));
+            mapper, mock(TenantSecretCodec.class), new ChannelRuntimeRegistry(List.of(runtime)));
 
     boolean refreshed =
         service.refreshHealth(

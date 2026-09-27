@@ -1,6 +1,6 @@
-package io.github.aigoodle.connector.connection;
+package io.github.aigoodle.common.crypto;
 
-import io.github.aigoodle.common.crypto.AesGcmTextEncryptor;
+
 
 import java.util.concurrent.ConcurrentHashMap;
 

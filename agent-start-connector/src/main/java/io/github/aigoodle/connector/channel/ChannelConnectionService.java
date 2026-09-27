@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import io.github.aigoodle.common.util.JsonUtils;
 import io.github.aigoodle.connector.ConnectorException;
-import io.github.aigoodle.connector.connection.ConnectorSecretCodec;
+import io.github.aigoodle.common.crypto.TenantSecretCodec;
 import io.github.aigoodle.connector.persistence.ChannelConnectionEntity;
 import io.github.aigoodle.connector.persistence.ChannelConnectionMapper;
 import io.github.aigoodle.connector.persistence.ConnectorTenantScope;
@@ -114,11 +114,11 @@ public class ChannelConnectionService {
   }
 
   private final ChannelConnectionMapper mapper;
-  private final ConnectorSecretCodec codec;
+  private final TenantSecretCodec codec;
   private final ChannelRuntimeRegistry runtimes;
 
   public ChannelConnectionService(
-      ChannelConnectionMapper mapper, ConnectorSecretCodec codec, ChannelRuntimeRegistry runtimes) {
+      ChannelConnectionMapper mapper, TenantSecretCodec codec, ChannelRuntimeRegistry runtimes) {
     this.mapper = mapper;
     this.codec = codec;
     this.runtimes = runtimes;

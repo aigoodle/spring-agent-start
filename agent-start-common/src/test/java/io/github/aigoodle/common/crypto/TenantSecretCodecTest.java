@@ -1,6 +1,6 @@
-package io.github.aigoodle.connector.connection;
+package io.github.aigoodle.common.crypto;
 
-import io.github.aigoodle.common.crypto.AesGcmTextEncryptor;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
@@ -12,7 +12,7 @@ class ConnectorSecretCodecTest {
     @Test
     void derivesDifferentAuthenticatedKeysForEachTenant() {
         String root = "test-root-key-that-is-not-used-in-production";
-        ConnectorSecretCodec codec = new ConnectorSecretCodec(new DerivedTenantTextEncryptor(root),
+        TenantSecretCodec codec = new TenantSecretCodec(new DerivedTenantTextEncryptor(root),
                 new AesGcmTextEncryptor(root));
 
         String encrypted = codec.encode("tenant-a", Map.of("token", "secret"));
@@ -27,7 +27,7 @@ class ConnectorSecretCodecTest {
     void readsLegacyGlobalCiphertextForRollingUpgrade() {
         String root = "legacy-root";
         AesGcmTextEncryptor legacy = new AesGcmTextEncryptor(root);
-        ConnectorSecretCodec codec = new ConnectorSecretCodec(new DerivedTenantTextEncryptor(root), legacy);
+        TenantSecretCodec codec = new TenantSecretCodec(new DerivedTenantTextEncryptor(root), legacy);
         String oldValue = legacy.encrypt("{\"token\":\"old-secret\"}");
 
         assertThat(codec.decode("tenant-a", oldValue)).containsEntry("token", "old-secret");

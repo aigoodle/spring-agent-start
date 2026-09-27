@@ -2,6 +2,7 @@ package io.github.aigoodle.connector.connection;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import io.github.aigoodle.common.crypto.TenantSecretCodec;
 import io.github.aigoodle.connector.ConnectorException;
 import io.github.aigoodle.connector.persistence.ConnectorConnectionEntity;
 import io.github.aigoodle.connector.persistence.ConnectorConnectionMapper;
@@ -18,8 +19,8 @@ public class ConnectorConnectionService {
                                  String name, String status, boolean credentialsConfigured) {}
 
     private final ConnectorConnectionMapper mapper;
-    private final ConnectorSecretCodec codec;
-    public ConnectorConnectionService(ConnectorConnectionMapper mapper, ConnectorSecretCodec codec) {
+    private final TenantSecretCodec codec;
+    public ConnectorConnectionService(ConnectorConnectionMapper mapper, TenantSecretCodec codec) {
         this.mapper = mapper; this.codec = codec;
     }
 

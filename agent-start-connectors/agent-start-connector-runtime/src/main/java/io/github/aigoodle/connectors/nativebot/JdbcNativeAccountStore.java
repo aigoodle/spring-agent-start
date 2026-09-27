@@ -1,7 +1,7 @@
 package io.github.aigoodle.connectors.nativebot;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import io.github.aigoodle.connector.connection.ConnectorSecretCodec;
+import io.github.aigoodle.common.crypto.TenantSecretCodec;
 import io.github.aigoodle.connector.persistence.ChannelConnectionEntity;
 import io.github.aigoodle.connector.persistence.ChannelConnectionMapper;
 import io.github.aigoodle.connector.persistence.ConnectorTenantScope;
@@ -11,9 +11,9 @@ import java.util.Optional;
 
 final class JdbcNativeAccountStore implements NativeAccountStore {
   private final ChannelConnectionMapper mapper;
-  private final ConnectorSecretCodec secrets;
+  private final TenantSecretCodec secrets;
 
-  JdbcNativeAccountStore(ChannelConnectionMapper mapper, ConnectorSecretCodec secrets) {
+  JdbcNativeAccountStore(ChannelConnectionMapper mapper, TenantSecretCodec secrets) {
     this.mapper = mapper;
     this.secrets = secrets;
   }

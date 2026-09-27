@@ -12,7 +12,7 @@ import io.github.aigoodle.connectors.webhook.WebhookConnectorAutoConfiguration;
 import io.github.aigoodle.connectors.wecom.WeComConnectorAutoConfiguration;
 import io.github.aigoodle.connector.channel.ChannelEventLogService;
 import io.github.aigoodle.connector.channel.ChannelInboundDispatcher;
-import io.github.aigoodle.connector.connection.ConnectorSecretCodec;
+import io.github.aigoodle.common.crypto.TenantSecretCodec;
 import io.github.aigoodle.connector.persistence.ChannelConnectionMapper;
 import io.github.aigoodle.connectors.core.ChannelConnectorAutoConfiguration;
 import java.util.Set;
@@ -68,8 +68,8 @@ class NativeConnectorAutoConfigurationTest {
     }
 
     @Bean
-    ConnectorSecretCodec connectorSecretCodec() {
-      return mock(ConnectorSecretCodec.class);
+    TenantSecretCodec connectorSecretCodec() {
+      return mock(TenantSecretCodec.class);
     }
 
     @Bean

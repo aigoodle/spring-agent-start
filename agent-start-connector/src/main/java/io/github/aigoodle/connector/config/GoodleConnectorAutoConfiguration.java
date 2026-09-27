@@ -7,9 +7,9 @@ import io.github.aigoodle.connector.execution.DefaultConnectorExecutionGateway;
 import io.github.aigoodle.connector.provider.ConnectorProvider;
 import io.github.aigoodle.connector.registry.ConnectorRegistry;
 import io.github.aigoodle.connector.connection.ConnectorConnectionService;
-import io.github.aigoodle.connector.connection.ConnectorSecretCodec;
-import io.github.aigoodle.connector.connection.TenantTextEncryptor;
-import io.github.aigoodle.connector.connection.DerivedTenantTextEncryptor;
+import io.github.aigoodle.common.crypto.TenantSecretCodec;
+import io.github.aigoodle.common.crypto.TenantTextEncryptor;
+import io.github.aigoodle.common.crypto.DerivedTenantTextEncryptor;
 import io.github.aigoodle.connector.persistence.ConnectorConnectionMapper;
 import io.github.aigoodle.connector.persistence.ConnectorExecutionMapper;
 import io.github.aigoodle.connector.persistence.ConnectorInstallationMapper;
@@ -82,7 +82,7 @@ public class GoodleConnectorAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public ChannelConnectionService channelConnectionService(ChannelConnectionMapper mapper,
-                                                              ConnectorSecretCodec codec,
+                                                              TenantSecretCodec codec,
                                                               ChannelRuntimeRegistry runtimes) {
         return new ChannelConnectionService(mapper, codec, runtimes);
     }
@@ -221,20 +221,20 @@ public class GoodleConnectorAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public ConnectorSecretCodec connectorSecretCodec(ObjectProvider<TextEncryptor> encryptors,
+    public TenantSecretCodec connectorSecretCodec(ObjectProvider<TextEncryptor> encryptors,
                                                       ObjectProvider<TenantTextEncryptor> tenantEncryptors,
                                                       ConnectorProperties properties) {
         TextEncryptor encryptor = encryptors.getIfAvailable(
                 () -> new AesGcmTextEncryptor(properties.getEncryptionSecret()));
         TenantTextEncryptor tenantEncryptor = tenantEncryptors.getIfAvailable(
                 () -> new DerivedTenantTextEncryptor(properties.getEncryptionSecret()));
-        return new ConnectorSecretCodec(tenantEncryptor, encryptor);
+        return new TenantSecretCodec(tenantEncryptor, encryptor);
     }
 
     @Bean
     @ConditionalOnMissingBean
     public ConnectorConnectionService connectorConnectionService(
-            ConnectorConnectionMapper mapper, ConnectorSecretCodec codec) {
+            ConnectorConnectionMapper mapper, TenantSecretCodec codec) {
         return new ConnectorConnectionService(mapper, codec);
     }
 

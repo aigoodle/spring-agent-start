@@ -2,7 +2,7 @@ package io.github.aigoodle.connectors.nativebot;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.aigoodle.connector.channel.*;
-import io.github.aigoodle.connector.connection.ConnectorSecretCodec;
+import io.github.aigoodle.common.crypto.TenantSecretCodec;
 import io.github.aigoodle.connector.persistence.ChannelConnectionMapper;
 import io.github.aigoodle.connectors.core.ChannelConnectorRegistry;
 import org.springframework.beans.factory.ObjectProvider;
@@ -33,7 +33,7 @@ public class NativeConnectorAutoConfiguration {
   @Bean
   @ConditionalOnMissingBean
   NativeAccountStore nativeAccountStore(
-      ChannelConnectionMapper mapper, ConnectorSecretCodec secrets) {
+      ChannelConnectionMapper mapper, TenantSecretCodec secrets) {
     return new JdbcNativeAccountStore(mapper, secrets);
   }
 

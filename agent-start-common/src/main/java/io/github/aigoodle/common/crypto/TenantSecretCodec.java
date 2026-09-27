@@ -1,24 +1,24 @@
-package io.github.aigoodle.connector.connection;
+package io.github.aigoodle.common.crypto;
 
-import io.github.aigoodle.common.crypto.TextEncryptor;
+
 import io.github.aigoodle.common.util.JsonUtils;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-public class ConnectorSecretCodec {
+public class TenantSecretCodec {
     private static final String TENANT_TOKEN_PREFIX = "at1:";
     private final TenantTextEncryptor tenantEncryptor;
     private final TextEncryptor legacyEncryptor;
 
     /** Compatibility constructor for hosts that supplied only a global encryptor. */
-    public ConnectorSecretCodec(TextEncryptor encryptor) {
+    public TenantSecretCodec(TextEncryptor encryptor) {
         this(new TenantTextEncryptor() {
             @Override public String encrypt(String tenantId, String plaintext) { return encryptor.encrypt(plaintext); }
             @Override public String decrypt(String tenantId, String ciphertext) { return encryptor.decrypt(ciphertext); }
         }, encryptor);
     }
 
-    public ConnectorSecretCodec(TenantTextEncryptor tenantEncryptor, TextEncryptor legacyEncryptor) {
+    public TenantSecretCodec(TenantTextEncryptor tenantEncryptor, TextEncryptor legacyEncryptor) {
         this.tenantEncryptor = tenantEncryptor;
         this.legacyEncryptor = legacyEncryptor;
     }
