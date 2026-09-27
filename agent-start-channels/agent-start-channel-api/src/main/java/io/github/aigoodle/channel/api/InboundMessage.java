@@ -6,7 +6,7 @@ import java.util.Map;
 
 public record InboundMessage(
     String messageId,
-    String connectorId,
+    String channelId,
     String accountId,
     String conversationId,
     ConversationType conversationType,
@@ -18,7 +18,7 @@ public record InboundMessage(
     Map<String, Object> metadata) {
   public InboundMessage {
     require(messageId, "messageId");
-    require(connectorId, "connectorId");
+    require(channelId, "channelId");
     require(accountId, "accountId");
     require(conversationId, "conversationId");
     require(replyTargetId, "replyTargetId");

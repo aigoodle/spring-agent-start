@@ -1,7 +1,7 @@
 package io.github.aigoodle.channel.api;
 
 /** Minimal platform extension: translate inbound and outbound messages only. */
-public interface ChannelConnector<C> {
+public interface Channel<C> {
   String id();
 
   Class<C> configType();

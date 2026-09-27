@@ -10,7 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/** Bridges the lightweight connector SPI into the existing durable channel runtime. */
+/** Bridges the lightweight channel SPI into the existing durable channel runtime. */
 public final class NativeChannelRuntimeProvider implements ChannelRuntimeProvider {
   public static final String PROVIDER = "native";
   private static final Logger log = LoggerFactory.getLogger(NativeChannelRuntimeProvider.class);
@@ -18,11 +18,11 @@ public final class NativeChannelRuntimeProvider implements ChannelRuntimeProvide
   private record Account(
       String name,
       boolean enabled,
-      NativeChannelConnector<Object> connector,
+      NativeChannel<Object> channel,
       Object config,
       Instant updatedAt) {}
 
-  private final Map<String, NativeChannelConnector<?>> connectors;
+  private final Map<String, NativeChannel<?>> channels;
   private final Map<String, Account> accounts = new ConcurrentHashMap<>();
   private final Map<String, ChannelSession> sessions = new ConcurrentHashMap<>();
   private final ObjectMapper json;
@@ -30,20 +30,20 @@ public final class NativeChannelRuntimeProvider implements ChannelRuntimeProvide
   private final InboundMessageSink sink;
   private final Map<String, ChannelManifestCatalog.Manifest> manifests;
 
-  public NativeChannelRuntimeProvider(List<NativeChannelConnector<?>> values, ObjectMapper json) {
+  public NativeChannelRuntimeProvider(List<NativeChannel<?>> values, ObjectMapper json) {
     this(values, json, null, null);
   }
 
   public NativeChannelRuntimeProvider(
-      List<NativeChannelConnector<?>> values,
+      List<NativeChannel<?>> values,
       ObjectMapper json,
       NativeAccountStore store,
       InboundMessageSink sink) {
-    Map<String, NativeChannelConnector<?>> m = new LinkedHashMap<>();
+    Map<String, NativeChannel<?>> m = new LinkedHashMap<>();
     for (var c : values)
       if (m.putIfAbsent(c.id(), c) != null)
-        throw new IllegalArgumentException("Duplicate native connector: " + c.id());
-    connectors = Map.copyOf(m);
+        throw new IllegalArgumentException("Duplicate native channel: " + c.id());
+    channels = Map.copyOf(m);
     this.json = json;
     this.store = store;
     this.sink = sink;
@@ -55,7 +55,7 @@ public final class NativeChannelRuntimeProvider implements ChannelRuntimeProvide
   }
 
   public List<ChannelDefinition> discoverChannels() {
-    return connectors.values().stream()
+    return channels.values().stream()
         .map(
             c -> {
                 ChannelManifestCatalog.Manifest manifest = manifests.get(c.id());
@@ -132,7 +132,7 @@ public final class NativeChannelRuntimeProvider implements ChannelRuntimeProvide
 
   @SuppressWarnings("unchecked")
   public ChannelAccount saveAccount(SaveChannelAccountRequest r) {
-    NativeChannelConnector<Object> c = (NativeChannelConnector<Object>) require(r.channelId());
+    NativeChannel<Object> c = (NativeChannel<Object>) require(r.channelId());
     Map<String, Object> raw = new LinkedHashMap<>(r.configuration());
     raw.put("accountId", r.accountId());
     validateRequired(c.credentialSchema(), raw);
@@ -150,7 +150,7 @@ public final class NativeChannelRuntimeProvider implements ChannelRuntimeProvide
 
   public ChannelAccount testAccount(String channelId, String accountId) {
     Account a = requireAccount(channelId, accountId);
-    ConnectionTestResult t = a.connector.test(a.config);
+    ConnectionTestResult t = a.channel.test(a.config);
     ChannelSession session = sessions.get(key(channelId, accountId));
     boolean connected = session != null && session.connected();
     Map<String, Object> metadata = new LinkedHashMap<>(t.metadata());
@@ -201,7 +201,7 @@ public final class NativeChannelRuntimeProvider implements ChannelRuntimeProvide
             ? null
             : String.valueOf(metadata.get("replyToPlatformMessageId"));
     SendResult r =
-        a.connector.send(
+        a.channel.send(
             a.config,
             new OutboundMessage(
                 String.valueOf(old.metadata().get("idempotencyKey")),
@@ -220,17 +220,17 @@ public final class NativeChannelRuntimeProvider implements ChannelRuntimeProvide
   public InboundMessage parse(
       String channelId, String accountId, Map<String, String> h, Map<String, Object> p) {
     Account a = requireAccount(channelId, accountId);
-    return a.connector.parse(a.config, h, p);
+    return a.channel.parse(a.config, h, p);
   }
 
   public Object challenge(
       String channelId, String accountId, Map<String, String> h, Map<String, Object> p) {
     Account a = requireAccount(channelId, accountId);
-    return a.connector.challenge(a.config, h, p);
+    return a.channel.challenge(a.config, h, p);
   }
 
-  private NativeChannelConnector<?> require(String id) {
-    NativeChannelConnector<?> c = connectors.get(id);
+  private NativeChannel<?> require(String id) {
+    NativeChannel<?> c = channels.get(id);
     if (c == null) throw new IllegalArgumentException("Unknown native channel: " + id);
     return c;
   }
@@ -247,9 +247,9 @@ public final class NativeChannelRuntimeProvider implements ChannelRuntimeProvide
 
   @SuppressWarnings("unchecked")
   private Account restore(String channel, String accountId, NativeAccountStore.Saved saved) {
-    NativeChannelConnector<Object> connector = (NativeChannelConnector<Object>) require(channel);
-    Object config = json.convertValue(saved.configuration(), connector.configType());
-    Account account = new Account(saved.name(), saved.enabled(), connector, config, Instant.now());
+    NativeChannel<Object> impl = (NativeChannel<Object>) require(channel);
+    Object config = json.convertValue(saved.configuration(), impl.configType());
+    Account account = new Account(saved.name(), saved.enabled(), impl, config, Instant.now());
     startSession(channel, accountId, account);
     return account;
   }
@@ -257,8 +257,8 @@ public final class NativeChannelRuntimeProvider implements ChannelRuntimeProvide
   private void startSession(String channel, String accountId, Account account) {
     ChannelSession old = sessions.remove(key(channel, accountId));
     if (old != null) old.close();
-    if (account.enabled && sink != null && account.connector.descriptor().capabilities().streaming()) {
-      ChannelSession session = account.connector.connect(account.config, sink);
+    if (account.enabled && sink != null && account.channel.descriptor().capabilities().streaming()) {
+      ChannelSession session = account.channel.connect(account.config, sink);
       if (session != null) sessions.put(key(channel, accountId), session);
     }
   }
@@ -285,9 +285,9 @@ public final class NativeChannelRuntimeProvider implements ChannelRuntimeProvide
   }
 
   private static String transport(Account account, ChannelSession session) {
-    ChannelCapabilities capabilities = account.connector.descriptor().capabilities();
+    ChannelCapabilities capabilities = account.channel.descriptor().capabilities();
     if (capabilities.streaming() && capabilities.webhook() && session == null) return "webhook";
-    Object value = account.connector.descriptor().metadata().get("transport");
+    Object value = account.channel.descriptor().metadata().get("transport");
     return value == null
         ? (capabilities.streaming() ? "stream" : "webhook")
         : String.valueOf(value);

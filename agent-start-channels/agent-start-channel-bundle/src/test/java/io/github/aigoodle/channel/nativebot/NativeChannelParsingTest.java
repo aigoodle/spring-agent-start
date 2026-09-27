@@ -3,24 +3,24 @@ package io.github.aigoodle.channel.nativebot;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.aigoodle.channel.dingtalk.DingTalkConnector;
-import io.github.aigoodle.channel.email.EmailConnector;
-import io.github.aigoodle.channel.feishu.FeishuConnector;
-import io.github.aigoodle.channel.qqbot.QQBotConnector;
-import io.github.aigoodle.channel.webhook.WebhookConnector;
-import io.github.aigoodle.channel.wecom.WeComConnector;
+import io.github.aigoodle.channel.dingtalk.DingTalkChannel;
+import io.github.aigoodle.channel.email.EmailChannel;
+import io.github.aigoodle.channel.feishu.FeishuChannel;
+import io.github.aigoodle.channel.qqbot.QQBotChannel;
+import io.github.aigoodle.channel.webhook.WebhookChannel;
+import io.github.aigoodle.channel.wecom.WeComChannel;
 import io.github.aigoodle.channel.ChannelDefinition;
 import io.github.aigoodle.channel.api.*;
 import java.util.*;
 import org.junit.jupiter.api.Test;
 
-class NativeConnectorParsingTest {
+class NativeChannelParsingTest {
   private final ObjectMapper json = new ObjectMapper();
 
   @Test
   void qqGroupKeepsGroupReplyTargetAndVerifiesNativeSignature() throws Exception {
-    QQBotConnector c = new QQBotConnector(json);
-    QQBotConnector.Config cfg = new QQBotConnector.Config("a", "secret", "", "acc");
+    QQBotChannel c = new QQBotChannel(json);
+    QQBotChannel.Config cfg = new QQBotChannel.Config("a", "secret", "", "acc");
     Map<String, Object> payload =
         Map.of(
             "d",
@@ -58,10 +58,10 @@ class NativeConnectorParsingTest {
 
   @Test
   void qqValidationReturnsEd25519Signature() {
-    QQBotConnector c = new QQBotConnector(json);
+    QQBotChannel c = new QQBotChannel(json);
     Object result =
         c.challenge(
-            new QQBotConnector.Config("a", "secret", null, "acc"),
+            new QQBotChannel.Config("a", "secret", null, "acc"),
             Map.of(),
             Map.of("op", 13, "d", Map.of("plain_token", "token", "event_ts", "123")));
     assertInstanceOf(Map.class, result);
@@ -71,11 +71,11 @@ class NativeConnectorParsingTest {
 
   @Test
   void feishuChallengeDoesNotDispatchMessage() {
-    FeishuConnector c = new FeishuConnector(json);
+    FeishuChannel c = new FeishuChannel(json);
     assertEquals(
         Map.of("challenge", "ok"),
         c.challenge(
-            new FeishuConnector.Config("a", "s", "v", null, "acc"),
+            new FeishuChannel.Config("a", "s", "v", null, "acc"),
             Map.of(),
             Map.of("challenge", "ok")));
   }
@@ -95,11 +95,11 @@ class NativeConnectorParsingTest {
         Base64.getEncoder()
             .encodeToString(
                 cipher.doFinal(plain.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
-    FeishuConnector c = new FeishuConnector(json);
+    FeishuChannel c = new FeishuChannel(json);
     assertEquals(
         Map.of("challenge", "encrypted-ok"),
         c.challenge(
-            new FeishuConnector.Config("a", "s", null, key, "acc"),
+            new FeishuChannel.Config("a", "s", null, key, "acc"),
             Map.of(),
             Map.of("encrypt", encrypted)));
   }
@@ -135,10 +135,10 @@ class NativeConnectorParsingTest {
                 java.security.MessageDigest.getInstance("SHA-1")
                     .digest(
                         String.join("", parts).getBytes(java.nio.charset.StandardCharsets.UTF_8)));
-    WeComConnector c = new WeComConnector(json);
+    WeComChannel c = new WeComChannel(json);
     InboundMessage inbound =
         c.parse(
-            new WeComConnector.Config(corpId, "secret", "1", token, encodingKey, "acc"),
+            new WeComChannel.Config(corpId, "secret", "1", token, encodingKey, "acc"),
             Map.of(),
             Map.of(
                 "Encrypt",
@@ -165,9 +165,9 @@ class NativeConnectorParsingTest {
                 java.security.MessageDigest.getInstance("SHA-1")
                     .digest(
                         String.join("", parts).getBytes(java.nio.charset.StandardCharsets.UTF_8)));
-    WeComConnector connector = new WeComConnector(json);
-    WeComConnector.Config config =
-        new WeComConnector.Config("corp", "secret", "1", token, null, "acc");
+    WeComChannel channel = new WeComChannel(json);
+    WeComChannel.Config config =
+        new WeComChannel.Config("corp", "secret", "1", token, null, "acc");
     Map<String, Object> payload =
         Map.of(
             "FromUserName",
@@ -183,29 +183,29 @@ class NativeConnectorParsingTest {
             "msg_signature",
             signature);
 
-    assertEquals("message-1", connector.parse(config, Map.of(), payload).messageId());
+    assertEquals("message-1", channel.parse(config, Map.of(), payload).messageId());
     Map<String, Object> unsigned = new LinkedHashMap<>(payload);
     unsigned.remove("msg_signature");
-    assertThrows(ChannelException.class, () -> connector.parse(config, Map.of(), unsigned));
+    assertThrows(ChannelException.class, () -> channel.parse(config, Map.of(), unsigned));
   }
 
   @Test
   void weComMigratesBotCredentialsStoredInLegacyFieldsWithoutCallingCorpTokenApi() {
-    WeComConnector connector = new WeComConnector(json);
-    WeComConnector.Config legacyUiRecord =
-        new WeComConnector.Config("aib-example", "bot-secret", "1", null, null, "acc");
+    WeComChannel channel = new WeComChannel(json);
+    WeComChannel.Config legacyUiRecord =
+        new WeComChannel.Config("aib-example", "bot-secret", "1", null, null, "acc");
 
-    ConnectionTestResult result = connector.test(legacyUiRecord);
+    ConnectionTestResult result = channel.test(legacyUiRecord);
 
     assertTrue(result.success());
-    assertEquals("websocket", connector.descriptor().metadata().get("transport"));
+    assertEquals("websocket", channel.descriptor().metadata().get("transport"));
   }
 
   @Test
   void webhookRequiresConfiguredToken() {
-    WebhookConnector c = new WebhookConnector(json);
-    WebhookConnector.Config cfg =
-        new WebhookConnector.Config("https://example.test", null, "secret", "acc");
+    WebhookChannel c = new WebhookChannel(json);
+    WebhookChannel.Config cfg =
+        new WebhookChannel.Config("https://example.test", null, "secret", "acc");
     assertThrows(
         ChannelException.class,
         () -> c.parse(cfg, Map.of(), Map.of("messageId", "1", "senderId", "u", "content", "x")));
@@ -235,12 +235,12 @@ class NativeConnectorParsingTest {
     NativeChannelRuntimeProvider runtime =
         new NativeChannelRuntimeProvider(
             List.of(
-                new QQBotConnector(json),
-                new FeishuConnector(json),
-                new DingTalkConnector(json),
-                new WeComConnector(json),
-                new EmailConnector(),
-                new WebhookConnector(json)),
+                new QQBotChannel(json),
+                new FeishuChannel(json),
+                new DingTalkChannel(json),
+                new WeComChannel(json),
+                new EmailChannel(),
+                new WebhookChannel(json)),
             json);
     assertEquals(
         Set.of("qqbot", "feishu", "dingtalk", "wecom", "email", "webhook"),
@@ -264,7 +264,7 @@ class NativeConnectorParsingTest {
   void runtimePublishesAccountOwnershipAndIdentityContracts() throws Exception {
     NativeChannelRuntimeProvider runtime =
         new NativeChannelRuntimeProvider(
-            List.of(new QQBotConnector(json), new WeComConnector(json), new EmailConnector()), json);
+            List.of(new QQBotChannel(json), new WeComChannel(json), new EmailChannel()), json);
     Map<String, ChannelDefinition> channels =
         runtime.discoverChannels().stream()
             .collect(java.util.stream.Collectors.toMap(ChannelDefinition::channelId, item -> item));
@@ -293,14 +293,14 @@ class NativeConnectorParsingTest {
 
   @Test
   void everyNativeChannelPublishesItsCompleteConfigurationContract() {
-    List<NativeChannelConnector<?>> connectors =
+    List<NativeChannel<?>> channels =
         List.of(
-            new QQBotConnector(json),
-            new FeishuConnector(json),
-            new DingTalkConnector(json),
-            new WeComConnector(json),
-            new EmailConnector(),
-            new WebhookConnector(json));
+            new QQBotChannel(json),
+            new FeishuChannel(json),
+            new DingTalkChannel(json),
+            new WeComChannel(json),
+            new EmailChannel(),
+            new WebhookChannel(json));
     Map<String, Set<String>> expected =
         Map.of(
             "qqbot", Set.of("appId", "clientSecret", "apiBase", "transport", "intents"),
@@ -321,17 +321,17 @@ class NativeConnectorParsingTest {
                     "startTls",
                     "pollIntervalSeconds"),
             "webhook", Set.of("outboundUrl", "callbackToken", "bearerToken"));
-    for (NativeChannelConnector<?> connector : connectors) {
-      Set<String> actual = new HashSet<>(properties(connector.credentialSchema()));
-      actual.addAll(properties(connector.configurationSchema()));
-      assertEquals(expected.get(connector.id()), actual, connector.id());
+    for (NativeChannel<?> channel : channels) {
+      Set<String> actual = new HashSet<>(properties(channel.credentialSchema()));
+      actual.addAll(properties(channel.configurationSchema()));
+      assertEquals(expected.get(channel.id()), actual, channel.id());
     }
   }
 
   @Test
   void runtimeRejectsMissingRequiredFieldsBeforeCallingAPlatform() {
     NativeChannelRuntimeProvider runtime =
-        new NativeChannelRuntimeProvider(List.of(new QQBotConnector(json)), json);
+        new NativeChannelRuntimeProvider(List.of(new QQBotChannel(json)), json);
     ChannelException failure =
         assertThrows(
             ChannelException.class,
@@ -346,9 +346,9 @@ class NativeConnectorParsingTest {
 
   @Test
   void webhookAccountsAreReadyButNotReportedAsPersistentConnections() {
-    CapturingConnector connector = new CapturingConnector();
+    CapturingChannel channel = new CapturingChannel();
     NativeChannelRuntimeProvider runtime =
-        new NativeChannelRuntimeProvider(List.of(connector), json);
+        new NativeChannelRuntimeProvider(List.of(channel), json);
 
     io.github.aigoodle.channel.ChannelAccount account =
         runtime.saveAccount(
@@ -362,9 +362,9 @@ class NativeConnectorParsingTest {
 
   @Test
   void runtimePreservesOriginalConversationAndReplyMessage() {
-    CapturingConnector connector = new CapturingConnector();
+    CapturingChannel channel = new CapturingChannel();
     NativeChannelRuntimeProvider runtime =
-        new NativeChannelRuntimeProvider(List.of(connector), json);
+        new NativeChannelRuntimeProvider(List.of(channel), json);
     runtime.saveAccount(
         new io.github.aigoodle.channel.SaveChannelAccountRequest(
             "capture", "account", "Capture", true, Map.of()));
@@ -379,12 +379,12 @@ class NativeConnectorParsingTest {
             List.of(),
             Map.of("conversationType", "GROUP"),
             Map.of("replyToPlatformMessageId", "message-1", "idempotencyKey", "key-1")));
-    assertEquals("message-1", connector.sent.replyToMessageId());
-    assertEquals("GROUP", connector.sent.metadata().get("conversationType"));
+    assertEquals("message-1", channel.sent.replyToMessageId());
+    assertEquals("GROUP", channel.sent.metadata().get("conversationType"));
   }
 
-  private static final class CapturingConnector
-      implements NativeChannelConnector<Map<String, Object>> {
+  private static final class CapturingChannel
+      implements NativeChannel<Map<String, Object>> {
     OutboundMessage sent;
 
     public String id() {

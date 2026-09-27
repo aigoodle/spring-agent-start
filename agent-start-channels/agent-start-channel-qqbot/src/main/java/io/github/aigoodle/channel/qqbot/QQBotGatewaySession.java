@@ -21,8 +21,8 @@ final class QQBotGatewaySession implements ChannelSession, WebSocket.Listener {
       (1 << 0) | (1 << 1) | (1 << 12) | (1 << 25) | (1 << 26) | (1 << 30);
   private static final long[] RECONNECT_DELAYS = {1, 2, 5, 10, 30, 60};
 
-  private final QQBotConnector connector;
-  private final QQBotConnector.Config config;
+  private final QQBotChannel channel;
+  private final QQBotChannel.Config config;
   private final InboundMessageSink sink;
   private final HttpJsonClient http;
   private final ObjectMapper json = new ObjectMapper();
@@ -39,11 +39,11 @@ final class QQBotGatewaySession implements ChannelSession, WebSocket.Listener {
   private int reconnectAttempt;
 
   QQBotGatewaySession(
-      QQBotConnector connector,
-      QQBotConnector.Config config,
+      QQBotChannel channel,
+      QQBotChannel.Config config,
       InboundMessageSink sink,
       HttpJsonClient http) {
-    this.connector = connector;
+    this.channel = channel;
     this.config = config;
     this.sink = sink;
     this.http = http;
@@ -60,7 +60,7 @@ final class QQBotGatewaySession implements ChannelSession, WebSocket.Listener {
   private void connect() {
     if (closed.get()) return;
     try {
-      String token = connector.accessToken(config);
+      String token = channel.accessToken(config);
       String base =
           config.apiBase() == null || config.apiBase().isBlank()
               ? "https://api.sgroup.qq.com"
@@ -133,7 +133,7 @@ final class QQBotGatewaySession implements ChannelSession, WebSocket.Listener {
   }
 
   private void hello(Map<String, Object> hello, WebSocket webSocket) {
-    String token = "QQBot " + connector.accessToken(config);
+    String token = "QQBot " + channel.accessToken(config);
     Map<String, Object> data = new LinkedHashMap<>();
     int op;
     if (sessionId != null && sequence != null) {
@@ -189,13 +189,13 @@ final class QQBotGatewaySession implements ChannelSession, WebSocket.Listener {
 
     Map<String, Object> author = map(data.get("author"));
     String group = text(data, "group_openid");
-    String channel = text(data, "channel_id");
+    String channelId = text(data, "channel_id");
     String guild = text(data, "guild_id");
     String sender = text(author, "member_openid", "user_openid", "id");
-    String conversation = first(group, channel, guild, sender);
+    String conversation = first(group, channelId, guild, sender);
     if (sender == null || conversation == null || text(data, "id") == null) return;
     ConversationType conversationType =
-        group != null || channel != null ? ConversationType.GROUP : ConversationType.DIRECT;
+        group != null || channelId != null ? ConversationType.GROUP : ConversationType.DIRECT;
     InboundMessage message =
         new InboundMessage(
             text(data, "id"),

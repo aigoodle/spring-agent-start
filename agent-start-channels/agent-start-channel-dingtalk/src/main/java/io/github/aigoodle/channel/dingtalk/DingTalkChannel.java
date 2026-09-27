@@ -7,7 +7,7 @@ import io.github.aigoodle.channel.api.*;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public final class DingTalkConnector implements NativeChannelConnector<DingTalkConnector.Config> {
+public final class DingTalkChannel implements NativeChannel<DingTalkChannel.Config> {
   public record Config(
       String clientId,
       String clientSecret,
@@ -18,7 +18,7 @@ public final class DingTalkConnector implements NativeChannelConnector<DingTalkC
   private final HttpJsonClient http;
   private final AccessTokenCache tokens = new AccessTokenCache();
 
-  public DingTalkConnector(ObjectMapper j) {
+  public DingTalkChannel(ObjectMapper j) {
     http = new HttpJsonClient(j);
   }
 

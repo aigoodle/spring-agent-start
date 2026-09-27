@@ -22,7 +22,7 @@ final class FeishuStreamSession implements ChannelSession {
   private final Thread worker;
 
   FeishuStreamSession(
-      FeishuConnector.Config config, InboundMessageSink sink, ObjectMapper json) {
+      FeishuChannel.Config config, InboundMessageSink sink, ObjectMapper json) {
     EventDispatcher dispatcher =
         EventDispatcher.newBuilder(
                 value(config.verificationToken()), value(config.encryptKey()))
@@ -59,7 +59,7 @@ final class FeishuStreamSession implements ChannelSession {
   }
 
   private static void dispatch(
-      FeishuConnector.Config config,
+      FeishuChannel.Config config,
       InboundMessageSink sink,
       ObjectMapper json,
       P2MessageReceiveV1 event) {

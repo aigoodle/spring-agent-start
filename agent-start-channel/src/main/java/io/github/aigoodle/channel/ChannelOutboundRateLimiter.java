@@ -2,7 +2,7 @@ package io.github.aigoodle.channel;
 
 import java.time.Duration;
 /**
- * Outbound quota SPI. The optional {@code agent-start-connector-redis} module supplies a shared,
+ * Outbound quota SPI. The optional {@code agent-start-channel-redis} module supplies a shared,
  * atomic implementation; hosts without it retain the default single-JVM fallback.
  */
 public interface ChannelOutboundRateLimiter {

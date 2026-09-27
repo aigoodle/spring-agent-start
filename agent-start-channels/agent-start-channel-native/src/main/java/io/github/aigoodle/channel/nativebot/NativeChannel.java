@@ -1,11 +1,11 @@
 package io.github.aigoodle.channel.nativebot;
 
-import io.github.aigoodle.channel.api.ChannelConnector;
+import io.github.aigoodle.channel.api.Channel;
 import io.github.aigoodle.channel.api.InboundMessage;
 import java.util.Map;
 
-/** Optional webhook boundary implemented by native bot connectors. */
-public interface NativeChannelConnector<C> extends ChannelConnector<C> {
+/** Optional webhook boundary implemented by native bot channels. */
+public interface NativeChannel<C> extends Channel<C> {
   Map<String, Object> credentialSchema();
 
   default Map<String, Object> configurationSchema() {

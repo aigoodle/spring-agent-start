@@ -7,11 +7,11 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
-class ChannelConnectorRegistryTest {
+class ChannelRegistryTest {
   @Test
   void registersAndResolvesCaseInsensitively() {
-    ChannelConnectorRegistry registry =
-        new ChannelConnectorRegistry(List.of(connector("qqbot", "qqbot")));
+    ChannelRegistry registry =
+        new ChannelRegistry(List.of(channel("qqbot", "qqbot")));
     assertEquals("qqbot", registry.require("QQBOT").id());
   }
 
@@ -20,19 +20,19 @@ class ChannelConnectorRegistryTest {
     assertThrows(
         IllegalArgumentException.class,
         () ->
-            new ChannelConnectorRegistry(
-                List.of(connector("qqbot", "qqbot"), connector("QQBOT", "QQBOT"))));
+            new ChannelRegistry(
+                List.of(channel("qqbot", "qqbot"), channel("QQBOT", "QQBOT"))));
   }
 
   @Test
   void rejectsDescriptorMismatch() {
     assertThrows(
         IllegalArgumentException.class,
-        () -> new ChannelConnectorRegistry(List.of(connector("qqbot", "other"))));
+        () -> new ChannelRegistry(List.of(channel("qqbot", "other"))));
   }
 
-  private ChannelConnector<Map> connector(String id, String descriptorId) {
-    return new ChannelConnector<>() {
+  private Channel<Map> channel(String id, String descriptorId) {
+    return new Channel<>() {
       public String id() {
         return id;
       }

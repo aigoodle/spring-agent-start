@@ -16,7 +16,7 @@ channel-api <- channel-core <- channel-native
 channel-bundle = optional convenience dependency containing all six adapters
 ```
 
-A third-party channel implements `NativeChannelConnector<C>`, publishes it as a Spring bean, and
+A third-party channel implements `NativeChannel<C>`, publishes it as a Spring bean, and
 verifies the common behavior with `agent-start-channel-testkit`. The platform adapter must not
 depend on Agent, Workflow, MyBatis or the web layer. `NativeChannelRuntimeProvider` is the only bridge
 to the durable channel runtime in `agent-start-channel`.
@@ -81,7 +81,7 @@ channel ID. OAuth, QR-code and device authorization remain explicit UI/runtime e
 
 ```java
 @Component
-final class AcmeConnector implements NativeChannelConnector<AcmeConnector.Config> {
+final class AcmeChannel implements NativeChannel<AcmeChannel.Config> {
   record Config(String token, String accountId) {}
 
   public String id() { return "acme"; }
@@ -189,11 +189,11 @@ available in the channel catalog. Library users do not need the bundle.
 
 ## Live black-box sends
 
-`NativeConnectorLiveTest` is intentionally opt-in. Configure the environment variables for the
+`NativeChannelLiveTest` is intentionally opt-in. Configure the environment variables for the
 platform being tested and run:
 
 ```bash
-mvn -pl agent-start-channels/agent-start-channel-bundle -am -Dtest=NativeConnectorLiveTest \
+mvn -pl agent-start-channels/agent-start-channel-bundle -am -Dtest=NativeChannelLiveTest \
   -Dsurefire.failIfNoSpecifiedTests=false test
 ```
 

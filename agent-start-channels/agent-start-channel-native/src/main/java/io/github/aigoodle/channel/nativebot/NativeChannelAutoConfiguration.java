@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.aigoodle.channel.*;
 import io.github.aigoodle.common.crypto.TenantSecretCodec;
 import io.github.aigoodle.channel.persistence.ChannelConnectionMapper;
-import io.github.aigoodle.channel.core.ChannelConnectorRegistry;
+import io.github.aigoodle.channel.core.ChannelRegistry;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.*;
@@ -16,17 +16,17 @@ import org.springframework.web.bind.annotation.RestController;
 @AutoConfiguration(
     afterName = {
       "io.github.aigoodle.channel.config.GoodleChannelAutoConfiguration",
-      "io.github.aigoodle.channel.core.ChannelConnectorAutoConfiguration"
+      "io.github.aigoodle.channel.core.GoodleChannelCoreAutoConfiguration"
     })
-public class NativeConnectorAutoConfiguration {
+public class NativeChannelAutoConfiguration {
   /**
-   * Connector implementations still use Jackson 2 while Spring Boot 4 auto-configures a
-   * Jackson 3 {@code tools.jackson.databind.ObjectMapper}. Keep the connector mapper separate
-   * from Boot's HTTP codec mapper until the connector API is migrated to Jackson 3.
+   * Channel implementations still use Jackson 2 while Spring Boot 4 auto-configures a
+   * Jackson 3 {@code tools.jackson.databind.ObjectMapper}. Keep the channel mapper separate
+   * from Boot's HTTP codec mapper until the channel API is migrated to Jackson 3.
    */
   @Bean
   @ConditionalOnMissingBean(ObjectMapper.class)
-  ObjectMapper connectorObjectMapper() {
+  ObjectMapper channelObjectMapper() {
     return new ObjectMapper().findAndRegisterModules();
   }
 
@@ -47,18 +47,18 @@ public class NativeConnectorAutoConfiguration {
   @Bean
   @ConditionalOnMissingBean
   NativeChannelRuntimeProvider nativeChannelRuntimeProvider(
-      ChannelConnectorRegistry connectorRegistry,
+      ChannelRegistry channelRegistry,
       ObjectMapper j,
       ObjectProvider<NativeAccountStore> store,
       NativeInboundBridge sink) {
-    java.util.List<NativeChannelConnector<?>> nativeConnectors = new java.util.ArrayList<>();
-    for (var connector : connectorRegistry.all()) {
-      if (connector instanceof NativeChannelConnector<?> nativeConnector) {
-        nativeConnectors.add(nativeConnector);
+    java.util.List<NativeChannel<?>> nativeChannels = new java.util.ArrayList<>();
+    for (var channel : channelRegistry.all()) {
+      if (channel instanceof NativeChannel<?> nativeChannel) {
+        nativeChannels.add(nativeChannel);
       }
     }
     return new NativeChannelRuntimeProvider(
-        nativeConnectors, j, store.getIfAvailable(), sink);
+        nativeChannels, j, store.getIfAvailable(), sink);
   }
 
   @Bean

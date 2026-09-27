@@ -1,6 +1,6 @@
 package io.github.aigoodle.channel.dingtalk;
 
-import io.github.aigoodle.channel.nativebot.NativeConnectorAutoConfiguration;
+import io.github.aigoodle.channel.nativebot.NativeChannelAutoConfiguration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -8,11 +8,11 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.context.annotation.Bean;
 
 /** Installs only the DingTalk channel adapter when this platform module is present. */
-@AutoConfiguration(before = NativeConnectorAutoConfiguration.class)
-public class DingTalkConnectorAutoConfiguration {
+@AutoConfiguration(before = NativeChannelAutoConfiguration.class)
+public class DingTalkChannelAutoConfiguration {
   @Bean
-  @ConditionalOnMissingBean(DingTalkConnector.class)
-  DingTalkConnector dingtalkConnector(ObjectMapper j) {
-    return new DingTalkConnector(j);
+  @ConditionalOnMissingBean(DingTalkChannel.class)
+  DingTalkChannel dingtalkChannel(ObjectMapper j) {
+    return new DingTalkChannel(j);
   }
 }

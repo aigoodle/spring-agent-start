@@ -23,7 +23,7 @@ public final class PlatformMessages {
   }
 
   public static InboundMessage inbound(
-      String connector,
+      String channel,
       String account,
       String id,
       String conversation,
@@ -34,7 +34,7 @@ public final class PlatformMessages {
       Map<String, Object> raw) {
     return new InboundMessage(
         id,
-        connector,
+        channel,
         account,
         conversation,
         group ? ConversationType.GROUP : ConversationType.DIRECT,

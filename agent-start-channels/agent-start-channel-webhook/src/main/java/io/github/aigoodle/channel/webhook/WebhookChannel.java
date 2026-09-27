@@ -6,13 +6,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.aigoodle.channel.api.*;
 import java.util.*;
 
-public final class WebhookConnector implements NativeChannelConnector<WebhookConnector.Config> {
+public final class WebhookChannel implements NativeChannel<WebhookChannel.Config> {
   public record Config(
       String outboundUrl, String bearerToken, String callbackToken, String accountId) {}
 
   private final HttpJsonClient http;
 
-  public WebhookConnector(ObjectMapper j) {
+  public WebhookChannel(ObjectMapper j) {
     http = new HttpJsonClient(j);
   }
 

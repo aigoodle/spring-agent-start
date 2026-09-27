@@ -6,7 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.aigoodle.channel.api.*;
 import java.util.*;
 
-public final class FeishuConnector implements NativeChannelConnector<FeishuConnector.Config> {
+public final class FeishuChannel implements NativeChannel<FeishuChannel.Config> {
   public record Config(
       String appId,
       String appSecret,
@@ -32,7 +32,7 @@ public final class FeishuConnector implements NativeChannelConnector<FeishuConne
   private final ObjectMapper json;
   private final AccessTokenCache tokens = new AccessTokenCache();
 
-  public FeishuConnector(ObjectMapper j) {
+  public FeishuChannel(ObjectMapper j) {
     json = j;
     http = new HttpJsonClient(j);
   }

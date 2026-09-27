@@ -4,17 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.aigoodle.channel.dingtalk.DingTalkConnectorAutoConfiguration;
-import io.github.aigoodle.channel.email.EmailConnectorAutoConfiguration;
-import io.github.aigoodle.channel.feishu.FeishuConnectorAutoConfiguration;
-import io.github.aigoodle.channel.qqbot.QQBotConnectorAutoConfiguration;
-import io.github.aigoodle.channel.webhook.WebhookConnectorAutoConfiguration;
-import io.github.aigoodle.channel.wecom.WeComConnectorAutoConfiguration;
+import io.github.aigoodle.channel.dingtalk.DingTalkChannelAutoConfiguration;
+import io.github.aigoodle.channel.email.EmailChannelAutoConfiguration;
+import io.github.aigoodle.channel.feishu.FeishuChannelAutoConfiguration;
+import io.github.aigoodle.channel.qqbot.QQBotChannelAutoConfiguration;
+import io.github.aigoodle.channel.webhook.WebhookChannelAutoConfiguration;
+import io.github.aigoodle.channel.wecom.WeComChannelAutoConfiguration;
 import io.github.aigoodle.channel.ChannelEventLogService;
 import io.github.aigoodle.channel.ChannelInboundDispatcher;
 import io.github.aigoodle.common.crypto.TenantSecretCodec;
 import io.github.aigoodle.channel.persistence.ChannelConnectionMapper;
-import io.github.aigoodle.channel.core.ChannelConnectorAutoConfiguration;
+import io.github.aigoodle.channel.core.GoodleChannelCoreAutoConfiguration;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
@@ -23,20 +23,20 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-class NativeConnectorAutoConfigurationTest {
+class NativeChannelAutoConfigurationTest {
 
   private final ApplicationContextRunner contextRunner =
       new ApplicationContextRunner()
           .withConfiguration(
               AutoConfigurations.of(
-                  ChannelConnectorAutoConfiguration.class,
-                  NativeConnectorAutoConfiguration.class,
-                  QQBotConnectorAutoConfiguration.class,
-                  WeComConnectorAutoConfiguration.class,
-                  FeishuConnectorAutoConfiguration.class,
-                  DingTalkConnectorAutoConfiguration.class,
-                  EmailConnectorAutoConfiguration.class,
-                  WebhookConnectorAutoConfiguration.class))
+                  GoodleChannelCoreAutoConfiguration.class,
+                  NativeChannelAutoConfiguration.class,
+                  QQBotChannelAutoConfiguration.class,
+                  WeComChannelAutoConfiguration.class,
+                  FeishuChannelAutoConfiguration.class,
+                  DingTalkChannelAutoConfiguration.class,
+                  EmailChannelAutoConfiguration.class,
+                  WebhookChannelAutoConfiguration.class))
           .withUserConfiguration(HostBeans.class);
 
   @Test
@@ -51,8 +51,8 @@ class NativeConnectorAutoConfigurationTest {
           assertThat(context).hasSingleBean(NativeChannelCallbackController.class);
 
           Set<String> ids =
-              context.getBeansOfType(NativeChannelConnector.class).values().stream()
-                  .map(NativeChannelConnector::id)
+              context.getBeansOfType(NativeChannel.class).values().stream()
+                  .map(NativeChannel::id)
                   .collect(Collectors.toSet());
           assertThat(ids)
               .containsExactlyInAnyOrder(
@@ -68,7 +68,7 @@ class NativeConnectorAutoConfigurationTest {
     }
 
     @Bean
-    TenantSecretCodec connectorSecretCodec() {
+    TenantSecretCodec channelSecretCodec() {
       return mock(TenantSecretCodec.class);
     }
 

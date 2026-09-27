@@ -21,7 +21,7 @@ final class WeComGatewaySession implements ChannelSession, WebSocket.Listener {
   private static final String DEFAULT_URL = "wss://openws.work.weixin.qq.com";
   private static final long[] RECONNECT_DELAYS = {1, 2, 4, 8, 16, 30};
 
-  private final WeComConnector.Config config;
+  private final WeComChannel.Config config;
   private final InboundMessageSink sink;
   private final BiConsumer<String, WeComGatewaySession> onClose;
   private final ObjectMapper json = new ObjectMapper();
@@ -39,7 +39,7 @@ final class WeComGatewaySession implements ChannelSession, WebSocket.Listener {
   private int reconnectAttempt;
 
   WeComGatewaySession(
-      WeComConnector.Config config,
+      WeComChannel.Config config,
       InboundMessageSink sink,
       BiConsumer<String, WeComGatewaySession> onClose) {
     this.config = config;
@@ -360,7 +360,7 @@ final class WeComGatewaySession implements ChannelSession, WebSocket.Listener {
     return lastError;
   }
 
-  boolean uses(WeComConnector.Config candidate) {
+  boolean uses(WeComChannel.Config candidate) {
     return Objects.equals(config.resolvedBotId(), candidate.resolvedBotId())
         && Objects.equals(config.resolvedSecret(), candidate.resolvedSecret())
         && Objects.equals(config.wsUrl(), candidate.wsUrl());

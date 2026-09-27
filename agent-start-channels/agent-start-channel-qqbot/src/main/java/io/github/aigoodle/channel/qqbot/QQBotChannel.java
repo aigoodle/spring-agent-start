@@ -6,7 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.aigoodle.channel.api.*;
 import java.util.*;
 
-public final class QQBotConnector implements NativeChannelConnector<QQBotConnector.Config> {
+public final class QQBotChannel implements NativeChannel<QQBotChannel.Config> {
   public record Config(
       String appId,
       String clientSecret,
@@ -31,7 +31,7 @@ public final class QQBotConnector implements NativeChannelConnector<QQBotConnect
   private final java.util.concurrent.atomic.AtomicInteger sequence =
       new java.util.concurrent.atomic.AtomicInteger();
 
-  public QQBotConnector(ObjectMapper json) {
+  public QQBotChannel(ObjectMapper json) {
     http = new HttpJsonClient(json);
   }
 

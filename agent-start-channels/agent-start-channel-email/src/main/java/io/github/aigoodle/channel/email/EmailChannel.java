@@ -9,7 +9,7 @@ import jakarta.mail.search.FlagTerm;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public final class EmailConnector implements NativeChannelConnector<EmailConnector.Config> {
+public final class EmailChannel implements NativeChannel<EmailChannel.Config> {
   public record Config(
       String smtpHost,
       Integer smtpPort,

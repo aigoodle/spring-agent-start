@@ -4,12 +4,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.aigoodle.channel.dingtalk.DingTalkConnector;
-import io.github.aigoodle.channel.email.EmailConnector;
-import io.github.aigoodle.channel.feishu.FeishuConnector;
-import io.github.aigoodle.channel.qqbot.QQBotConnector;
-import io.github.aigoodle.channel.webhook.WebhookConnector;
-import io.github.aigoodle.channel.wecom.WeComConnector;
+import io.github.aigoodle.channel.dingtalk.DingTalkChannel;
+import io.github.aigoodle.channel.email.EmailChannel;
+import io.github.aigoodle.channel.feishu.FeishuChannel;
+import io.github.aigoodle.channel.qqbot.QQBotChannel;
+import io.github.aigoodle.channel.webhook.WebhookChannel;
+import io.github.aigoodle.channel.wecom.WeComChannel;
 import io.github.aigoodle.channel.api.MessageContent;
 import io.github.aigoodle.channel.api.OutboundMessage;
 import java.util.List;
@@ -17,16 +17,16 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /** Opt-in black-box sends. Each case runs only when that platform's environment is complete. */
-class NativeConnectorLiveTest {
+class NativeChannelLiveTest {
   private final ObjectMapper json = new ObjectMapper();
 
   @Test
   void qqBotAuthentication() {
     String app = env("QQBOT_APP_ID"), secret = env("QQBOT_CLIENT_SECRET");
     assume(app, secret);
-    var connector = new QQBotConnector(json);
-    var configuration = new QQBotConnector.Config(app, secret, env("QQBOT_API_BASE"), "live-auth");
-    assertTrue(connector.test(configuration).success());
+    var channel = new QQBotChannel(json);
+    var configuration = new QQBotChannel.Config(app, secret, env("QQBOT_API_BASE"), "live-auth");
+    assertTrue(channel.test(configuration).success());
   }
 
   @Test
@@ -35,8 +35,8 @@ class NativeConnectorLiveTest {
         secret = env("QQBOT_CLIENT_SECRET"),
         target = env("QQBOT_TARGET_ID");
     assume(app, secret, target);
-    var c = new QQBotConnector(json);
-    var cfg = new QQBotConnector.Config(app, secret, env("QQBOT_API_BASE"), "live");
+    var c = new QQBotChannel(json);
+    var cfg = new QQBotChannel.Config(app, secret, env("QQBOT_API_BASE"), "live");
     assertTrue(c.test(cfg).success());
     assertTrue(c.send(cfg, message(target, env("QQBOT_CONVERSATION_TYPE", "C2C"))).accepted());
   }
@@ -47,8 +47,8 @@ class NativeConnectorLiveTest {
         secret = env("FEISHU_APP_SECRET"),
         target = env("FEISHU_CHAT_ID");
     assume(app, secret, target);
-    var c = new FeishuConnector(json);
-    var cfg = new FeishuConnector.Config(app, secret, null, null, "live");
+    var c = new FeishuChannel(json);
+    var cfg = new FeishuChannel.Config(app, secret, null, null, "live");
     assertTrue(c.test(cfg).success());
     assertTrue(c.send(cfg, message(target, "GROUP")).accepted());
   }
@@ -59,8 +59,8 @@ class NativeConnectorLiveTest {
         secret = env("DINGTALK_CLIENT_SECRET"),
         target = env("DINGTALK_TARGET_ID");
     assume(app, secret, target);
-    var c = new DingTalkConnector(json);
-    var cfg = new DingTalkConnector.Config(app, secret, env("DINGTALK_WEBHOOK_URL"), null, "live");
+    var c = new DingTalkChannel(json);
+    var cfg = new DingTalkChannel.Config(app, secret, env("DINGTALK_WEBHOOK_URL"), null, "live");
     assertTrue(c.test(cfg).success());
     assertTrue(c.send(cfg, message(target, env("DINGTALK_CONVERSATION_TYPE", "GROUP"))).accepted());
   }
@@ -72,8 +72,8 @@ class NativeConnectorLiveTest {
         agent = env("WECOM_AGENT_ID"),
         target = env("WECOM_USER_ID");
     assume(corp, secret, agent, target);
-    var c = new WeComConnector(json);
-    var cfg = new WeComConnector.Config(corp, secret, agent, null, null, "live");
+    var c = new WeComChannel(json);
+    var cfg = new WeComChannel.Config(corp, secret, agent, null, null, "live");
     assertTrue(c.test(cfg).success());
     assertTrue(c.send(cfg, message(target, "DIRECT")).accepted());
   }
@@ -87,9 +87,9 @@ class NativeConnectorLiveTest {
         from = env("EMAIL_FROM"),
         target = env("EMAIL_TARGET");
     assume(smtp, imap, user, password, from, target);
-    var c = new EmailConnector();
+    var c = new EmailChannel();
     var cfg =
-        new EmailConnector.Config(
+        new EmailChannel.Config(
             smtp,
             integer("EMAIL_SMTP_PORT"),
             imap,
@@ -109,9 +109,9 @@ class NativeConnectorLiveTest {
   void webhook() {
     String url = env("WEBHOOK_OUTBOUND_URL"), target = env("WEBHOOK_TARGET_ID");
     assume(url, target);
-    var c = new WebhookConnector(json);
+    var c = new WebhookChannel(json);
     var cfg =
-        new WebhookConnector.Config(
+        new WebhookChannel.Config(
             url, env("WEBHOOK_BEARER_TOKEN"), env("WEBHOOK_CALLBACK_TOKEN"), "live");
     assertTrue(c.test(cfg).success());
     assertTrue(c.send(cfg, message(target, "DIRECT")).accepted());
@@ -123,7 +123,7 @@ class NativeConnectorLiveTest {
         target,
         target,
         null,
-        List.of(MessageContent.text(env("CONNECTOR_LIVE_TEXT", "Agent Start connector live test"))),
+        List.of(MessageContent.text(env("CHANNEL_LIVE_TEXT", "Agent Start channel live test"))),
         Map.of("conversationType", type));
   }
 

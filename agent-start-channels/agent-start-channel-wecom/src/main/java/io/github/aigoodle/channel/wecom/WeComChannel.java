@@ -6,7 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.aigoodle.channel.api.*;
 import java.util.*;
 
-public final class WeComConnector implements NativeChannelConnector<WeComConnector.Config> {
+public final class WeComChannel implements NativeChannel<WeComChannel.Config> {
   public record Config(
       String botId,
       String secret,
@@ -56,7 +56,7 @@ public final class WeComConnector implements NativeChannelConnector<WeComConnect
   private final AccessTokenCache tokens = new AccessTokenCache();
   private final Map<String, WeComGatewaySession> sessions = new java.util.concurrent.ConcurrentHashMap<>();
 
-  public WeComConnector(ObjectMapper j) {
+  public WeComChannel(ObjectMapper j) {
     http = new HttpJsonClient(j);
   }
 

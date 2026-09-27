@@ -12,7 +12,7 @@ import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.SafeConstructor;
 
-/** Loads channel-owned frontend contracts from every installed connector jar. */
+/** Loads channel-owned frontend contracts from every installed channel jar. */
 final class ChannelManifestCatalog {
   static final String LOCATION = "classpath*:META-INF/agent-start/channels/*.yml";
 

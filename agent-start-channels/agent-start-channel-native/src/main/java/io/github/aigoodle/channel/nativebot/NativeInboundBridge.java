@@ -46,7 +46,7 @@ final class NativeInboundBridge implements InboundMessageSink {
     metadata.put("replyTargetId", message.replyTargetId());
     return new ChannelInboundEvent(
         "native",
-        message.connectorId(),
+        message.channelId(),
         message.accountId(),
         message.messageId(),
         message.senderId(),
