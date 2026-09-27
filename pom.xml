@@ -46,7 +46,7 @@
         <module>agent-start-tools</module>
         <module>agent-start-mcp-auth-spring-starter</module>
         <module>agent-start-channel</module>
-        <module>agent-start-connectors</module>
+        <module>agent-start-channels</module>
         <module>agent-start-connector</module>
         <module>agent-start-plugin</module>
         <module>agent-start-plugin-agent</module>
@@ -87,16 +87,16 @@
 
     <dependencyManagement>
         <dependencies>
-            <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-connector-api</artifactId><version>${project.version}</version></dependency>
-            <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-connector-core</artifactId><version>${project.version}</version></dependency>
-            <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-connector-runtime</artifactId><version>${project.version}</version></dependency>
-            <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-connector-qqbot</artifactId><version>${project.version}</version></dependency>
-            <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-connector-wecom</artifactId><version>${project.version}</version></dependency>
-            <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-connector-feishu</artifactId><version>${project.version}</version></dependency>
-            <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-connector-dingtalk</artifactId><version>${project.version}</version></dependency>
-            <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-connector-email</artifactId><version>${project.version}</version></dependency>
-            <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-connector-webhook</artifactId><version>${project.version}</version></dependency>
-            <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-connector-bundle</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-channel-api</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-channel-core</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-channel-native</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-channel-qqbot</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-channel-wecom</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-channel-feishu</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-channel-dingtalk</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-channel-email</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-channel-webhook</artifactId><version>${project.version}</version></dependency>
+            <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-channel-bundle</artifactId><version>${project.version}</version></dependency>
             <!-- Spring Boot -->
             <dependency>
                 <groupId>org.springframework.boot</groupId>

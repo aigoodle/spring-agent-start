@@ -1,0 +1,80 @@
+package io.github.aigoodle.channel.nativebot;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.aigoodle.channel.*;
+import io.github.aigoodle.common.crypto.TenantSecretCodec;
+import io.github.aigoodle.channel.persistence.ChannelConnectionMapper;
+import io.github.aigoodle.channel.core.ChannelConnectorRegistry;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.*;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.ApplicationListener;
+import org.springframework.web.bind.annotation.RestController;
+
+@AutoConfiguration(
+    afterName = {
+      "io.github.aigoodle.channel.config.GoodleChannelAutoConfiguration",
+      "io.github.aigoodle.channel.core.ChannelConnectorAutoConfiguration"
+    })
+public class NativeConnectorAutoConfiguration {
+  /**
+   * Connector implementations still use Jackson 2 while Spring Boot 4 auto-configures a
+   * Jackson 3 {@code tools.jackson.databind.ObjectMapper}. Keep the connector mapper separate
+   * from Boot's HTTP codec mapper until the connector API is migrated to Jackson 3.
+   */
+  @Bean
+  @ConditionalOnMissingBean(ObjectMapper.class)
+  ObjectMapper connectorObjectMapper() {
+    return new ObjectMapper().findAndRegisterModules();
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
+  NativeAccountStore nativeAccountStore(
+      ChannelConnectionMapper mapper, TenantSecretCodec secrets) {
+    return new JdbcNativeAccountStore(mapper, secrets);
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
+  NativeInboundBridge nativeInboundBridge(
+      ObjectProvider<ChannelInboundDispatcher> d, ObjectProvider<ChannelEventLogService> e) {
+    return new NativeInboundBridge(d, e);
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
+  NativeChannelRuntimeProvider nativeChannelRuntimeProvider(
+      ChannelConnectorRegistry connectorRegistry,
+      ObjectMapper j,
+      ObjectProvider<NativeAccountStore> store,
+      NativeInboundBridge sink) {
+    java.util.List<NativeChannelConnector<?>> nativeConnectors = new java.util.ArrayList<>();
+    for (var connector : connectorRegistry.all()) {
+      if (connector instanceof NativeChannelConnector<?> nativeConnector) {
+        nativeConnectors.add(nativeConnector);
+      }
+    }
+    return new NativeChannelRuntimeProvider(
+        nativeConnectors, j, store.getIfAvailable(), sink);
+  }
+
+  @Bean
+  ApplicationListener<ApplicationReadyEvent> nativeAccountSessionStarter(
+      NativeChannelRuntimeProvider runtime) {
+    return event -> runtime.restoreEnabledAccounts();
+  }
+
+  @Bean
+  @ConditionalOnClass(RestController.class)
+  @ConditionalOnBean({ChannelInboundDispatcher.class, ChannelEventLogService.class})
+  NativeChannelCallbackController nativeChannelCallbackController(
+      NativeChannelRuntimeProvider r,
+      ChannelInboundDispatcher d,
+      ChannelEventLogService e,
+      ObjectMapper j) {
+    return new NativeChannelCallbackController(r, d, e, j);
+  }
+}

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <parent><groupId>io.github.aigoodle</groupId><artifactId>spring-agent-start</artifactId><version>0.1.0</version></parent>
+  <artifactId>agent-start-channels</artifactId><packaging>pom</packaging>
+  <name>agent-start-channels</name>
+  <description>Lightweight channel SPI, platform-neutral native runtime and independent platform channels.</description>
+  <modules>
+    <module>agent-start-channel-api</module>
+    <module>agent-start-channel-core</module>
+    <module>agent-start-channel-testkit</module>
+    <module>agent-start-channel-native</module>
+    <module>agent-start-channel-qqbot</module>
+    <module>agent-start-channel-wecom</module>
+    <module>agent-start-channel-feishu</module>
+    <module>agent-start-channel-dingtalk</module>
+    <module>agent-start-channel-email</module>
+    <module>agent-start-channel-webhook</module>
+    <module>agent-start-channel-bundle</module>
+  </modules>
+</project>

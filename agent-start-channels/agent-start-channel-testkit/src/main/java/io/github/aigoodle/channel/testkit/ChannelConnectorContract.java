@@ -1,0 +1,30 @@
+package io.github.aigoodle.channel.testkit;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+import io.github.aigoodle.channel.api.ChannelConnector;
+import org.junit.jupiter.api.Test;
+
+public interface ChannelConnectorContract<C> {
+  ChannelConnector<C> connector();
+
+  C validConfiguration();
+
+  @Test
+  default void hasStableMatchingIdentity() {
+    assertFalse(connector().id().isBlank());
+    assertEquals(connector().id(), connector().descriptor().id());
+  }
+
+  @Test
+  default void declaresConfigurationAndCapabilities() {
+    assertNotNull(connector().configType());
+    assertNotNull(connector().descriptor().capabilities());
+    assertNotNull(connector().descriptor().accountModel());
+  }
+
+  @Test
+  default void validConfigurationCanBeTested() {
+    assertNotNull(connector().test(validConfiguration()));
+  }
+}

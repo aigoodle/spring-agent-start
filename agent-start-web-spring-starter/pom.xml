@@ -69,7 +69,7 @@
             <groupId>io.github.aigoodle</groupId>
             <artifactId>agent-start-connector-tools</artifactId>
         </dependency>
-        <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-connector-bundle</artifactId></dependency>
+        <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-channel-bundle</artifactId></dependency>
         <dependency>
             <groupId>io.github.aigoodle</groupId>
             <artifactId>agent-start-trigger</artifactId>
