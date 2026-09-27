@@ -45,6 +45,8 @@ public final class ProductionSecretEnvironmentPostProcessor
                 "demo-secret-change-me", 32);
         rejectDefaultOrWeak(environment, values, "spring-agent.connector.encryption-secret",
                 "demo-secret-change-me", 32);
+        rejectDefaultOrWeak(environment, values, "spring-agent.channel.encryption-secret",
+                "demo-secret-change-me", 32);
         rejectDefault(environment, values, "spring.datasource.password", "ai123456");
         return List.copyOf(values);
     }

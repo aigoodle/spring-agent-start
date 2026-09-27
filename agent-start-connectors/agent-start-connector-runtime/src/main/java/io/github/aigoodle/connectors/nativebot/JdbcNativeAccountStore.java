@@ -2,9 +2,9 @@ package io.github.aigoodle.connectors.nativebot;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.github.aigoodle.common.crypto.TenantSecretCodec;
-import io.github.aigoodle.connector.persistence.ChannelConnectionEntity;
-import io.github.aigoodle.connector.persistence.ChannelConnectionMapper;
-import io.github.aigoodle.connector.persistence.ConnectorTenantScope;
+import io.github.aigoodle.channel.persistence.ChannelConnectionEntity;
+import io.github.aigoodle.channel.persistence.ChannelConnectionMapper;
+import io.github.aigoodle.persistence.TenantSqlScope;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
@@ -21,7 +21,7 @@ final class JdbcNativeAccountStore implements NativeAccountStore {
   @Override
   public Optional<Saved> find(String channelId, String accountId) {
     ChannelConnectionEntity row =
-        ConnectorTenantScope.bypass(
+        TenantSqlScope.bypass(
             () ->
                 mapper.selectOne(
                     new LambdaQueryWrapper<ChannelConnectionEntity>()
@@ -38,7 +38,7 @@ final class JdbcNativeAccountStore implements NativeAccountStore {
   @Override
   public List<SavedAccount> findEnabled() {
     List<ChannelConnectionEntity> rows =
-        ConnectorTenantScope.bypass(
+        TenantSqlScope.bypass(
             () ->
                 mapper.selectList(
                     new LambdaQueryWrapper<ChannelConnectionEntity>()

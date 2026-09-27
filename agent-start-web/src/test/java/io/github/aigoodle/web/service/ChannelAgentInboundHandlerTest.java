@@ -7,11 +7,11 @@ import io.github.aigoodle.agent.entity.AgentVersionEntity;
 import io.github.aigoodle.agent.service.AgentService;
 import io.github.aigoodle.agent.service.AgentVersionService;
 import io.github.aigoodle.agent.runtime.AgentRuntimeRegistry;
-import io.github.aigoodle.connector.channel.ChannelAgentRouter;
-import io.github.aigoodle.connector.channel.ChannelInboundEvent;
-import io.github.aigoodle.connector.channel.ChannelInboundResult;
-import io.github.aigoodle.connector.channel.ChannelIdentityService;
-import io.github.aigoodle.connector.channel.ChannelConversationService;
+import io.github.aigoodle.channel.ChannelAgentRouter;
+import io.github.aigoodle.channel.ChannelInboundEvent;
+import io.github.aigoodle.channel.ChannelInboundResult;
+import io.github.aigoodle.channel.ChannelIdentityService;
+import io.github.aigoodle.channel.ChannelConversationService;
 import io.github.aigoodle.common.context.PrincipalType;
 import io.github.aigoodle.common.context.UserContextHolder;
 import org.junit.jupiter.api.Test;
@@ -38,8 +38,8 @@ class ChannelAgentInboundHandlerTest {
         when(agents.run(eq("agent-1"), any())).thenReturn(
                 AgentResponse.forConversation("conversation-route-once").complete("你好"));
         ChannelAgentInboundHandler handler = new ChannelAgentInboundHandler(router, agents, identities);
-        io.github.aigoodle.connector.channel.ChannelInboundDispatcher dispatcher =
-                new io.github.aigoodle.connector.channel.ChannelInboundDispatcher(java.util.List.of(handler));
+        io.github.aigoodle.channel.ChannelInboundDispatcher dispatcher =
+                new io.github.aigoodle.channel.ChannelInboundDispatcher(java.util.List.of(handler));
 
         ChannelInboundResult result = dispatcher.dispatch(event);
 

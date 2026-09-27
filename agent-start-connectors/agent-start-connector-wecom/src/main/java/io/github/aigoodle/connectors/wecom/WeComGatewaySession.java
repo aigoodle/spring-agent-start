@@ -3,7 +3,7 @@ package io.github.aigoodle.connectors.wecom;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.aigoodle.connectors.api.*;
-import io.github.aigoodle.connector.channel.ChannelReplyStream;
+import io.github.aigoodle.channel.ChannelReplyStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;

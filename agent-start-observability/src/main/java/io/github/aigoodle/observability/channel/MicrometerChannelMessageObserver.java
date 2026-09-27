@@ -1,6 +1,6 @@
 package io.github.aigoodle.observability.channel;
 
-import io.github.aigoodle.connector.channel.ChannelMessageObserver;
+import io.github.aigoodle.channel.ChannelMessageObserver;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 

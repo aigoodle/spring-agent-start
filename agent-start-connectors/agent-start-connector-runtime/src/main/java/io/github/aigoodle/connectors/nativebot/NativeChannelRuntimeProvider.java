@@ -1,8 +1,9 @@
 package io.github.aigoodle.connectors.nativebot;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.aigoodle.connector.channel.*;
+import io.github.aigoodle.channel.*;
 import io.github.aigoodle.connectors.api.*;
+import io.github.aigoodle.connectors.api.ChannelException;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;

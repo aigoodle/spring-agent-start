@@ -3,7 +3,7 @@ package io.github.aigoodle.web.controller;
 import io.github.aigoodle.agent.entity.AgentVersionEntity;
 import io.github.aigoodle.agent.api.AgentDefinition;
 import io.github.aigoodle.agent.service.AgentVersionService;
-import io.github.aigoodle.connector.channel.ChannelAuditService;
+import io.github.aigoodle.channel.ChannelAuditService;
 import io.github.aigoodle.web.common.ApiResponse;
 import io.github.aigoodle.web.support.ChannelAdministrationPolicy;
 import io.github.aigoodle.common.util.JsonUtils;

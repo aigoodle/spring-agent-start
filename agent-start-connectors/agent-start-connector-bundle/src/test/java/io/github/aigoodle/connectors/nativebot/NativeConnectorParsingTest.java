@@ -9,7 +9,7 @@ import io.github.aigoodle.connectors.feishu.FeishuConnector;
 import io.github.aigoodle.connectors.qqbot.QQBotConnector;
 import io.github.aigoodle.connectors.webhook.WebhookConnector;
 import io.github.aigoodle.connectors.wecom.WeComConnector;
-import io.github.aigoodle.connector.channel.ChannelDefinition;
+import io.github.aigoodle.channel.ChannelDefinition;
 import io.github.aigoodle.connectors.api.*;
 import java.util.*;
 import org.junit.jupiter.api.Test;
@@ -337,7 +337,7 @@ class NativeConnectorParsingTest {
             ChannelException.class,
             () ->
                 runtime.saveAccount(
-                    new io.github.aigoodle.connector.channel.SaveChannelAccountRequest(
+                    new io.github.aigoodle.channel.SaveChannelAccountRequest(
                         "qqbot", "account", "QQ", false, Map.of())));
     assertEquals("invalid_configuration", failure.code());
     assertTrue(failure.getMessage().contains("appId"));
@@ -350,9 +350,9 @@ class NativeConnectorParsingTest {
     NativeChannelRuntimeProvider runtime =
         new NativeChannelRuntimeProvider(List.of(connector), json);
 
-    io.github.aigoodle.connector.channel.ChannelAccount account =
+    io.github.aigoodle.channel.ChannelAccount account =
         runtime.saveAccount(
-            new io.github.aigoodle.connector.channel.SaveChannelAccountRequest(
+            new io.github.aigoodle.channel.SaveChannelAccountRequest(
                 "capture", "account", "Capture", true, Map.of()));
 
     assertTrue(account.running());
@@ -366,10 +366,10 @@ class NativeConnectorParsingTest {
     NativeChannelRuntimeProvider runtime =
         new NativeChannelRuntimeProvider(List.of(connector), json);
     runtime.saveAccount(
-        new io.github.aigoodle.connector.channel.SaveChannelAccountRequest(
+        new io.github.aigoodle.channel.SaveChannelAccountRequest(
             "capture", "account", "Capture", true, Map.of()));
     runtime.sendWithResult(
-        new io.github.aigoodle.connector.channel.ChannelOutboundMessage(
+        new io.github.aigoodle.channel.ChannelOutboundMessage(
             "capture",
             "account",
             "group-1",

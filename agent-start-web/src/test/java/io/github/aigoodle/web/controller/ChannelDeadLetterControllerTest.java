@@ -2,8 +2,8 @@ package io.github.aigoodle.web.controller;
 
 import io.github.aigoodle.common.context.CurrentUser;
 import io.github.aigoodle.common.context.UserContextHolder;
-import io.github.aigoodle.connector.channel.ChannelAuditService;
-import io.github.aigoodle.connector.channel.ChannelEventLogService;
+import io.github.aigoodle.channel.ChannelAuditService;
+import io.github.aigoodle.channel.ChannelEventLogService;
 import io.github.aigoodle.web.support.ChannelAdministrationPolicy;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;

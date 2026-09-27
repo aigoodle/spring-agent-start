@@ -55,6 +55,7 @@ import tools.jackson.databind.module.SimpleModule;
         "io.github.aigoodle.model.config.GoodleModelAutoConfiguration",
         "io.github.aigoodle.tool.config.GoodleToolsAutoConfiguration",
         "io.github.aigoodle.connector.config.GoodleConnectorAutoConfiguration",
+        "io.github.aigoodle.channel.config.GoodleChannelAutoConfiguration",
         "io.github.aigoodle.plugin.config.PluginAutoConfiguration",
         "io.github.aigoodle.connectors.nativebot.NativeConnectorAutoConfiguration",
         "io.github.aigoodle.agent.config.AgentRuntimeAutoConfiguration",

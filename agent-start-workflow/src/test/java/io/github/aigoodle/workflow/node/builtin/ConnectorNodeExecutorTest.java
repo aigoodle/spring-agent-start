@@ -1,10 +1,10 @@
 package io.github.aigoodle.workflow.node.builtin;
 
 import io.github.aigoodle.connector.execution.ConnectorResult;
-import io.github.aigoodle.connector.channel.ChannelConnectionService;
-import io.github.aigoodle.connector.channel.ChannelRuntimeProvider;
-import io.github.aigoodle.connector.channel.ChannelRuntimeRegistry;
-import io.github.aigoodle.connector.channel.ChannelSendResult;
+import io.github.aigoodle.channel.ChannelConnectionService;
+import io.github.aigoodle.channel.ChannelRuntimeProvider;
+import io.github.aigoodle.channel.ChannelRuntimeRegistry;
+import io.github.aigoodle.channel.ChannelSendResult;
 import io.github.aigoodle.workflow.graph.NodeDef;
 import io.github.aigoodle.workflow.graph.NodeType;
 import io.github.aigoodle.workflow.node.ExecutionContext;
@@ -79,7 +79,7 @@ class ConnectorNodeExecutorTest {
         assertThat(executor.execute(node, context).getOutputs().get("result"))
                 .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
                 .containsEntry("messageId", "qq-message-2").containsEntry("targetId", "qq-user-1");
-        var outbound = org.mockito.ArgumentCaptor.forClass(io.github.aigoodle.connector.channel.ChannelOutboundMessage.class);
+        var outbound = org.mockito.ArgumentCaptor.forClass(io.github.aigoodle.channel.ChannelOutboundMessage.class);
         verify(runtime).sendWithResult(outbound.capture());
         assertThat(outbound.getValue().accountId()).isEqualTo("runtime-account-1");
         assertThat(outbound.getValue().targetId()).isEqualTo("qq-user-1");

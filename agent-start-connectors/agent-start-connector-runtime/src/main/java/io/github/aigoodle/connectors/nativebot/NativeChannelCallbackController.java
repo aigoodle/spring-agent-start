@@ -2,7 +2,7 @@ package io.github.aigoodle.connectors.nativebot;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.aigoodle.connector.channel.*;
+import io.github.aigoodle.channel.*;
 import io.github.aigoodle.connectors.api.InboundMessage;
 import java.util.*;
 import org.springframework.http.HttpStatus;

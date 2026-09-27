@@ -1,11 +1,11 @@
 package io.github.aigoodle.web.service;
 
-import io.github.aigoodle.connector.channel.ChannelConnectionService;
-import io.github.aigoodle.connector.channel.ChannelIdentityService;
-import io.github.aigoodle.connector.channel.ChannelInboundEvent;
-import io.github.aigoodle.connector.channel.ChannelInboundHandler;
-import io.github.aigoodle.connector.channel.ChannelInboundResult;
-import io.github.aigoodle.connector.channel.ChannelReplyStream;
+import io.github.aigoodle.channel.ChannelConnectionService;
+import io.github.aigoodle.channel.ChannelIdentityService;
+import io.github.aigoodle.channel.ChannelInboundEvent;
+import io.github.aigoodle.channel.ChannelInboundHandler;
+import io.github.aigoodle.channel.ChannelInboundResult;
+import io.github.aigoodle.channel.ChannelReplyStream;
 import io.github.aigoodle.trigger.api.TriggerType;
 import io.github.aigoodle.trigger.entity.TriggerEntity;
 import io.github.aigoodle.trigger.service.TriggerInvocationRequest;
@@ -27,7 +27,7 @@ import org.springframework.stereotype.Component;
 public class ChannelWorkflowInboundHandler implements ChannelInboundHandler {
   private final TriggerService triggers;
   private final ChannelConnectionService connections;
-  private final io.github.aigoodle.connector.channel.ChannelEventLogService events;
+  private final io.github.aigoodle.channel.ChannelEventLogService events;
   private final ChannelIdentityService identities;
 
   public ChannelWorkflowInboundHandler(
@@ -38,7 +38,7 @@ public class ChannelWorkflowInboundHandler implements ChannelInboundHandler {
   public ChannelWorkflowInboundHandler(
       TriggerService triggers,
       ChannelConnectionService connections,
-      io.github.aigoodle.connector.channel.ChannelEventLogService events) {
+      io.github.aigoodle.channel.ChannelEventLogService events) {
     this(triggers, connections, events, null);
   }
 
@@ -47,7 +47,7 @@ public class ChannelWorkflowInboundHandler implements ChannelInboundHandler {
       TriggerService triggers,
       ChannelConnectionService connections,
       @org.springframework.context.annotation.Lazy
-      io.github.aigoodle.connector.channel.ChannelEventLogService events,
+      io.github.aigoodle.channel.ChannelEventLogService events,
       ChannelIdentityService identities) {
     this.triggers = triggers;
     this.connections = connections;

@@ -1,10 +1,10 @@
 package io.github.aigoodle.web.service;
 
-import io.github.aigoodle.connector.channel.ChannelConnectionService;
-import io.github.aigoodle.connector.channel.ChannelIdentityAuthenticator;
-import io.github.aigoodle.connector.channel.ChannelInboundEvent;
-import io.github.aigoodle.connector.channel.ChannelInboundHandler;
-import io.github.aigoodle.connector.channel.ChannelInboundResult;
+import io.github.aigoodle.channel.ChannelConnectionService;
+import io.github.aigoodle.channel.ChannelIdentityAuthenticator;
+import io.github.aigoodle.channel.ChannelInboundEvent;
+import io.github.aigoodle.channel.ChannelInboundHandler;
+import io.github.aigoodle.channel.ChannelInboundResult;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;

@@ -45,12 +45,13 @@
         <module>agent-start-store</module>
         <module>agent-start-tools</module>
         <module>agent-start-mcp-auth-spring-starter</module>
+        <module>agent-start-channel</module>
         <module>agent-start-connectors</module>
         <module>agent-start-connector</module>
         <module>agent-start-plugin</module>
         <module>agent-start-plugin-agent</module>
         <module>agent-start-plugins</module>
-        <module>agent-start-connector-redis</module>
+        <module>agent-start-channel-redis</module>
         <module>agent-start-connector-tools</module>
         <module>agent-start-memory</module>
         <module>agent-start-skill</module>
@@ -231,12 +232,17 @@
             </dependency>
             <dependency>
                 <groupId>io.github.aigoodle</groupId>
+                <artifactId>agent-start-channel</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.aigoodle</groupId>
                 <artifactId>agent-start-connector</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.github.aigoodle</groupId>
-                <artifactId>agent-start-connector-redis</artifactId>
+                <artifactId>agent-start-channel-redis</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

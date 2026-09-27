@@ -4,7 +4,7 @@ import io.github.aigoodle.agent.api.AgentResponse;
 import io.github.aigoodle.agent.runtime.*;
 import io.github.aigoodle.common.context.CurrentUser;
 import io.github.aigoodle.common.context.UserContextHolder;
-import io.github.aigoodle.connector.channel.ChannelAuditService;
+import io.github.aigoodle.channel.ChannelAuditService;
 import io.github.aigoodle.web.support.ChannelAdministrationPolicy;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;

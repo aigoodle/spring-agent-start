@@ -1,9 +1,9 @@
 package io.github.aigoodle.web.service;
 
-import io.github.aigoodle.connector.channel.ChannelConnectionService;
-import io.github.aigoodle.connector.channel.ChannelInboundEvent;
-import io.github.aigoodle.connector.channel.ChannelInboundHandler;
-import io.github.aigoodle.connector.channel.ChannelInboundResult;
+import io.github.aigoodle.channel.ChannelConnectionService;
+import io.github.aigoodle.channel.ChannelInboundEvent;
+import io.github.aigoodle.channel.ChannelInboundHandler;
+import io.github.aigoodle.channel.ChannelInboundResult;
 import io.github.aigoodle.workflow.entity.HumanInteractionEntity;
 import io.github.aigoodle.workflow.service.HumanInteractionService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;

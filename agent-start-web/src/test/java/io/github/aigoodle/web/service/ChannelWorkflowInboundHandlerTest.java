@@ -7,12 +7,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.aigoodle.common.util.JsonUtils;
-import io.github.aigoodle.connector.channel.ChannelConnectionService;
-import io.github.aigoodle.connector.channel.ChannelEventLogService;
-import io.github.aigoodle.connector.channel.ChannelIdentityService;
-import io.github.aigoodle.connector.channel.ChannelInboundEvent;
-import io.github.aigoodle.connector.channel.ChannelInboundResult;
-import io.github.aigoodle.connector.channel.ChannelReplyStream;
+import io.github.aigoodle.channel.ChannelConnectionService;
+import io.github.aigoodle.channel.ChannelEventLogService;
+import io.github.aigoodle.channel.ChannelIdentityService;
+import io.github.aigoodle.channel.ChannelInboundEvent;
+import io.github.aigoodle.channel.ChannelInboundResult;
+import io.github.aigoodle.channel.ChannelReplyStream;
 import io.github.aigoodle.trigger.api.TriggerType;
 import io.github.aigoodle.trigger.dispatch.DispatchResult;
 import io.github.aigoodle.trigger.entity.TriggerEntity;

@@ -1,9 +1,9 @@
 package io.github.aigoodle.connectors.nativebot;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.aigoodle.connector.channel.*;
+import io.github.aigoodle.channel.*;
 import io.github.aigoodle.common.crypto.TenantSecretCodec;
-import io.github.aigoodle.connector.persistence.ChannelConnectionMapper;
+import io.github.aigoodle.channel.persistence.ChannelConnectionMapper;
 import io.github.aigoodle.connectors.core.ChannelConnectorRegistry;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @AutoConfiguration(
     afterName = {
-      "io.github.aigoodle.connector.config.GoodleConnectorAutoConfiguration",
+      "io.github.aigoodle.channel.config.GoodleChannelAutoConfiguration",
       "io.github.aigoodle.connectors.core.ChannelConnectorAutoConfiguration"
     })
 public class NativeConnectorAutoConfiguration {

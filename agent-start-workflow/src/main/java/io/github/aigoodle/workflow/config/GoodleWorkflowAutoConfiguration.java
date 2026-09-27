@@ -66,7 +66,8 @@ import java.util.List;
  */
 @AutoConfiguration(
         after = GoodleModelAutoConfiguration.class,
-        afterName = "io.github.aigoodle.connector.config.GoodleConnectorAutoConfiguration")
+        afterName = {"io.github.aigoodle.connector.config.GoodleConnectorAutoConfiguration",
+                "io.github.aigoodle.channel.config.GoodleChannelAutoConfiguration"})
 @EnableConfigurationProperties(GoodleWorkflowProperties.class)
 @EnableScheduling
 @MapperScan("io.github.aigoodle.workflow.mapper")
@@ -222,8 +223,8 @@ public class GoodleWorkflowAutoConfiguration {
         @ConditionalOnBean(type = "io.github.aigoodle.connector.execution.ConnectorExecutionGateway")
         public io.github.aigoodle.workflow.node.builtin.ConnectorNodeExecutor connectorNodeExecutor(
                 io.github.aigoodle.connector.execution.ConnectorExecutionGateway gateway,
-                io.github.aigoodle.connector.channel.ChannelConnectionService channelConnections,
-                io.github.aigoodle.connector.channel.ChannelRuntimeRegistry channelRuntimes) {
+                io.github.aigoodle.channel.ChannelConnectionService channelConnections,
+                io.github.aigoodle.channel.ChannelRuntimeRegistry channelRuntimes) {
             return new io.github.aigoodle.workflow.node.builtin.ConnectorNodeExecutor(
                     gateway, channelConnections, channelRuntimes);
         }

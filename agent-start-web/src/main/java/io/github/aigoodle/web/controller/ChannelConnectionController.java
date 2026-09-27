@@ -1,9 +1,9 @@
 package io.github.aigoodle.web.controller;
 
-import io.github.aigoodle.connector.channel.ChannelConnectionService;
-import io.github.aigoodle.connector.channel.ChannelConnectionService.SaveRequest;
-import io.github.aigoodle.connector.channel.ChannelConnectionService.View;
-import io.github.aigoodle.connector.channel.ChannelAuditService;
+import io.github.aigoodle.channel.ChannelConnectionService;
+import io.github.aigoodle.channel.ChannelConnectionService.SaveRequest;
+import io.github.aigoodle.channel.ChannelConnectionService.View;
+import io.github.aigoodle.channel.ChannelAuditService;
 import io.github.aigoodle.web.common.ApiResponse;
 import io.github.aigoodle.web.support.ChannelOwnershipPolicy;
 import io.github.aigoodle.web.support.ChannelAdministrationPolicy;

@@ -1,5 +1,6 @@
 package io.github.aigoodle.web.common;
 
+import io.github.aigoodle.channel.ChannelException;
 import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.connector.ConnectorException;
 import org.slf4j.Logger;
@@ -70,6 +71,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<?>> handleConnector(ConnectorException ex) {
         log.warn("ConnectorException [{}]: {}", ex.code(), ex.getMessage());
         return build(ApiErrorCode.UPSTREAM_UNAVAILABLE, ex.getMessage(), Map.of("connectorCode", ex.code()));
+    }
+
+    @ExceptionHandler(ChannelException.class)
+    public ResponseEntity<ApiResponse<?>> handleChannel(ChannelException ex) {
+        log.warn("ChannelException [{}]: {}", ex.code(), ex.getMessage());
+        return build(ApiErrorCode.UPSTREAM_UNAVAILABLE, ex.getMessage(), Map.of("channelCode", ex.code()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

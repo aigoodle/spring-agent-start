@@ -1,6 +1,6 @@
 package io.github.aigoodle.connectors.nativebot;
 
-import io.github.aigoodle.connector.channel.*;
+import io.github.aigoodle.channel.*;
 import io.github.aigoodle.connectors.api.*;
 import java.util.*;
 import org.springframework.beans.factory.ObjectProvider;
