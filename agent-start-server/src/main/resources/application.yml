@@ -49,6 +49,7 @@ spring:
         - classpath:db/trigger-schema.sql
         - classpath:db/observability-schema.sql
         - classpath:db/connector-schema.sql
+        - classpath:db/channel-schema.sql
 
   # Upload limits — knowledge module accepts multipart docs (PDF/DOCX/etc). Bump
   # these if you plan to upload very large source files. WebFlux enforces the limit
@@ -85,14 +86,17 @@ spring-agent:
   connector:
     # Connector connection credentials are encrypted separately from model credentials.
     encryption-secret: ${CONNECTOR_SECRET:${AGENT_SECRET:demo-secret-change-me}}
-    channel-catalog-cache-ttl: ${CHANNEL_CATALOG_CACHE_TTL:10m}
-    channel-rate-limit:
+  channel:
+    # Channel connection credentials historically shared the connector secret; keep
+    # both pointing at the same value so existing ciphertexts keep decrypting.
+    encryption-secret: ${CONNECTOR_SECRET:${AGENT_SECRET:demo-secret-change-me}}
+    catalog-cache-ttl: ${CHANNEL_CATALOG_CACHE_TTL:10m}
+    rate-limit:
       backend: ${CHANNEL_RATE_LIMIT_BACKEND:redis}
       key-prefix: ${CHANNEL_RATE_LIMIT_KEY_PREFIX:agent-start:channel-rate}
-    channel:
-      # Explicit server migration switch. Embedded SDK consumers that do not
-      # install the connector schema must not fail application startup.
-      backfill-enabled: true
+    # Explicit server migration switch. Embedded SDK consumers that do not
+    # install the channel schema must not fail application startup.
+    backfill-enabled: true
   knowledge:
     # Persist embeddings via the built-in JDBC vector store (same DB). Swap to
     # pgvector / elasticsearch / milvus by adding the matching starter jar and
@@ -148,7 +152,7 @@ logging:
     # 高频后台轮询只关闭 SQL 明细，避免每秒刷屏；其他 Mapper 仍输出 DEBUG。
     io.github.aigoodle.workflow.mapper.WorkflowCheckpointMapper: INFO
     io.github.aigoodle.trigger.mapper.TriggerMapper: INFO
-    io.github.aigoodle.connector.persistence.ChannelEventMapper: INFO
+    io.github.aigoodle.channel.persistence.ChannelEventMapper: INFO
 
     # ---- Spring / WebFlux / 启动 ----
     org.springframework.boot.autoconfigure: WARN

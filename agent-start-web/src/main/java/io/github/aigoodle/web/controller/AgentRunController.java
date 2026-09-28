@@ -5,7 +5,7 @@ import io.github.aigoodle.agent.runtime.AgentRunSnapshot;
 import io.github.aigoodle.agent.runtime.AgentRuntimeRegistry;
 import io.github.aigoodle.agent.runtime.AgentResumeCommand;
 import io.github.aigoodle.agent.api.AgentResponse;
-import io.github.aigoodle.connector.channel.ChannelAuditService;
+import io.github.aigoodle.channel.ChannelAuditService;
 import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.web.common.ApiResponse;
 import io.github.aigoodle.web.support.ChannelAdministrationPolicy;

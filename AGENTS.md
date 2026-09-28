@@ -55,7 +55,7 @@ mvn -pl agent-start-agent  -am -Dtest=AgentRuntimeTest#methodName test   # singl
 Build order is dependency-driven; respect it when adding cross-module references:
 
 ```
-common → { model, memory } → { knowledge, tools } → agent → workflow → { trigger, observability, web } → completion → { web-spring-starter, completion-spring-starter, server, example }
+common → { model, memory, channel } → { knowledge, tools, channels } → agent → workflow → { trigger, observability, web } → completion → { web-spring-starter, completion-spring-starter, server, example }
 ```
 
 | Module | Role |
@@ -69,7 +69,10 @@ common → { model, memory } → { knowledge, tools } → agent → workflow →
 | `agent-start-knowledge` | Datasets → documents → chunks, template chunking, hybrid (vector+keyword) retrieval, `DocumentReader`/`Chunker`/`Reranker` SPIs, optional RabbitMQ async ingestion |
 | `agent-start-store/` | Aggregator for optional `VectorStoreFactory` starters (`-pgvector`, `-elasticsearch`, `-milvus`). |
 | `agent-start-tools` | `Tool` SPI, `ToolRegistry`, `ToolProvider` plug-point, Spring AI `ToolCallback` adapter, **MCP client** (`McpToolProvider`) |
-| `agent-start-connectors/` | Lightweight channel SPI and platform-neutral account/callback/Outbox runtime. QQBot, WeCom, Feishu, DingTalk, Email and Webhook are separate Maven modules; `-bundle` is only the optional all-platform convenience artifact. |
+| `agent-start-connector` | Connector catalog domain: third-party connector definitions, installations, encrypted connections and governed execution (`agent_connector_*` tables, `/connectors*` REST). Distinct from message-ingestion channels. |
+| `agent-start-channel` | Message-ingestion channel runtime: channel catalog, connections, agent routing, trusted identity, conversations, durable Outbox and audit (`agent_channel_*` tables, `spring-agent.channel.*` config). |
+| `agent-start-channels/` | Lightweight `Channel` SPI (`-api`), registry (`-core`), platform-neutral native runtime (`-native`: account store, callback controller, manifest catalog) and independent platform channels — QQBot, WeCom, Feishu, DingTalk, Email and Webhook are separate Maven modules; `-bundle` is only the optional all-platform convenience artifact. |
+| `agent-start-channel-redis` | Optional Redis-backed cluster-wide channel outbound rate limiter (`spring-agent.channel.rate-limit.*`); automatically replaces the in-memory limiter. |
 | `agent-start-plugin` | Business Plugin SPI, Java Bean / remote HTTP runtimes, manifest, scoped host capabilities and invocation tokens; projected into Connector catalog and gateway. |
 | `agent-start-plugin-agent` | PLUGIN Agent runtime, non-streaming `model.chat` host capability, registered-tool/MCP bridge, progressive plugin skill tools. |
 | `agent-start-plugins/` | Aggregator for business plugin starters; YAML manifests live under each child's `resources/plugins/<name>/`. |
@@ -124,6 +127,12 @@ The SPIs:
   DB, file-format parsing, chunking template, or post-retrieval scoring without touching the pipeline.
 - **`TriggerDispatcher`** (trigger) — bind a trigger to something other than a workflow (the example's
   `AgentTriggerDispatcher` drives an agent from a webhook).
+- **`Channel` / `NativeChannel`** (channels) — lightweight message-ingestion SPI: a platform adapter
+  translates only between its protocol and normalized `InboundMessage`/`OutboundMessage`; persistence,
+  tenancy, routing and retries stay in the host. `ChannelRegistry` collects the beans, and
+  `NativeChannelRuntimeProvider` bridges every registered `NativeChannel` into the durable
+  `agent-start-channel` runtime (accounts, callback endpoint, identity, Outbox). Each platform module
+  ships a YAML manifest at `META-INF/agent-start/channels/<channel-id>.yml`.
 
 ### Workflow engine model
 
@@ -150,13 +159,19 @@ are recorded for timing/observability.
 ## Persistence & config conventions
 
 - Every module ships portable DDL at `src/main/resources/db/<module>-schema.sql` (H2 + MySQL/Postgres;
-  current files: model, knowledge, workflow, agent, trigger, observability). Both runnable apps load
+  current files: model, knowledge, workflow, agent, trigger, observability, connector, channel). Both runnable apps load
   all of them via `spring.sql.init` with `continue-on-error: true`. When you add an entity/table,
   update the matching schema file.
 - Mappers are MyBatis-Plus; each auto-config does `@MapperScan` on its own `...mapper` package.
 - **Multi-tenancy is opt-in**: a blank `tenant_id` defaults to `"default"`.
 - Model credentials are **AES-GCM encrypted at rest**; set the key via
   `spring-agent.model.encryption-secret` (defaults to a demo secret).
+- Connector-catalog and channel credentials use the same `TenantSecretCodec` scheme under
+  `spring-agent.connector.encryption-secret` and `spring-agent.channel.encryption-secret`; keep both
+  set to the same strong secret in production (the standalone server refuses demo values). Channel
+  runtime behavior is tuned via `spring-agent.channel.*` (catalog cache, `outbox-*`,
+  `connection-reconcile-*`, `connection-health-*`, `sla-reminder-*`, `backfill-enabled`) and the
+  optional Redis limiter via `spring-agent.channel.rate-limit.*`.
 - Knowledge vector store defaults to in-memory `SimpleVectorStore`; both runnable apps set it to
   `jdbc` (in-project `JdbcVectorStore`, same DB). Switch via `spring-agent.knowledge.vector-store`
   (`jdbc | pgvector | elasticsearch | milvus`) plus the matching optional starter, or publish your

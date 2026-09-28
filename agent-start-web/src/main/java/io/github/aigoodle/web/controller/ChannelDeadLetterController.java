@@ -1,7 +1,7 @@
 package io.github.aigoodle.web.controller;
 
-import io.github.aigoodle.connector.channel.ChannelAuditService;
-import io.github.aigoodle.connector.channel.ChannelEventLogService;
+import io.github.aigoodle.channel.ChannelAuditService;
+import io.github.aigoodle.channel.ChannelEventLogService;
 import io.github.aigoodle.web.common.ApiResponse;
 import io.github.aigoodle.web.support.ChannelAdministrationPolicy;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;

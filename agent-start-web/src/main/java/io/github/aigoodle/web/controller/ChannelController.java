@@ -1,12 +1,12 @@
 package io.github.aigoodle.web.controller;
 
-import io.github.aigoodle.connector.channel.ChannelAccount;
-import io.github.aigoodle.connector.channel.ChannelDefinition;
-import io.github.aigoodle.connector.channel.ChannelRuntimeProvider;
-import io.github.aigoodle.connector.channel.ChannelRuntimeRegistry;
-import io.github.aigoodle.connector.channel.ChannelCatalogService;
-import io.github.aigoodle.connector.channel.ChannelAuditService;
-import io.github.aigoodle.connector.channel.SaveChannelAccountRequest;
+import io.github.aigoodle.channel.ChannelAccount;
+import io.github.aigoodle.channel.ChannelDefinition;
+import io.github.aigoodle.channel.ChannelRuntimeProvider;
+import io.github.aigoodle.channel.ChannelRuntimeRegistry;
+import io.github.aigoodle.channel.ChannelCatalogService;
+import io.github.aigoodle.channel.ChannelAuditService;
+import io.github.aigoodle.channel.SaveChannelAccountRequest;
 import io.github.aigoodle.web.common.ApiResponse;
 import io.github.aigoodle.web.support.ChannelRuntimeAdministrationPolicy;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;

@@ -1,7 +1,7 @@
 package io.github.aigoodle.connector;
 
 import io.github.aigoodle.connector.connection.ConnectorConnectionService;
-import io.github.aigoodle.connector.connection.ConnectorSecretCodec;
+import io.github.aigoodle.common.crypto.TenantSecretCodec;
 import io.github.aigoodle.connector.execution.ConnectorExecutionQueryService;
 import io.github.aigoodle.connector.persistence.ConnectorConnectionEntity;
 import io.github.aigoodle.connector.persistence.ConnectorConnectionMapper;
@@ -19,7 +19,7 @@ class ConnectorManagementServiceTest {
     @Test
     void connectionTestValidatesEncryptedPayloadWithoutReturningSecrets() {
         ConnectorConnectionMapper mapper = mock(ConnectorConnectionMapper.class);
-        ConnectorSecretCodec codec = mock(ConnectorSecretCodec.class);
+        TenantSecretCodec codec = mock(TenantSecretCodec.class);
         ConnectorConnectionEntity entity = new ConnectorConnectionEntity();
         entity.setId("connection-1"); entity.setTenantId("acme");
         entity.setEncryptedCredentials("ciphertext"); entity.setEncryptedConfig("config-ciphertext");

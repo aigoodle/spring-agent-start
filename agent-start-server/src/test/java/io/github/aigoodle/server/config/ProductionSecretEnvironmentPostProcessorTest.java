@@ -29,6 +29,7 @@ class ProductionSecretEnvironmentPostProcessorTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("spring-agent.demo.enabled")
                 .hasMessageContaining("spring-agent.model.encryption-secret")
+                .hasMessageContaining("spring-agent.channel.encryption-secret")
                 .hasMessageContaining("spring-agent.web.allowed-origins");
     }
 
@@ -58,6 +59,7 @@ class ProductionSecretEnvironmentPostProcessorTest {
                 .withProperty("spring-agent.web.allowed-origins", "https://agent.example.com")
                 .withProperty("spring-agent.model.encryption-secret", "model-encryption-secret-32-bytes-long")
                 .withProperty("spring-agent.connector.encryption-secret", "connector-encryption-secret-32-bytes-long")
+                .withProperty("spring-agent.channel.encryption-secret", "channel-encryption-secret-32-bytes-long")
                 .withProperty("spring.datasource.password", "database-password-from-secret-store");
         environment.setActiveProfiles("production");
         return environment;

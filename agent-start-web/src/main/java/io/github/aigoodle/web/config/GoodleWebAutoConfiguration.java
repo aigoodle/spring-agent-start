@@ -55,8 +55,9 @@ import tools.jackson.databind.module.SimpleModule;
         "io.github.aigoodle.model.config.GoodleModelAutoConfiguration",
         "io.github.aigoodle.tool.config.GoodleToolsAutoConfiguration",
         "io.github.aigoodle.connector.config.GoodleConnectorAutoConfiguration",
+        "io.github.aigoodle.channel.config.GoodleChannelAutoConfiguration",
         "io.github.aigoodle.plugin.config.PluginAutoConfiguration",
-        "io.github.aigoodle.connectors.nativebot.NativeConnectorAutoConfiguration",
+        "io.github.aigoodle.channel.nativebot.NativeChannelAutoConfiguration",
         "io.github.aigoodle.agent.config.AgentRuntimeAutoConfiguration",
         "io.github.aigoodle.knowledge.config.GoodleKnowledgeAutoConfiguration",
         "io.github.aigoodle.workflow.config.GoodleWorkflowAutoConfiguration",
@@ -250,7 +251,7 @@ public class GoodleWebAutoConfiguration {
     private static boolean isAgentStartController(Class<?> type) {
         String packageName = type.getPackageName();
         return packageName.startsWith("io.github.aigoodle.web.controller")
-                || packageName.startsWith("io.github.aigoodle.connectors");
+                || packageName.startsWith("io.github.aigoodle.channel");
     }
 
     static String normalizedBasePath(String basePath) {

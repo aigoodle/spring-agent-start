@@ -21,7 +21,8 @@ public final class TenantGuardTables {
     public static final Set<String> TRIGGER = Set.of(
             "goodle_app_triggers", "goodle_trigger_invocations");
     public static final Set<String> CONNECTOR = Set.of(
-            "agent_connector_installation", "agent_connector_connection", "agent_connector_execution",
+            "agent_connector_installation", "agent_connector_connection", "agent_connector_execution");
+    public static final Set<String> CHANNEL = Set.of(
             "agent_channel_connection", "agent_channel_event", "agent_channel_identity",
             "agent_tenant_agent_binding", "agent_employee_agent_binding", "agent_channel_audit",
             "agent_channel_conversation");
@@ -30,6 +31,7 @@ public final class TenantGuardTables {
 
     public static Set<String> defaults() {
         java.util.LinkedHashSet<String> tables = new java.util.LinkedHashSet<>(CONNECTOR);
+        tables.addAll(CHANNEL);
         tables.addAll(MODEL);
         tables.addAll(AGENT);
         tables.addAll(WORKFLOW);

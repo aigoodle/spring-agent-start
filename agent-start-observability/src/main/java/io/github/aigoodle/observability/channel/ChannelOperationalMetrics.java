@@ -1,6 +1,6 @@
 package io.github.aigoodle.observability.channel;
 
-import io.github.aigoodle.connector.channel.ChannelOperationalSnapshotProvider;
+import io.github.aigoodle.channel.ChannelOperationalSnapshotProvider;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 

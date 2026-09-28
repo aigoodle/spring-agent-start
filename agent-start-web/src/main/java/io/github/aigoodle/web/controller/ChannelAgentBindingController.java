@@ -1,7 +1,7 @@
 package io.github.aigoodle.web.controller;
 
-import io.github.aigoodle.connector.channel.ChannelAgentBindingService;
-import io.github.aigoodle.connector.channel.ChannelAuditService;
+import io.github.aigoodle.channel.ChannelAgentBindingService;
+import io.github.aigoodle.channel.ChannelAuditService;
 import io.github.aigoodle.web.common.ApiResponse;
 import io.github.aigoodle.web.support.ChannelAdministrationPolicy;
 import io.github.aigoodle.agent.service.AgentVersionService;

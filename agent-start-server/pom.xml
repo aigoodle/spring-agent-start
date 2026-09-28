@@ -87,13 +87,17 @@
         </dependency>
         <dependency>
             <groupId>io.github.aigoodle</groupId>
-            <artifactId>agent-start-connector-redis</artifactId>
+            <artifactId>agent-start-channel</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-channel-redis</artifactId>
         </dependency>
         <dependency>
             <groupId>io.github.aigoodle</groupId>
             <artifactId>agent-start-connector-tools</artifactId>
         </dependency>
-        <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-connector-bundle</artifactId></dependency>
+        <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-channel-bundle</artifactId></dependency>
         <dependency>
             <groupId>io.github.aigoodle</groupId>
             <artifactId>agent-start-trigger</artifactId>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <parent><groupId>io.github.aigoodle</groupId><artifactId>agent-start-channels</artifactId><version>0.1.0</version></parent>
+  <artifactId>agent-start-channel-email</artifactId><name>agent-start-channel-email</name>
+  <dependencies>
+    <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-channel-native</artifactId></dependency>
+    <dependency><groupId>org.eclipse.angus</groupId><artifactId>angus-mail</artifactId><version>2.0.3</version></dependency>
+  </dependencies>
+</project>

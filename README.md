@@ -27,8 +27,10 @@ ecosystem, so you can drop enterprise-grade agent capabilities into an existing 
 | `agent-start-knowledge` | `io.github.aigoodle:agent-start-knowledge` | model | Datasets, document ingestion, template chunking, vector + keyword hybrid retrieval |
 | `agent-start-tools` | `io.github.aigoodle:agent-start-tools` | model | Tool/connector SPI, built-in tools (calculator, time, HTTP), Spring AI `ToolCallback` adapter, **MCP client** (stdio + HTTP) |
 | `agent-start-mcp-auth-spring-starter` | `io.github.aigoodle:agent-start-mcp-auth-spring-starter` | common | MCP server Token/JWT authentication, AOP role/scope authorization, `UserContextHolder` binding and credential forwarding |
-| `agent-start-connector` | `io.github.aigoodle:agent-start-connector` | common, persistence | Multi-tenant Connector/Channel control plane, durable Outbox and in-memory embedded quota |
-| `agent-start-connector-redis` | `io.github.aigoodle:agent-start-connector-redis` | connector, Spring Data Redis | Optional atomic cluster-wide outbound quota; automatically replaces the memory limiter when Redis is available |
+| `agent-start-connector` | `io.github.aigoodle:agent-start-connector` | common, persistence | Connector catalog domain: definitions, installations, encrypted connections and governed execution (`/connectors*` REST) |
+| `agent-start-channel` | `io.github.aigoodle:agent-start-channel` | common, persistence | Message-ingestion channel runtime: catalog, connections, agent routing, trusted identity, conversations, durable Outbox, audit and in-memory outbound quota |
+| `agent-start-channels/` | `io.github.aigoodle:agent-start-channel-{api,core,native,testkit,qqbot,wecom,feishu,dingtalk,email,webhook,bundle}` | channel | Lightweight `Channel` SPI plus platform channels (QQBot, WeCom, Feishu, DingTalk, Email, Webhook); `-bundle` is the optional all-platform convenience artifact |
+| `agent-start-channel-redis` | `io.github.aigoodle:agent-start-channel-redis` | channel, Spring Data Redis | Optional atomic cluster-wide channel outbound quota; automatically replaces the memory limiter when Redis is available |
 | `agent-start-memory` | `io.github.aigoodle:agent-start-memory` | common | Layered working, short-term and long-term memory with TTL, promotion and hybrid ranking |
 | `agent-start-agent` | `io.github.aigoodle:agent-start-agent` | model, tools, memory, *(knowledge optional)* | Agent runtime: strategies (ReAct, function-calling, plan-execute), multi-agent delegation, human-in-the-loop approval |
 | `agent-start-trigger` | `io.github.aigoodle:agent-start-trigger` | workflow | Triggers/automation: webhook, cron and event triggers driving workflows async, with invocation history + replay |
@@ -238,7 +240,7 @@ Integration tests use an in-memory H2 database (auto-created from each module's
 ## Persistence
 
 Each module ships portable DDL under `src/main/resources/db/*-schema.sql` (H2 + MySQL).
-Tenancy is opt-in: a blank `tenant_id` defaults to `"default"`. Model and Connector
+Tenancy is opt-in: a blank `tenant_id` defaults to `"default"`. Model, Connector and Channel
 credentials are written with tenant-bound AES-GCM keys derived from the configured root secret;
 a ciphertext copied to another tenant cannot be decrypted. Existing legacy ciphertext remains
 readable for rolling upgrades. Embedded hosts can replace the tenant encryptor SPI with KMS/HSM
@@ -250,12 +252,14 @@ spring-agent:
     encryption-secret: ${AGENT_SECRET}   # change me!
   connector:
     encryption-secret: ${CONNECTOR_SECRET} # change me!
+  channel:
+    encryption-secret: ${CONNECTOR_SECRET} # change me! (same secret keeps existing ciphertext readable)
 ```
 
 The standalone `agent-start-server` adds a fail-fast production guard without changing the
 embedded starters' host-owned security model. Activating the `prod` or `production` profile (or
 setting `AGENT_PRODUCTION_GUARD=true`) refuses startup while demo identity/debugging, wildcard CORS,
-default database credentials, weak encryption roots, or demo connector credentials remain.
+default database credentials, weak encryption roots, or demo connector/channel credentials remain.
 Embedded applications continue to supply tenant/user identity and secret policy through their own
 trusted runtime context and SPI beans.
 

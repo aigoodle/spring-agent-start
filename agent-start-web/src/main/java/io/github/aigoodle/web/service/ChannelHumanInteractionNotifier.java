@@ -1,8 +1,8 @@
 package io.github.aigoodle.web.service;
 
-import io.github.aigoodle.connector.channel.ChannelConnectionService;
-import io.github.aigoodle.connector.channel.ChannelOutboundMessage;
-import io.github.aigoodle.connector.channel.ChannelRuntimeRegistry;
+import io.github.aigoodle.channel.ChannelConnectionService;
+import io.github.aigoodle.channel.ChannelOutboundMessage;
+import io.github.aigoodle.channel.ChannelRuntimeRegistry;
 import io.github.aigoodle.workflow.entity.HumanInteractionEntity;
 import io.github.aigoodle.workflow.interaction.HumanInteractionNotifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
