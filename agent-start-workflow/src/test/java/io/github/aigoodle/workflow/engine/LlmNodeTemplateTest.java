@@ -114,6 +114,11 @@ class LlmNodeTemplateTest {
         public PromptTemplateEntity get(String id) {
             return fixture;
         }
+
+        @Override
+        public PromptTemplateEntity get(String tenantId, String id) {
+            return fixture;
+        }
     }
 
     @SuppressWarnings("unused")

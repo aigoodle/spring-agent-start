@@ -29,6 +29,10 @@ order, then the DB is at the corresponding revision.
 Numbering follows the same convention Flyway uses so this folder can be
 wired into a real migration runner later without renaming.
 
+The production workflow runtime also requires
+`V20__workflow_node_structured_errors.sql`, which adds stable node error codes
+and retryability metadata used by recovery and alerting.
+
 ## How to apply
 
 Manual (single-shot):

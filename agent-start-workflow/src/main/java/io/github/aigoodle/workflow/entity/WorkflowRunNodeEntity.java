@@ -20,6 +20,8 @@ public class WorkflowRunNodeEntity extends BaseEntity {
     private String selectedHandle;
     private String outputsJson;
     private String error;
+    private String errorCode;
+    private Boolean retryable;
     private String idempotencyKey;
     private String executionMode;
     private String resultCachePolicy;

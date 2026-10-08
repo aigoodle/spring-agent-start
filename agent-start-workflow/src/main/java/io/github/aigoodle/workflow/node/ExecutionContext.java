@@ -41,6 +41,8 @@ public class ExecutionContext {
         return io.github.aigoodle.common.context.UserContextHolder.callAs(reader, action);
     }
     private String userId;
+    /** Authenticated caller propagated explicitly across virtual-thread boundaries. */
+    private io.github.aigoodle.common.context.CurrentUser executionUser;
     private RunCancellationToken cancellationToken;
     private Map<String, Object> iterationCursors = new java.util.concurrent.ConcurrentHashMap<>();
     private BiConsumer<String, Object> iterationProgressListener = (nodeId, cursor) -> {};

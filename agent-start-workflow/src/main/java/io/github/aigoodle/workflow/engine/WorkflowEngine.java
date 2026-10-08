@@ -11,6 +11,7 @@ import io.github.aigoodle.workflow.node.NodeExecutor;
 import io.github.aigoodle.workflow.node.NodeResult;
 import io.github.aigoodle.workflow.node.StepRecord;
 import io.github.aigoodle.workflow.node.NodeExecutionPolicy;
+import io.github.aigoodle.workflow.node.NodeFailureClassifier;
 import io.github.aigoodle.workflow.node.WorkflowWaitRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +31,9 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -66,6 +70,8 @@ public class WorkflowEngine {
     private static final ScheduledExecutorService DEADLINE_SCHEDULER =
             Executors.newSingleThreadScheduledExecutor(Thread.ofPlatform()
                     .daemon(true).name("workflow-deadlines").factory());
+    private static final ExecutorService NODE_ATTEMPT_EXECUTOR =
+            Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("workflow-node-attempt-", 0).factory());
 
     private final NodeExecutorRegistry executorRegistry;
     private final WorkflowCompiler compiler;
@@ -146,6 +152,7 @@ public class WorkflowEngine {
         context.setTenantId(tenantId == null || tenantId.isBlank()
                 ? UserContextHolder.currentTenantId() : tenantId);
         context.setUserId(UserContextHolder.currentUserId());
+        context.setExecutionUser(UserContextHolder.get());
         context.setResourceTenantId(options.resourceTenantId());
         context.getPool().setSystem("tenant_id", context.getTenantId());
         context.getPool().setSystem("user_id", context.getUserId());
@@ -189,6 +196,11 @@ public class WorkflowEngine {
                 log.error("Workflow run {} failed: {}", context.getRunId(), ex.getMessage(), ex);
                 return result.fail(ex.getMessage(), run.endOutputs);
             }
+        } catch (RuntimeException ex) {
+            log.error("Workflow run {} encountered an engine or persistence failure: {}",
+                    context.getRunId(), ex.getMessage(), ex);
+            options.cancellationToken().cancel("Workflow infrastructure failure");
+            return result.fail(safeMessage(ex), run.endOutputs);
         } finally {
             workflowDeadline.cancel(false);
             executor.shutdownNow();
@@ -305,7 +317,8 @@ public class WorkflowEngine {
                     run.record(node, nodeResult, execution.elapsedMillis(), attempt,
                             execution.startedAt(), execution.finishedAt());
                 }
-                if (!nodeResult.isFailed() || run.options.cancellationToken().isCancelled()
+                if (!nodeResult.isFailed() || Boolean.FALSE.equals(nodeResult.getRetryable())
+                        || run.options.cancellationToken().isCancelled()
                         || attempt >= maximumAttempts) break;
 
                 run.observer.nodeFinished(node, NodeExecutionStatus.RETRYING, nodeResult,
@@ -353,6 +366,18 @@ public class WorkflowEngine {
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             run.outcomes.put(node.getId(), NodeOutcome.skipped());
+            if (!run.options.cancellationToken().isCancelled()) {
+                run.failure.compareAndSet(null, "Node " + node.getId() + " was interrupted");
+                run.options.cancellationToken().cancel(run.failure.get());
+            }
+        } catch (RuntimeException exception) {
+            // Observer/checkpoint failures happen outside executeAttempt(). They are
+            // infrastructure failures and must never be mistaken for a successful node.
+            String message = "Node " + node.getId() + " infrastructure failure: " + safeMessage(exception);
+            log.error(message, exception);
+            run.failure.compareAndSet(null, message);
+            run.options.cancellationToken().cancel(message);
+            run.outcomes.put(node.getId(), NodeOutcome.skipped());
         } finally {
             if (permit) run.concurrency.release();
             nodeFuture.complete(null);
@@ -363,30 +388,39 @@ public class WorkflowEngine {
         long start = System.nanoTime();
         Instant startedAt = Instant.now();
         NodeResult result;
-        AtomicReference<Boolean> nodeTimedOut = new AtomicReference<>(false);
-        Thread executingThread = Thread.currentThread();
         Duration nodeTimeout = nodeTimeout(node, run.options.defaultNodeTimeout());
-        ScheduledFuture<?> deadline = DEADLINE_SCHEDULER.schedule(() -> {
-            nodeTimedOut.set(true);
-            executingThread.interrupt();
-        }, nodeTimeout.toMillis(), TimeUnit.MILLISECONDS);
+        Future<NodeResult> attempt = NODE_ATTEMPT_EXECUTOR.submit(() -> {
+            try (RunCancellationToken.Registration ignored =
+                         run.options.cancellationToken().registerCurrentThread()) {
+                run.context.throwIfCancelled();
+                io.github.aigoodle.common.context.CurrentUser caller = run.context.getExecutionUser();
+                if (caller == null) {
+                    caller = io.github.aigoodle.common.context.CurrentUser.builder()
+                            .tenantId(run.context.getTenantId()).userId(run.context.getUserId()).build();
+                }
+                io.github.aigoodle.common.context.CurrentUser propagated = caller;
+                return UserContextHolder.callAs(propagated, () -> executor.execute(node, run.context));
+            }
+        });
         try (RunCancellationToken.Registration ignored =
                      run.options.cancellationToken().registerCurrentThread()) {
-            run.context.throwIfCancelled();
-            result = executor.execute(node, run.context);
-            if (Boolean.TRUE.equals(nodeTimedOut.get())) {
-                result = NodeResult.failure("Node deadline exceeded after " + nodeTimeout);
-            }
-        } catch (Exception exception) {
-            log.error("Node {} ({}) failed: {}", node.getId(), node.getType(), exception.getMessage(), exception);
-            String message = Boolean.TRUE.equals(nodeTimedOut.get())
-                    ? "Node deadline exceeded after " + nodeTimeout
-                    : (run.options.cancellationToken().isCancelled()
-                    ? run.options.cancellationToken().reason() : exception.getMessage());
-            result = NodeResult.failure(message);
+            result = attempt.get(nodeTimeout.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (TimeoutException timeout) {
+            attempt.cancel(true);
+            result = NodeResult.transientFailure("NODE_TIMEOUT",
+                    "Node deadline exceeded after " + nodeTimeout);
+        } catch (InterruptedException interrupted) {
+            attempt.cancel(true);
+            Thread.currentThread().interrupt();
+            String message = run.options.cancellationToken().reason();
+            result = NodeResult.permanentFailure("NODE_CANCELLED",
+                    message == null ? "Node execution interrupted" : message);
+        } catch (ExecutionException execution) {
+            Throwable failure = execution.getCause() == null ? execution : execution.getCause();
+            log.error("Node {} ({}) failed: {}", node.getId(), node.getType(), failure.getMessage(), failure);
+            result = NodeFailureClassifier.classify(failure);
         } finally {
-            deadline.cancel(false);
-            Thread.interrupted();
+            if (!attempt.isDone()) attempt.cancel(true);
         }
         return new AttemptExecution(result, (System.nanoTime() - start) / 1_000_000,
                 startedAt, Instant.now());
@@ -398,6 +432,11 @@ public class WorkflowEngine {
     private static Duration nodeTimeout(NodeDef node, Duration defaultTimeout) {
         int configured = node.getInt("timeoutMillis", -1);
         return configured > 0 ? Duration.ofMillis(configured) : defaultTimeout;
+    }
+
+    private static String safeMessage(Throwable failure) {
+        String message = failure.getMessage();
+        return message == null || message.isBlank() ? failure.getClass().getSimpleName() : message;
     }
 
     private static boolean anyIncomingFired(List<EdgeDef> incoming, Map<String, NodeOutcome> outcomes) {

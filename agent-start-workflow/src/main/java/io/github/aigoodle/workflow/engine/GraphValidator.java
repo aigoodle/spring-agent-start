@@ -17,12 +17,15 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.time.Duration;
 
 /** Publication and runtime safety checks for executable workflow DAGs. */
 public final class GraphValidator {
 
     private static final Pattern VARIABLE = Pattern.compile("\\{\\{#([^.\\s#}]+)\\.[^#}]+#}}");
     private static final int MAX_NESTED_GRAPH_DEPTH = 8;
+    private static final long MAX_NODE_TIMEOUT_MILLIS = Duration.ofHours(24).toMillis();
+    private static final long MAX_NODE_ATTEMPTS = 20;
 
     public void validate(WorkflowGraph graph) {
         validate(graph, 0, java.util.Collections.newSetFromMap(new IdentityHashMap<>()));
@@ -127,9 +130,39 @@ public final class GraphValidator {
         Object timeout = node.get("timeoutMillis");
         require(timeout == null || positiveLong(timeout), "invalid_node_timeout",
                 "Node " + node.getId() + " timeoutMillis must be a positive integer");
+        require(timeout == null || parsedLong(timeout) <= MAX_NODE_TIMEOUT_MILLIS,
+                "invalid_node_timeout", "Node " + node.getId() + " timeoutMillis exceeds 24 hours");
         Object retries = node.get("maxAttempts");
         require(retries == null || positiveLong(retries), "invalid_retry_policy",
                 "Node " + node.getId() + " maxAttempts must be a positive integer");
+        require(retries == null || parsedLong(retries) <= MAX_NODE_ATTEMPTS,
+                "invalid_retry_policy", "Node " + node.getId() + " maxAttempts exceeds " + MAX_NODE_ATTEMPTS);
+        Object initialBackoff = node.get("retryBackoffMillis");
+        require(initialBackoff == null || nonNegativeLong(initialBackoff), "invalid_retry_policy",
+                "Node " + node.getId() + " retryBackoffMillis must be a non-negative integer");
+        Object maximumBackoff = node.get("maxRetryBackoffMillis");
+        require(maximumBackoff == null || nonNegativeLong(maximumBackoff), "invalid_retry_policy",
+                "Node " + node.getId() + " maxRetryBackoffMillis must be a non-negative integer");
+        Object multiplier = node.get("retryBackoffMultiplier");
+        require(multiplier == null || multiplier instanceof Number number
+                        && Double.isFinite(number.doubleValue()) && number.doubleValue() >= 1.0
+                        && number.doubleValue() <= 10.0,
+                "invalid_retry_policy", "Node " + node.getId()
+                        + " retryBackoffMultiplier must be between 1 and 10");
+        Object legacyHttpRetries = node.get("maxRetries");
+        require(legacyHttpRetries == null || nonNegativeLong(legacyHttpRetries), "invalid_retry_policy",
+                "Node " + node.getId() + " maxRetries must be a non-negative integer");
+        require(retries == null || legacyHttpRetries == null, "ambiguous_retry_policy",
+                "Node " + node.getId() + " cannot configure both maxAttempts and maxRetries");
+        if (node.getType() == NodeType.HTTP_REQUEST && legacyHttpRetries instanceof Number count
+                && count.longValue() > 0) {
+            String method = node.getString("method", "GET").toUpperCase(java.util.Locale.ROOT);
+            boolean inherentlyIdempotent = method.equals("GET") || method.equals("HEAD")
+                    || method.equals("OPTIONS") || method.equals("PUT") || method.equals("DELETE");
+            require(inherentlyIdempotent || hasText(node.getString("idempotencyKey")),
+                    "unsafe_http_retry", "HTTP node " + node.getId()
+                            + " requires idempotencyKey before retrying " + method);
+        }
 
         switch (node.getType()) {
             case VIDEO_GENERATION -> {
@@ -183,11 +216,25 @@ public final class GraphValidator {
         }
     }
 
+    private static boolean nonNegativeLong(Object value) {
+        if (!(value instanceof Number number)) return false;
+        long converted = number.longValue();
+        return converted >= 0 && number.doubleValue() == converted;
+    }
+
     private static boolean positiveLong(Object value) {
         try {
             return Long.parseLong(String.valueOf(value)) > 0;
         } catch (NumberFormatException exception) {
             return false;
+        }
+    }
+
+    private static long parsedLong(Object value) {
+        try {
+            return Long.parseLong(String.valueOf(value));
+        } catch (NumberFormatException exception) {
+            return Long.MAX_VALUE;
         }
     }
 

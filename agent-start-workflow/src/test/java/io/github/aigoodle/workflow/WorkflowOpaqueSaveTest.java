@@ -13,7 +13,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 /**
  * Regression test that guards the exact save path the frontend hits: POST
@@ -94,8 +93,6 @@ class WorkflowOpaqueSaveTest {
 
     private static void assertTenantMismatch(org.junit.jupiter.api.function.Executable executable) {
         Throwable failure = assertThrows(RuntimeException.class, executable);
-        Throwable root = failure;
-        while (root.getCause() != null) root = root.getCause();
-        assertInstanceOf(SecurityException.class, root);
+        org.junit.jupiter.api.Assertions.assertInstanceOf(SecurityException.class, failure);
     }
 }

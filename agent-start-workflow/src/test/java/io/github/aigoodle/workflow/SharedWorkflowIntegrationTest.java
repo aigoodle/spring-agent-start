@@ -88,7 +88,8 @@ class SharedWorkflowIntegrationTest {
                     .eq(io.github.aigoodle.workflow.entity.WorkflowRunEntity::getId, result.getRunId()));
             assertThat(run).isNotNull();
             assertThat(run.getInputsJson()).contains("consumer").doesNotContain("\"_memory_tenant_id\":\"owner\"");
-            assertThatThrownBy(() -> service.require("owner", id)).hasRootCauseInstanceOf(SecurityException.class);
+            assertThatThrownBy(() -> service.require("owner", id))
+                    .isInstanceOf(SecurityException.class);
             assertThatThrownBy(() -> service.runSharedPublished("missing", "owner", Map.of(), "c", null, null))
                     .hasMessageContaining("不可访问");
         });

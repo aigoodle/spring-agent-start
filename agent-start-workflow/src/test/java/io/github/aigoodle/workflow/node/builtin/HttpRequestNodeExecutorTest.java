@@ -60,7 +60,7 @@ class HttpRequestNodeExecutorTest {
     }
 
     @Test
-    void exposesHttpErrorResponseWithoutTransportRetry() throws Exception {
+    void classifiesServiceUnavailableAsRetryableFailure() throws Exception {
         HttpClient httpClient = mock(HttpClient.class);
         HttpResponse<String> serviceUnavailable = response(503, "unavailable");
         when(httpClient.send(any(HttpRequest.class), anyStringBodyHandler()))
@@ -70,8 +70,10 @@ class HttpRequestNodeExecutorTest {
 
         NodeResult result = executor.execute(httpNode().with("maxRetries", 5), context);
 
-        assertThat(result.isFailed()).isFalse();
-        assertThat(result.getOutputs()).containsEntry("status", 503);
+        assertThat(result.isFailed()).isTrue();
+        assertThat(result.getErrorCode()).isEqualTo("HTTP_503");
+        assertThat(result.getRetryable()).isTrue();
+        assertThat(result.getExternalStatus()).isEqualTo(503);
         assertThat(backoffCount).hasValue(0);
         verify(httpClient).send(any(HttpRequest.class), anyStringBodyHandler());
     }
