@@ -45,6 +45,7 @@ import io.github.aigoodle.workflow.service.WorkflowCheckpointStore;
 import io.github.aigoodle.workflow.service.PersistentWorkflowRunner;
 import io.github.aigoodle.workflow.service.HumanInteractionStore;
 import io.github.aigoodle.workflow.service.HumanInteractionService;
+import io.github.aigoodle.workflow.service.WorkflowRuntimeMetrics;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.beans.factory.ObjectProvider;
@@ -263,8 +264,11 @@ public class GoodleWorkflowAutoConfiguration {
     @ConditionalOnMissingBean
     public PersistentWorkflowRunner persistentWorkflowRunner(WorkflowEngine engine,
                                                               WorkflowCheckpointStore checkpointStore,
-                                                              HumanInteractionStore humanInteractions) {
-        return new PersistentWorkflowRunner(engine, checkpointStore, humanInteractions);
+                                                              HumanInteractionStore humanInteractions,
+                                                              ObjectProvider<io.github.aigoodle.workflow.service.WorkflowRuntimeMetrics> metrics) {
+        return new PersistentWorkflowRunner(engine, checkpointStore, "workflow-" + java.util.UUID.randomUUID(),
+                java.time.Duration.ofSeconds(30), humanInteractions,
+                metrics.getIfAvailable(() -> io.github.aigoodle.workflow.service.WorkflowRuntimeMetrics.NOOP));
     }
 
     @Bean
@@ -278,8 +282,21 @@ public class GoodleWorkflowAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public io.github.aigoodle.workflow.service.WorkflowWaitRecoveryService workflowWaitRecoveryService(
-            WorkflowCheckpointStore store, PersistentWorkflowRunner runner) {
-        return new io.github.aigoodle.workflow.service.WorkflowWaitRecoveryService(store, runner);
+            WorkflowCheckpointStore store, PersistentWorkflowRunner runner,
+            ObjectProvider<io.github.aigoodle.workflow.service.WorkflowRuntimeMetrics> metrics) {
+        return new io.github.aigoodle.workflow.service.WorkflowWaitRecoveryService(store, runner,
+                metrics.getIfAvailable(() -> io.github.aigoodle.workflow.service.WorkflowRuntimeMetrics.NOOP));
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(io.micrometer.core.instrument.MeterRegistry.class)
+    static class WorkflowMetricsConfiguration {
+        @Bean
+        @ConditionalOnBean(io.micrometer.core.instrument.MeterRegistry.class)
+        @ConditionalOnMissingBean(WorkflowRuntimeMetrics.class)
+        WorkflowRuntimeMetrics workflowRuntimeMetrics(io.micrometer.core.instrument.MeterRegistry registry) {
+            return new io.github.aigoodle.workflow.service.MicrometerWorkflowRuntimeMetrics(registry);
+        }
     }
 
     @Bean

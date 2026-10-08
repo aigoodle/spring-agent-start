@@ -77,7 +77,8 @@ ALTER TABLE goodle_workflow_checkpoints ALTER COLUMN conversation_id TYPE VARCHA
 CREATE TABLE IF NOT EXISTS goodle_workflow_run_nodes (
     id VARCHAR(255) NOT NULL, tenant_id VARCHAR(64) NOT NULL DEFAULT 'default', run_id VARCHAR(64) NOT NULL,
     node_id VARCHAR(255) NOT NULL, node_type VARCHAR(64), status VARCHAR(32) NOT NULL, attempt INTEGER NOT NULL DEFAULT 0,
-    selected_handle VARCHAR(255), outputs_json TEXT, error TEXT, idempotency_key VARCHAR(255),
+    selected_handle VARCHAR(255), outputs_json TEXT, error TEXT, error_code VARCHAR(128), retryable BOOLEAN,
+    idempotency_key VARCHAR(255),
     execution_mode VARCHAR(32), result_cache_policy VARCHAR(32), resumable BOOLEAN,
     started_at TIMESTAMP, finished_at TIMESTAMP, executor_instance VARCHAR(255),
     token_count BIGINT, cost VARCHAR(64), external_status INTEGER, trace_id VARCHAR(128), span_id VARCHAR(128),
@@ -85,6 +86,8 @@ CREATE TABLE IF NOT EXISTS goodle_workflow_run_nodes (
     created_at TIMESTAMP, updated_at TIMESTAMP, PRIMARY KEY (id), UNIQUE (tenant_id, run_id, node_id)
 );
 CREATE INDEX IF NOT EXISTS idx_workflow_run_node_run ON goodle_workflow_run_nodes (tenant_id, run_id, status);
+ALTER TABLE goodle_workflow_run_nodes ADD COLUMN IF NOT EXISTS error_code VARCHAR(128);
+ALTER TABLE goodle_workflow_run_nodes ADD COLUMN IF NOT EXISTS retryable BOOLEAN;
 
 CREATE TABLE IF NOT EXISTS goodle_workflow_execution_events (
     id VARCHAR(64) NOT NULL, tenant_id VARCHAR(64) NOT NULL DEFAULT 'default', run_id VARCHAR(64) NOT NULL,

@@ -80,6 +80,30 @@ class WorkflowRunControlTest {
     }
 
     @Test
+    void nodeDeadlineReturnsEvenWhenExecutorIgnoresInterrupts() {
+        AtomicBoolean release = new AtomicBoolean();
+        NodeExecutor uncooperative = new NodeExecutor() {
+            public NodeType type() { return NodeType.TEMPLATE_TRANSFORM; }
+            public NodeResult execute(NodeDef node, ExecutionContext context) {
+                while (!release.get()) Thread.onSpinWait();
+                return NodeResult.of("value", "late");
+            }
+        };
+        WorkflowGraph graph = linear("work", "mark");
+        graph.node("work").with("timeoutMillis", 50);
+        long started = System.nanoTime();
+        try {
+            WorkflowRunResult result = run(engine(uncooperative), graph,
+                    options(Duration.ofSeconds(2), Duration.ofSeconds(1), 2, new RunCancellationToken()));
+            assertEquals(WorkflowRunStatus.FAILED, result.getStatus());
+            assertTrue(Duration.ofNanos(System.nanoTime() - started).toMillis() < 1000,
+                    "non-cooperative executor must not hold the workflow open");
+        } finally {
+            release.set(true);
+        }
+    }
+
+    @Test
     void boundsConcurrentNodeExecutions() {
         AtomicInteger active = new AtomicInteger();
         AtomicInteger peak = new AtomicInteger();
@@ -125,6 +149,82 @@ class WorkflowRunControlTest {
         assertEquals(List.of(1, 2), result.getSteps().stream()
                 .filter(step -> step.getNodeId().equals("work"))
                 .map(step -> step.getAttempt()).toList());
+    }
+
+    @Test
+    void permanentFailureIsNotRetriedEvenWhenAttemptsAreConfigured() {
+        AtomicInteger calls = new AtomicInteger();
+        NodeExecutor invalid = new NodeExecutor() {
+            public NodeType type() { return NodeType.TEMPLATE_TRANSFORM; }
+            public NodeResult execute(NodeDef node, ExecutionContext context) {
+                calls.incrementAndGet();
+                return NodeResult.permanentFailure("INVALID_CONFIG", "bad template");
+            }
+        };
+        WorkflowGraph graph = linear("work", "mark");
+        graph.node("work").with("maxAttempts", 5);
+
+        WorkflowRunResult result = run(engine(invalid), graph,
+                options(Duration.ofSeconds(5), Duration.ofSeconds(2), 2, new RunCancellationToken()));
+
+        assertEquals(WorkflowRunStatus.FAILED, result.getStatus());
+        assertEquals(1, calls.get());
+    }
+
+    @Test
+    void observerFailureCannotBeReportedAsSuccessfulRun() {
+        WorkflowEngine engine = engine(new NodeExecutor() {
+            public NodeType type() { return NodeType.TEMPLATE_TRANSFORM; }
+            public NodeResult execute(NodeDef node, ExecutionContext context) {
+                return NodeResult.of("value", "ok");
+            }
+        });
+        WorkflowExecutionObserver brokenPersistence = new WorkflowExecutionObserver() {
+            @Override
+            public void nodeStarted(NodeDef node, int attempt, ExecutionContext context) {
+                if ("work".equals(node.getId())) throw new IllegalStateException("database unavailable");
+            }
+        };
+
+        WorkflowRunResult result = engine.run(linear("work", "mark"), Map.of(), null,
+                null, null, "test", options(Duration.ofSeconds(5), Duration.ofSeconds(2), 2,
+                        new RunCancellationToken()), WorkflowResumeState.empty(), brokenPersistence);
+
+        assertEquals(WorkflowRunStatus.FAILED, result.getStatus());
+        assertTrue(result.getError().contains("database unavailable"), result.getError());
+    }
+
+    @Test
+    void retryStormRemainsInsideConfiguredConcurrencyAndAttemptBudgets() {
+        java.util.concurrent.ConcurrentHashMap<String, AtomicInteger> attempts = new java.util.concurrent.ConcurrentHashMap<>();
+        AtomicInteger active = new AtomicInteger();
+        AtomicInteger peak = new AtomicInteger();
+        NodeExecutor transientWork = new NodeExecutor() {
+            public NodeType type() { return NodeType.TEMPLATE_TRANSFORM; }
+            public NodeResult execute(NodeDef node, ExecutionContext context) {
+                int running = active.incrementAndGet();
+                peak.accumulateAndGet(running, Math::max);
+                try {
+                    int attempt = attempts.computeIfAbsent(node.getId(), ignored -> new AtomicInteger())
+                            .incrementAndGet();
+                    return attempt < 3
+                            ? NodeResult.transientFailure("OVERLOADED", "try later")
+                            : NodeResult.of("value", "ok");
+                } finally {
+                    active.decrementAndGet();
+                }
+            }
+        };
+        WorkflowGraph graph = fanOut(100);
+        graph.getNodes().stream().filter(node -> node.getType() == NodeType.TEMPLATE_TRANSFORM)
+                .forEach(node -> node.with("maxAttempts", 3).with("retryBackoffMillis", 1));
+
+        WorkflowRunResult result = run(engine(transientWork), graph,
+                options(Duration.ofSeconds(10), Duration.ofSeconds(2), 8, new RunCancellationToken()));
+
+        assertTrue(result.isSuccess(), result.getError());
+        assertEquals(300, attempts.values().stream().mapToInt(AtomicInteger::get).sum());
+        assertTrue(peak.get() <= 8, "retry storm exceeded concurrency limit: " + peak.get());
     }
 
     private static WorkflowRunResult run(WorkflowEngine engine, WorkflowGraph graph, WorkflowRunOptions options) {

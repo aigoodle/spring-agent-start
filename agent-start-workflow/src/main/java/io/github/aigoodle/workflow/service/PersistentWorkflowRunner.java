@@ -56,33 +56,41 @@ public class PersistentWorkflowRunner {
     private final String instanceId;
     private final Duration leaseDuration;
     private final HumanInteractionStore humanInteractions;
+    private final WorkflowRuntimeMetrics metrics;
     private final Map<String, ActiveRun> activeRuns = new ConcurrentHashMap<>();
 
     public PersistentWorkflowRunner(WorkflowEngine engine, WorkflowCheckpointStore store) {
-        this(engine, store, "workflow-" + UUID.randomUUID(), DEFAULT_LEASE, null);
+        this(engine, store, "workflow-" + UUID.randomUUID(), DEFAULT_LEASE, null, WorkflowRuntimeMetrics.NOOP);
     }
 
     public PersistentWorkflowRunner(WorkflowEngine engine, WorkflowCheckpointStore store,
                                     HumanInteractionStore humanInteractions) {
-        this(engine, store, "workflow-" + UUID.randomUUID(), DEFAULT_LEASE, humanInteractions);
+        this(engine, store, "workflow-" + UUID.randomUUID(), DEFAULT_LEASE, humanInteractions, WorkflowRuntimeMetrics.NOOP);
     }
 
     PersistentWorkflowRunner(WorkflowEngine engine, WorkflowCheckpointStore store, String instanceId) {
-        this(engine, store, instanceId, DEFAULT_LEASE, null);
+        this(engine, store, instanceId, DEFAULT_LEASE, null, WorkflowRuntimeMetrics.NOOP);
     }
 
     public PersistentWorkflowRunner(WorkflowEngine engine, WorkflowCheckpointStore store, String instanceId,
                                     Duration leaseDuration) {
-        this(engine, store, instanceId, leaseDuration, null);
+        this(engine, store, instanceId, leaseDuration, null, WorkflowRuntimeMetrics.NOOP);
     }
 
     public PersistentWorkflowRunner(WorkflowEngine engine, WorkflowCheckpointStore store, String instanceId,
                                     Duration leaseDuration, HumanInteractionStore humanInteractions) {
+        this(engine, store, instanceId, leaseDuration, humanInteractions, WorkflowRuntimeMetrics.NOOP);
+    }
+
+    public PersistentWorkflowRunner(WorkflowEngine engine, WorkflowCheckpointStore store, String instanceId,
+                                    Duration leaseDuration, HumanInteractionStore humanInteractions,
+                                    WorkflowRuntimeMetrics metrics) {
         this.engine = engine;
         this.store = store;
         this.instanceId = instanceId;
         this.leaseDuration = leaseDuration;
         this.humanInteractions = humanInteractions;
+        this.metrics = metrics == null ? WorkflowRuntimeMetrics.NOOP : metrics;
     }
 
     public WorkflowRunResult start(String tenantId, String workflowId, String graphVersion,
@@ -386,9 +394,12 @@ public class PersistentWorkflowRunner {
                     "Run " + checkpoint.getRunId() + " is owned by another executor", null);
         }
         CheckpointObserver observer = new CheckpointObserver(checkpoint);
+        long runStartedNanos = System.nanoTime();
+        metrics.runStarted();
         ScheduledFuture<?> heartbeat = LEASE_HEARTBEATS.scheduleAtFixedRate(() -> {
             try {
                 if (!store.acquireLease(checkpoint.getTenantId(), checkpoint.getRunId(), instanceId, leaseDuration)) {
+                    metrics.leaseLost();
                     options.cancellationToken().cancel("Workflow execution lease was lost");
                 }
             } catch (RuntimeException exception) {
@@ -404,6 +415,7 @@ public class PersistentWorkflowRunner {
                     checkpoint.getTenantId(), options.withResourceTenantId(
                             (String) JsonUtils.parseMap(checkpoint.getGraphJson()).get("_resourceTenantId")), resume, observer);
             observer.finish(result);
+            metrics.runFinished(result.getStatus(), System.nanoTime() - runStartedNanos);
             return result;
         } finally {
             heartbeat.cancel(false);
@@ -556,6 +568,7 @@ public class PersistentWorkflowRunner {
                 default -> WorkflowExecutionEventType.NODE_COMPLETED;
             };
             store.commitNode(checkpoint, checkpoint.getCheckpointVersion(), durableNode, event);
+            metrics.nodeFinished(node.getType(), status, result);
         }
 
         private WorkflowRunNodeEntity durableNode(NodeDef node, NodeExecutionStatus status,
@@ -569,6 +582,8 @@ public class PersistentWorkflowRunner {
             durableNode.setSelectedHandle(result.getHandle());
             durableNode.setOutputsJson(JsonUtils.toJson(result.getOutputs()));
             durableNode.setError(result.getError());
+            durableNode.setErrorCode(result.getErrorCode());
+            durableNode.setRetryable(result.getRetryable());
             durableNode.setExecutorInstance(instanceId);
             durableNode.setTokenCount(result.getTokenCount());
             durableNode.setCost(result.getCost());

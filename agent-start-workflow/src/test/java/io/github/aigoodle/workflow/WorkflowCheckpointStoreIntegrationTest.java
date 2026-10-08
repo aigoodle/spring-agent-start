@@ -27,6 +27,7 @@ import io.github.aigoodle.common.context.CurrentUser;
 import io.github.aigoodle.common.context.UserContextHolder;
 import io.github.aigoodle.workflow.service.WorkflowSignalResult;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
@@ -44,6 +45,18 @@ class WorkflowCheckpointStoreIntegrationTest {
 
     @Autowired
     private WorkflowCheckpointStore store;
+
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbc;
+
+    @BeforeEach
+    void cleanDurableWorkflowFixtures() {
+        jdbc.update("DELETE FROM goodle_workflow_resume_signals WHERE tenant_id = ?", "checkpoint-test");
+        jdbc.update("DELETE FROM goodle_workflow_execution_events WHERE tenant_id = ?", "checkpoint-test");
+        jdbc.update("DELETE FROM goodle_workflow_run_nodes WHERE tenant_id = ?", "checkpoint-test");
+        jdbc.update("DELETE FROM goodle_human_interactions WHERE tenant_id = ?", "checkpoint-test");
+        jdbc.update("DELETE FROM goodle_workflow_checkpoints WHERE tenant_id = ?", "checkpoint-test");
+    }
 
     @Test
     void createsCheckpointNodesAndAdvancesWithCas() {
@@ -311,6 +324,72 @@ class WorkflowCheckpointStoreIntegrationTest {
     }
 
     @Test
+    void recoveryScannerResumesRunningWorkflowAfterExecutorLeaseExpires() throws Exception {
+        AtomicInteger invocations = new AtomicInteger();
+        NodeExecutor work = new NodeExecutor() {
+            @Override public NodeType type() { return NodeType.TEMPLATE_TRANSFORM; }
+            @Override public NodeResult execute(NodeDef node, ExecutionContext context) {
+                invocations.incrementAndGet();
+                return NodeResult.of("value", "recovered");
+            }
+        };
+        WorkflowEngine engine = new WorkflowEngine(new NodeExecutorRegistry(List.of(
+                new StartNodeExecutor(), new EndNodeExecutor(), work)));
+        WorkflowGraph graph = new WorkflowGraph();
+        graph.addNode(NodeDef.of("start", NodeType.START));
+        graph.addNode(NodeDef.of("work", NodeType.TEMPLATE_TRANSFORM));
+        graph.addNode(NodeDef.of("end", NodeType.END).with("outputs", Map.of("answer", "{{#work.value#}}")));
+        graph.addEdge(EdgeDef.of("start", "work"));
+        graph.addEdge(EdgeDef.of("work", "end"));
+        String runId = UUID.randomUUID().toString();
+        WorkflowCheckpointEntity abandoned = checkpoint(runId);
+        abandoned.setGraphJson(io.github.aigoodle.common.util.JsonUtils.toJson(graph));
+        abandoned.setInputsJson("{}");
+        abandoned.setNodeStatesJson("{\"start\":\"PENDING\",\"work\":\"PENDING\",\"end\":\"PENDING\"}");
+        abandoned.setVariablePoolJson("{\"sys\":{}}");
+        abandoned.setPendingNodesJson("[\"start\",\"work\",\"end\"]");
+        store.create(abandoned, List.of(node("start", NodeExecutionStatus.PENDING),
+                typedNode("work", NodeType.TEMPLATE_TRANSFORM), typedNode("end", NodeType.END)));
+        assertTrue(store.acquireLease("checkpoint-test", runId, "crashed-instance", Duration.ofMillis(5)));
+        Thread.sleep(20);
+
+        new io.github.aigoodle.workflow.service.WorkflowWaitRecoveryService(store,
+                new PersistentWorkflowRunner(engine, store)).recoverDueWaits();
+
+        long deadline = System.nanoTime() + Duration.ofSeconds(2).toNanos();
+        while (!WorkflowRunStatus.SUCCEEDED.name().equals(
+                store.require("checkpoint-test", runId).getStatus()) && System.nanoTime() < deadline) {
+            Thread.sleep(10);
+        }
+        assertEquals(WorkflowRunStatus.SUCCEEDED.name(), store.require("checkpoint-test", runId).getStatus());
+        assertEquals(1, invocations.get());
+    }
+
+    @Test
+    void recoveryScannerTerminatesPermanentlyInvalidCheckpointInsteadOfHotLooping() throws Exception {
+        String runId = UUID.randomUUID().toString();
+        WorkflowCheckpointEntity invalid = checkpoint(runId);
+        store.create(invalid, List.of());
+        assertTrue(store.acquireLease("checkpoint-test", runId, "crashed-instance", Duration.ofMillis(5)));
+        Thread.sleep(20);
+        WorkflowEngine engine = new WorkflowEngine(new NodeExecutorRegistry(List.of(
+                new StartNodeExecutor(), new EndNodeExecutor())));
+
+        new io.github.aigoodle.workflow.service.WorkflowWaitRecoveryService(store,
+                new PersistentWorkflowRunner(engine, store)).recoverDueWaits();
+
+        long deadline = System.nanoTime() + Duration.ofSeconds(2).toNanos();
+        WorkflowCheckpointEntity state;
+        do {
+            state = store.require("checkpoint-test", runId);
+            if (WorkflowRunStatus.FAILED.name().equals(state.getStatus())) break;
+            Thread.sleep(10);
+        } while (System.nanoTime() < deadline);
+        assertEquals(WorkflowRunStatus.FAILED.name(), state.getStatus());
+        assertTrue(state.getInterruptReason().contains("invalid_start_count"));
+    }
+
+    @Test
     void activeRunCanBePausedDurablyAndResumed() throws Exception {
         AtomicInteger invocations = new AtomicInteger();
         NodeExecutor slow = new NodeExecutor() {
@@ -373,6 +452,12 @@ class WorkflowCheckpointStoreIntegrationTest {
         value.setNodeType("START");
         value.setStatus(status.name());
         value.setAttempt(0);
+        return value;
+    }
+
+    private static WorkflowRunNodeEntity typedNode(String nodeId, NodeType type) {
+        WorkflowRunNodeEntity value = node(nodeId, NodeExecutionStatus.PENDING);
+        value.setNodeType(type.name());
         return value;
     }
 }

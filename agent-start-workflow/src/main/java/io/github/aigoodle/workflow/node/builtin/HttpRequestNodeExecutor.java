@@ -48,7 +48,11 @@ public class HttpRequestNodeExecutor implements NodeExecutor {
     public NodeExecutionMode executionMode(NodeDef node) {
         String method = node.getString("method", "GET").toUpperCase(java.util.Locale.ROOT);
         if (method.equals("GET") || method.equals("HEAD") || method.equals("OPTIONS")) return NodeExecutionMode.PURE;
-        return NodeExecutionMode.IDEMPOTENT;
+        if (method.equals("PUT") || method.equals("DELETE")) return NodeExecutionMode.IDEMPOTENT;
+        // POST/PATCH are only safely replayable when the workflow author has
+        // confirmed that the remote endpoint honours an idempotency key.
+        return node.getString("idempotencyKey") == null || node.getString("idempotencyKey").isBlank()
+                ? NodeExecutionMode.SIDE_EFFECT : NodeExecutionMode.IDEMPOTENT;
     }
 
     @Override
@@ -70,7 +74,7 @@ public class HttpRequestNodeExecutor implements NodeExecutor {
             try {
                 HttpResponse<String> response = httpClient.send(
                         preparedRequest.request(), HttpResponse.BodyHandlers.ofString());
-                return responseResult(response);
+                return responseResult(response, preparedRequest);
             } catch (IOException transportFailure) {
                 lastTransportFailure = transportFailure;
                 if (attempt < preparedRequest.retryCount()) {
@@ -91,11 +95,20 @@ public class HttpRequestNodeExecutor implements NodeExecutor {
         return exhaustedRetries(preparedRequest, lastTransportFailure);
     }
 
-    private static NodeResult responseResult(HttpResponse<String> response) {
-        // 4xx/5xx are valid HTTP responses; downstream nodes decide how to handle them.
+    private static NodeResult responseResult(HttpResponse<String> response,
+                                             HttpNodeRequestFactory.PreparedRequest request) {
+        int status = response.statusCode();
+        if (status == 408 || status == 429 || status == 502 || status == 503 || status == 504) {
+            return NodeResult.transientFailure("HTTP_" + status,
+                    "HTTP request to " + request.url() + " returned " + status).externalStatus(status);
+        }
+        if (status >= 400) {
+            return NodeResult.permanentFailure("HTTP_" + status,
+                    "HTTP request to " + request.url() + " returned " + status).externalStatus(status);
+        }
         return NodeResult.empty()
-                .externalStatus(response.statusCode())
-                .output("status", response.statusCode())
+                .externalStatus(status)
+                .output("status", status)
                 .output("body", response.body())
                 .output("headers", response.headers().map());
     }

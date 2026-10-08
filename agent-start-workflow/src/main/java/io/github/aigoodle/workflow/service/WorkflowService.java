@@ -42,6 +42,14 @@ public class WorkflowService {
         if (appPermissions != null) appPermissions.requireLinkedApp(defaultIfBlank(tenantId, DEFAULT_TENANT), appId, write);
     }
 
+    private static void requireTenantAccess(String tenantId) {
+        io.github.aigoodle.common.context.CurrentUser current = UserContextHolder.get();
+        if (current != null && current.getTenantId() != null
+                && !current.getTenantId().equals(defaultIfBlank(tenantId, DEFAULT_TENANT))) {
+            throw new SecurityException("Cross-tenant workflow access is forbidden");
+        }
+    }
+
     private final WorkflowMapper workflowMapper;
     private final WorkflowEngine workflowEngine;
     private final WorkflowGraphCodec graphCodec;
@@ -87,6 +95,7 @@ public class WorkflowService {
     /** Creates or updates the single draft row owned by an application. */
     @Transactional
     public WorkflowEntity save(WorkflowDraftDefinition definition) {
+        requireTenantAccess(definition.tenantId());
         checkApp(definition.tenantId(), definition.applicationId(), true);
         requireAppId(definition.applicationId());
         String tenantId = defaultIfBlank(definition.tenantId(), DEFAULT_TENANT);
@@ -106,6 +115,7 @@ public class WorkflowService {
     }
 
     public WorkflowEntity require(String tenantId, String workflowId) {
+        requireTenantAccess(tenantId);
         WorkflowEntity workflow = workflowMapper.selectOne(new LambdaQueryWrapper<WorkflowEntity>()
                 .eq(WorkflowEntity::getTenantId, defaultIfBlank(tenantId, DEFAULT_TENANT))
                 .eq(WorkflowEntity::getId, workflowId).last("LIMIT 1"));

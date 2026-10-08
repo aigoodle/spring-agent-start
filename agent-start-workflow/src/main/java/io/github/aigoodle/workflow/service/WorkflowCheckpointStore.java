@@ -112,6 +112,37 @@ public class WorkflowCheckpointStore {
                 .last("LIMIT " + Math.max(1, Math.min(limit, 500))));
     }
 
+    /**
+     * Finds executions abandoned by a crashed process. A null lease is only
+     * considered stale after the grace cutoff so a freshly-created run cannot
+     * be stolen between checkpoint creation and its first lease acquisition.
+     */
+    public List<WorkflowCheckpointEntity> staleRunning(LocalDateTime now, LocalDateTime nullLeaseCutoff,
+                                                        int limit) {
+        return checkpointMapper.selectList(new LambdaQueryWrapper<WorkflowCheckpointEntity>()
+                .eq(WorkflowCheckpointEntity::getStatus,
+                        io.github.aigoodle.workflow.engine.WorkflowRunStatus.RUNNING.name())
+                .and(query -> query.le(WorkflowCheckpointEntity::getLeaseExpiresAt, now)
+                        .or(nested -> nested.isNull(WorkflowCheckpointEntity::getLeaseExpiresAt)
+                                .le(WorkflowCheckpointEntity::getUpdatedAt, nullLeaseCutoff)))
+                .orderByAsc(WorkflowCheckpointEntity::getUpdatedAt)
+                .last("LIMIT " + Math.max(1, Math.min(limit, 500))));
+    }
+
+    /** Marks a run that cannot be safely replayed as requiring operator action. */
+    @Transactional
+    public boolean failRecovery(WorkflowCheckpointEntity checkpoint, String reason) {
+        checkpoint.setStatus(io.github.aigoodle.workflow.engine.WorkflowRunStatus.FAILED.name());
+        checkpoint.setInterruptReason(reason);
+        try {
+            transition(checkpoint, checkpoint.getCheckpointVersion(), WorkflowExecutionEventType.RUN_FAILED);
+            return true;
+        } catch (PlatformException conflict) {
+            if ("checkpoint_conflict".equals(conflict.getCode())) return false;
+            throw conflict;
+        }
+    }
+
     @Transactional
     public boolean requestCancellation(String tenantId, String runId, String reason) {
         if (checkpointMapper.requestCancellation(tenantId, runId, reason, LocalDateTime.now()) != 1) return false;
