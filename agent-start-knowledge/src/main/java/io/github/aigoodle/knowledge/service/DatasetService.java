@@ -98,7 +98,7 @@ public class DatasetService {
     public RetrievalConfig retrievalConfig(DatasetEntity dataset) {
         RetrievalConfig retrievalConfig = JsonUtils.parse(
                 dataset.getRetrievalConfigJson(), RetrievalConfig.class);
-        return retrievalConfig == null ? RetrievalConfig.hybrid() : retrievalConfig;
+        return retrievalConfig == null ? RetrievalConfig.vector() : retrievalConfig;
     }
 
     public void applyCountChange(DatasetEntity dataset, DatasetCountChange change) {

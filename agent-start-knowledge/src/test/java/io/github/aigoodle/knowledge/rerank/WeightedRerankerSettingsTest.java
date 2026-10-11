@@ -9,10 +9,9 @@ class WeightedRerankerSettingsTest {
 
     @Test
     void normalizesWeightsAndAppliesTheMinimumIdealLength() {
-        WeightedRerankerSettings settings = new WeightedRerankerSettings(6, 3, 1, 10);
+        WeightedRerankerSettings settings = new WeightedRerankerSettings(9, 1, 10);
 
-        assertThat(settings.vectorWeight()).isEqualTo(0.6);
-        assertThat(settings.keywordWeight()).isEqualTo(0.3);
+        assertThat(settings.vectorWeight()).isEqualTo(0.9);
         assertThat(settings.lengthWeight()).isEqualTo(0.1);
         assertThat(settings.idealContentLength()).isEqualTo(50);
     }
@@ -20,10 +19,10 @@ class WeightedRerankerSettingsTest {
     @Test
     void rejectsWeightsThatCannotRepresentAValidContribution() {
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> new WeightedRerankerSettings(-1, 1, 1, 400))
+                .isThrownBy(() -> new WeightedRerankerSettings(-1, 1, 400))
                 .withMessageContaining("vectorWeight");
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> new WeightedRerankerSettings(Double.NaN, 1, 1, 400))
+                .isThrownBy(() -> new WeightedRerankerSettings(Double.NaN, 1, 400))
                 .withMessageContaining("vectorWeight");
     }
 }

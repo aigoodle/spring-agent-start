@@ -66,6 +66,9 @@
             <groupId>io.github.aigoodle</groupId>
             <artifactId>agent-start-knowledge</artifactId>
         </dependency>
+        <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-rag-query</artifactId></dependency>
+        <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-rag-rerank</artifactId></dependency>
+        <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-rag-agent</artifactId></dependency>
         <dependency>
             <groupId>io.github.aigoodle</groupId>
             <artifactId>agent-start-agent</artifactId>

@@ -22,8 +22,6 @@ public class RetrievalRequest {
     private Double scoreThreshold;
 
     /** Override the dense/vector fusion weight (0..1). */
-    private Double vectorWeight;
-
     /** Equality filter applied to chunk metadata (e.g. {@code {"category":"faq"}}). */
     private Map<String, Object> metadataFilter;
 }

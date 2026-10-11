@@ -39,19 +39,17 @@ class DatasetWebSupportTest {
     void mapsEveryRetrievalOption() {
         RetrieveRequestDto webRequest = new RetrieveRequestDto();
         webRequest.setQuery("human-readable code");
-        webRequest.setMethod(RetrievalMethod.HYBRID);
+        webRequest.setMethod(RetrievalMethod.VECTOR);
         webRequest.setTopK(8);
         webRequest.setScoreThreshold(0.42);
-        webRequest.setVectorWeight(0.7);
         webRequest.setMetadataFilter(Map.of("language", "java"));
 
         RetrievalRequest request = RetrievalRequestMapper.from(webRequest);
 
         assertThat(request.getQuery()).isEqualTo("human-readable code");
-        assertThat(request.getMethod()).isEqualTo(RetrievalMethod.HYBRID);
+        assertThat(request.getMethod()).isEqualTo(RetrievalMethod.VECTOR);
         assertThat(request.getTopK()).isEqualTo(8);
         assertThat(request.getScoreThreshold()).isEqualTo(0.42);
-        assertThat(request.getVectorWeight()).isEqualTo(0.7);
         assertThat(request.getMetadataFilter()).containsEntry("language", "java");
     }
 }

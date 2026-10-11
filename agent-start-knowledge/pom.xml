@@ -13,7 +13,7 @@
     <artifactId>agent-start-knowledge</artifactId>
     <name>agent-start-knowledge</name>
     <description>Knowledge base / RAG: document loading, template-based chunking, embedding indexing and
-        hybrid (vector + keyword) retrieval with reranking. Depends on agent-start-model.</description>
+        vector retrieval, context expansion and pluggable RAG pipeline execution. Depends on agent-start-model.</description>
 
     <dependencies>
         <dependency>
@@ -23,6 +23,10 @@
         <dependency>
             <groupId>io.github.aigoodle</groupId>
             <artifactId>agent-start-model</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.aigoodle</groupId>
+            <artifactId>agent-start-rag-api</artifactId>
         </dependency>
 
         <!-- Spring AI: vector store + RAG advisors + document readers -->
@@ -46,23 +50,6 @@
         <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-jdbc</artifactId>
-        </dependency>
-
-        <!-- Embedded Lucene: default sparse/full-text index for term-weighted
-             keyword retrieval (RAGFlow-style). Treat as a per-instance cache
-             rebuildable from the DB; disable with
-             spring-agent.knowledge.lucene.enabled=false. -->
-        <dependency>
-            <groupId>org.apache.lucene</groupId>
-            <artifactId>lucene-core</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.lucene</groupId>
-            <artifactId>lucene-queryparser</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.lucene</groupId>
-            <artifactId>lucene-analysis-common</artifactId>
         </dependency>
 
         <!-- RabbitMQ / AMQP — optional. Only active when the host actually

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+    <parent><groupId>io.github.aigoodle</groupId><artifactId>spring-agent-start</artifactId><version>0.1.0</version></parent>
+    <artifactId>agent-start-rag</artifactId>
+    <packaging>pom</packaging>
+    <name>agent-start-rag</name>
+    <description>Composable RAG contracts and optional query, rerank and agent orchestration modules.</description>
+    <modules>
+        <module>agent-start-rag-api</module>
+        <module>agent-start-rag-query</module>
+        <module>agent-start-rag-rerank</module>
+        <module>agent-start-rag-agent</module>
+    </modules>
+</project>

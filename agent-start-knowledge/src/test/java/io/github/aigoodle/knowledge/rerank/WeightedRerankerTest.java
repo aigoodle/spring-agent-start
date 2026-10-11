@@ -10,26 +10,25 @@ import static org.assertj.core.api.Assertions.assertThat;
 class WeightedRerankerTest {
 
     @Test
-    void combinesSignalsAndReturnsOnlyTheHighestScoringCandidates() {
+    void combinesVectorSimilarityAndLengthPrior() {
         WeightedReranker reranker = new WeightedReranker(
-                new WeightedRerankerSettings(0.5, 0.5, 0, 400));
-        RetrievedSegment vectorMatch = candidate("vector", 1.0, 0.0);
-        RetrievedSegment balancedMatch = candidate("balanced", 0.8, 0.8);
-        RetrievedSegment keywordMatch = candidate("keyword", 0.0, 1.0);
+                new WeightedRerankerSettings(0.9, 0.1, 400));
+        RetrievedSegment vectorMatch = candidate("vector", 1.0);
+        RetrievedSegment balancedMatch = candidate("balanced".repeat(50), 0.8);
+        RetrievedSegment weakMatch = candidate("weak", 0.1);
 
         List<RetrievedSegment> results = reranker.rerank(
-                "query", List.of(vectorMatch, balancedMatch, keywordMatch), 2);
+                "query", List.of(vectorMatch, balancedMatch, weakMatch), 2);
 
         assertThat(results).extracting(RetrievedSegment::getContent)
-                .containsExactly("balanced", "vector");
+                .containsExactly("vector", "balanced".repeat(50));
     }
 
     private static RetrievedSegment candidate(
-            String content, double vectorScore, double keywordScore) {
+            String content, double vectorScore) {
         return RetrievedSegment.builder()
                 .content(content)
                 .vectorScore(vectorScore)
-                .keywordScore(keywordScore)
                 .build();
     }
 }

@@ -43,6 +43,25 @@ class WorkflowGraphCodecTest {
     }
 
     @Test
+    void removesIdenticalLegacyEdgesButPreservesDifferentBranchHandles() {
+        JsonNode source = io.github.aigoodle.common.util.JsonUtils.mapper().valueToTree(java.util.Map.of(
+                "nodes", List.of(
+                        java.util.Map.of("id", "start", "type", "START"),
+                        java.util.Map.of("id", "branch", "type", "IF_ELSE"),
+                        java.util.Map.of("id", "llm", "type", "LLM")),
+                "edges", List.of(
+                        java.util.Map.of("source", "branch", "target", "llm", "sourceHandle", "true"),
+                        java.util.Map.of("source", "branch", "target", "llm", "sourceHandle", "true"),
+                        java.util.Map.of("source", "branch", "target", "llm", "sourceHandle", "false"))));
+
+        WorkflowGraph decoded = graphCodec.read(source);
+
+        assertThat(decoded.getEdges()).hasSize(2);
+        assertThat(decoded.getEdges()).extracting(EdgeDef::getSourceHandle)
+                .containsExactly("true", "false");
+    }
+
+    @Test
     void rejectsMissingGraphWithDomainError() {
         assertThatThrownBy(() -> graphCodec.read(null))
                 .isInstanceOf(PlatformException.class)

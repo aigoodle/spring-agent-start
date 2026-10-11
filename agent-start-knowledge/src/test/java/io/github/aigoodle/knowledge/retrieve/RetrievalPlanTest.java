@@ -1,7 +1,6 @@
 package io.github.aigoodle.knowledge.retrieve;
 
 import io.github.aigoodle.knowledge.config.RetrievalConfig;
-import io.github.aigoodle.knowledge.enums.RetrievalMethod;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -9,48 +8,26 @@ import static org.assertj.core.api.Assertions.assertThat;
 class RetrievalPlanTest {
 
     @Test
-    void requestValuesOverrideDatasetDefaults() {
-        RetrievalConfig config = RetrievalConfig.hybrid();
+    void resolvesVectorRecallPoolAndRequestOverrides() {
+        RetrievalConfig config = RetrievalConfig.vector();
         config.setTopK(5);
-        config.setScoreThreshold(0.2);
-        RetrievalRequest request = RetrievalRequest.builder()
-                .method(RetrievalMethod.HYBRID)
-                .topK(2)
-                .scoreThreshold(0.6)
-                .vectorWeight(0.25)
-                .build();
+        config.setRecallMultiplier(4);
+        RetrievalRequest request = RetrievalRequest.builder().topK(3).scoreThreshold(0.25).build();
 
-        RetrievalPlan plan = RetrievalPlan.resolve(config, request, true);
+        RetrievalPlan plan = RetrievalPlan.resolve(config, request);
 
-        assertThat(plan.topK()).isEqualTo(2);
-        assertThat(plan.scoreThreshold()).isEqualTo(0.6);
-        assertThat(plan.fusedScore(0.8, 0.4)).isEqualTo(0.5);
+        assertThat(plan.topK()).isEqualTo(3);
+        assertThat(plan.recallLimit()).isEqualTo(12);
+        assertThat(plan.scoreThreshold()).isEqualTo(0.25);
     }
 
     @Test
-    void vectorOnlyRetrievalFallsBackToKeywordsWithoutVectorIndex() {
-        RetrievalConfig config = RetrievalConfig.hybrid();
-        RetrievalRequest request = RetrievalRequest.builder()
-                .method(RetrievalMethod.VECTOR)
-                .build();
+    void rerankPoolControlsRecallLimit() {
+        RetrievalConfig config = RetrievalConfig.vector();
+        config.setRerankEnabled(true);
+        config.setRerankPoolSize(30);
 
-        RetrievalPlan plan = RetrievalPlan.resolve(config, request, false);
-
-        assertThat(plan.method()).isEqualTo(RetrievalMethod.FULL_TEXT);
-        assertThat(plan.usesKeywords()).isTrue();
-        assertThat(plan.usesVectors(false)).isFalse();
-    }
-
-    @Test
-    void reciprocalRankFusionRewardsAgreementAcrossRecallChannels() {
-        RetrievalConfig config = RetrievalConfig.hybrid();
-        config.setVectorWeight(0.5);
-        config.setFusionMethod(RetrievalConfig.FusionMethod.RECIPROCAL_RANK);
-        RetrievalPlan plan = RetrievalPlan.resolve(config, RetrievalRequest.builder().query("rag").build(), true);
-
-        double foundByBoth = plan.fusedScore(0.2, 0.2, 2, 2);
-        double vectorOnly = plan.fusedScore(0.99, 0.0, 1, 0);
-
-        assertThat(foundByBoth).isGreaterThan(vectorOnly);
+        assertThat(RetrievalPlan.resolve(config, RetrievalRequest.builder().build()).recallLimit())
+                .isEqualTo(30);
     }
 }

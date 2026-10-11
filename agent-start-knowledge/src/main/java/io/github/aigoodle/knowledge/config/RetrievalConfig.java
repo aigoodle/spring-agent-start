@@ -2,6 +2,7 @@ package io.github.aigoodle.knowledge.config;
 
 import io.github.aigoodle.knowledge.enums.RetrievalMethod;
 import lombok.Data;
+import io.github.aigoodle.rag.api.RagPolicy;
 
 /**
  * How queries are matched and ranked against a dataset.
@@ -9,27 +10,15 @@ import lombok.Data;
 @Data
 public class RetrievalConfig {
 
-    public enum FusionMethod {
-        /** Blend scores directly. Best when both stores expose calibrated scores. */
-        WEIGHTED_SCORE,
-        /** Reciprocal-rank fusion is robust when dense and sparse score scales differ. */
-        RECIPROCAL_RANK
-    }
+    /** Composable execution policy used by the new /rag/retrieve pipeline. */
+    private RagPolicy ragPolicy = RagPolicy.defaults();
 
-    private RetrievalMethod method = RetrievalMethod.HYBRID;
+    private RetrievalMethod method = RetrievalMethod.VECTOR;
 
     private int topK = 5;
 
-    /** Minimum fused score (0..1) for a chunk to be returned. */
+    /** Minimum vector similarity score (0..1) for a chunk to be returned. */
     private double scoreThreshold = 0.0;
-
-    /** Weight of the dense/vector score in HYBRID fusion (keyword weight = 1 - this). */
-    private double vectorWeight = 0.7;
-
-    private FusionMethod fusionMethod = FusionMethod.RECIPROCAL_RANK;
-
-    /** RRF smoothing constant; lower values put more emphasis on the first few hits. */
-    private int rrfK = 60;
 
     /** Candidate multiplier before fusion/reranking. */
     private int recallMultiplier = 6;
@@ -61,11 +50,7 @@ public class RetrievalConfig {
     /** How many candidates to pass into the reranker (default: 4 &times; topK). */
     private int rerankPoolSize = 20;
 
-    public double keywordWeight() {
-        return Math.max(0.0, 1.0 - vectorWeight);
-    }
-
-    public static RetrievalConfig hybrid() {
+    public static RetrievalConfig vector() {
         return new RetrievalConfig();
     }
 }

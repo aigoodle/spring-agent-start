@@ -6,8 +6,7 @@ import lombok.Data;
 import java.util.Map;
 
 /**
- * A scored chunk returned from retrieval, with source attribution and the individual
- * vector/keyword scores that produced the fused {@link #score}.
+ * A scored chunk returned from vector retrieval with source attribution.
  */
 @Data
 @Builder
@@ -28,8 +27,6 @@ public class RetrievedSegment {
 
     private double score;
     private double vectorScore;
-    private double keywordScore;
-
     private Map<String, Object> metadata;
 
     /** Best text to feed an LLM: the parent context when available, else the chunk. */

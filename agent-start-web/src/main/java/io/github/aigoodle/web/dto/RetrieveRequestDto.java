@@ -17,6 +17,5 @@ public class RetrieveRequestDto {
     private RetrievalMethod method;
     private Integer topK;
     private Double scoreThreshold;
-    private Double vectorWeight;
     private Map<String, Object> metadataFilter;
 }

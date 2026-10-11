@@ -72,7 +72,7 @@ class KnowledgeServiceIntegrationTest {
                 .embeddingModelId(registerEmbeddingModel())
                 .indexingTechnique(IndexingTechnique.HIGH_QUALITY)
                 .processRule(rule)
-                .retrievalConfig(RetrievalConfig.hybrid())
+                .retrievalConfig(RetrievalConfig.vector())
                 .build());
     }
 
@@ -92,7 +92,7 @@ class KnowledgeServiceIntegrationTest {
         assertTrue(py.get(0).getContent().toLowerCase().contains("python"),
                 "top hit should be the python chunk, was: " + py.get(0).getContent());
 
-        // scores carry both signals in hybrid mode
+        // vector retrieval exposes the similarity score
         assertTrue(dogs.get(0).getScore() > 0);
         assertTrue(dogs.get(0).getVectorScore() > 0);
     }
@@ -103,11 +103,13 @@ class KnowledgeServiceIntegrationTest {
         try {
             DatasetEntity owned = datasetService.create(CreateDatasetRequest.builder()
                     .tenantId("kb-a").name("guarded-kb")
-                    .indexingTechnique(IndexingTechnique.ECONOMY).build());
+                    .indexingTechnique(IndexingTechnique.HIGH_QUALITY)
+                    .embeddingModelId("test-embedding").build());
             assertTenantMismatch(() -> datasetService.require("kb-b", owned.getId()));
             assertTenantMismatch(() -> datasetService.create(CreateDatasetRequest.builder()
                     .tenantId("kb-b").name("forged-kb")
-                    .indexingTechnique(IndexingTechnique.ECONOMY).build()));
+                    .indexingTechnique(IndexingTechnique.HIGH_QUALITY)
+                    .embeddingModelId("test-embedding").build()));
             assertTenantMismatch(() -> documentMapper.selectList(
                     new LambdaQueryWrapper<KnowledgeDocumentEntity>()
                             .eq(KnowledgeDocumentEntity::getTenantId, "kb-b")));
@@ -134,7 +136,7 @@ class KnowledgeServiceIntegrationTest {
     }
 
     @Test
-    void vectorOnlyAndKeywordOnlyBothWork() {
+    void vectorRetrievalWorks() {
         DatasetEntity ds = highQualityDataset(ChunkingTemplate.NAIVE);
         knowledgeService.addText(ds.getTenantId(), ds.getId(), "animals.txt", DOC);
 
@@ -142,24 +144,6 @@ class KnowledgeServiceIntegrationTest {
                 .query("capital of France Paris").method(RetrievalMethod.VECTOR).build());
         assertTrue(vec.get(0).getContent().toLowerCase().contains("paris"));
 
-        var kw = knowledgeService.retrieve(ds.getTenantId(), ds.getId(), RetrievalRequest.builder()
-                .query("capital of France Paris").method(RetrievalMethod.FULL_TEXT).build());
-        assertTrue(kw.get(0).getContent().toLowerCase().contains("paris"));
-        assertTrue(kw.get(0).getKeywordScore() > 0);
-    }
-
-    @Test
-    void economyDatasetUsesKeywordRetrievalWithoutEmbeddings() {
-        DatasetEntity ds = datasetService.create(CreateDatasetRequest.builder()
-                .tenantId("kb").name("economy")
-                .indexingTechnique(IndexingTechnique.ECONOMY)
-                .processRule(new ProcessRule())
-                .build());
-        knowledgeService.addText(ds.getTenantId(), ds.getId(), "animals.txt", DOC);
-
-        var res = knowledgeService.retrieve(ds.getTenantId(), ds.getId(), "python data science");
-        assertFalse(res.isEmpty());
-        assertTrue(res.get(0).getContent().toLowerCase().contains("python"));
     }
 
     @Test
@@ -217,7 +201,7 @@ class KnowledgeServiceIntegrationTest {
     @Test
     void retrievalCanExpandAdjacentChunkContext() {
         DatasetEntity ds = highQualityDataset(ChunkingTemplate.NAIVE);
-        RetrievalConfig config = RetrievalConfig.hybrid();
+        RetrievalConfig config = RetrievalConfig.vector();
         config.setNeighborWindow(1);
         UpdateDatasetRequest patch = new UpdateDatasetRequest();
         patch.setRetrievalConfig(config);
@@ -229,23 +213,4 @@ class KnowledgeServiceIntegrationTest {
         assertTrue(hit.contextText().length() >= hit.getContent().length());
     }
 
-    @Test
-    void knowledgeGraphIncludesTraceableSemanticEntities() {
-        DatasetEntity ds = highQualityDataset(ChunkingTemplate.NAIVE);
-        knowledgeService.addText(ds.getTenantId(), ds.getId(), "spring-ai.txt",
-                "Spring AI connects retrieval pipelines. Spring AI also connects vector stores.");
-
-        KnowledgeService.KnowledgeGraph graph = knowledgeService.buildKnowledgeGraph(
-                ds.getTenantId(), ds.getId());
-        KnowledgeService.KnowledgeGraphNode spring = graph.nodes().stream()
-                .filter(node -> "entity".equals(node.type()))
-                .filter(node -> "spring".equalsIgnoreCase(node.label()))
-                .findFirst().orElseThrow();
-
-        assertTrue(spring.weight() >= 1);
-        assertFalse(spring.evidenceSegmentIds().isEmpty());
-        assertTrue(graph.edges().stream().anyMatch(edge ->
-                "mentions".equals(edge.relation()) && edge.target().equals(spring.id())
-                        && !edge.evidenceSegmentIds().isEmpty()));
-    }
 }

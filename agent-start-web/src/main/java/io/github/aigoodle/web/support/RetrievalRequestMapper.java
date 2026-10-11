@@ -15,7 +15,6 @@ public final class RetrievalRequestMapper {
                 .method(request.getMethod())
                 .topK(request.getTopK())
                 .scoreThreshold(request.getScoreThreshold())
-                .vectorWeight(request.getVectorWeight())
                 .metadataFilter(request.getMetadataFilter())
                 .build();
     }

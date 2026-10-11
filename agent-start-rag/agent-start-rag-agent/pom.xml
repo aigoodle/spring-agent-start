@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent><groupId>io.github.aigoodle</groupId><artifactId>agent-start-rag</artifactId><version>0.1.0</version></parent>
+    <artifactId>agent-start-rag-agent</artifactId>
+    <description>Agent-facing knowledge search tool and reflective retrieval orchestration.</description>
+    <dependencies>
+        <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-rag-api</artifactId></dependency>
+        <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-tools</artifactId></dependency>
+        <dependency><groupId>io.github.aigoodle</groupId><artifactId>agent-start-common</artifactId></dependency>
+        <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-autoconfigure</artifactId></dependency>
+    </dependencies>
+</project>

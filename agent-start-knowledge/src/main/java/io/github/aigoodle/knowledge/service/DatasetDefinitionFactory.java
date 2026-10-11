@@ -37,11 +37,10 @@ final class DatasetDefinitionFactory {
     }
 
     static void requireEmbeddingModelFor(IndexingTechnique technique, String embeddingModelId) {
-        if (technique == IndexingTechnique.HIGH_QUALITY
-                && (embeddingModelId == null || embeddingModelId.isBlank())) {
+        if (embeddingModelId == null || embeddingModelId.isBlank()) {
             throw new PlatformException(
                     "embedding_model_required",
-                    "A high-quality dataset requires an embedding model id",
+                    "A dataset requires an embedding model id",
                     null);
         }
     }
@@ -55,6 +54,6 @@ final class DatasetDefinitionFactory {
     }
 
     private static RetrievalConfig defaultRetrievalConfig(RetrievalConfig retrievalConfig) {
-        return retrievalConfig == null ? RetrievalConfig.hybrid() : retrievalConfig;
+        return retrievalConfig == null ? RetrievalConfig.vector() : retrievalConfig;
     }
 }

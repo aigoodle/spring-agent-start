@@ -21,7 +21,8 @@ class IndexVersionServiceTest {
     void atomicallyActivatesAndRollsBackGenerations() {
         DatasetEntity dataset = datasetService.create(CreateDatasetRequest.builder()
                 .tenantId("index-version-test").name("versioned")
-                .indexingTechnique(IndexingTechnique.ECONOMY).build());
+                .indexingTechnique(IndexingTechnique.HIGH_QUALITY)
+                .embeddingModelId("test-embedding").build());
         var v1 = versionService.beginRebuild(dataset.getTenantId(), dataset.getId(),
                 "v1", "embed-v1", "chunk-v1", "aaa");
         var v2 = versionService.beginRebuild(dataset.getTenantId(), dataset.getId(),

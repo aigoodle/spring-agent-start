@@ -1,9 +1,8 @@
 package io.github.aigoodle.knowledge.rerank;
 
-/** Normalized scoring weights and content-length preference for weighted reranking. */
+/** Normalized vector scoring and content-length preference for weighted reranking. */
 public record WeightedRerankerSettings(
         double vectorWeight,
-        double keywordWeight,
         double lengthWeight,
         int idealContentLength) {
 
@@ -11,20 +10,17 @@ public record WeightedRerankerSettings(
 
     public WeightedRerankerSettings {
         requireNonNegativeFinite("vectorWeight", vectorWeight);
-        requireNonNegativeFinite("keywordWeight", keywordWeight);
         requireNonNegativeFinite("lengthWeight", lengthWeight);
-
-        double totalWeight = vectorWeight + keywordWeight + lengthWeight;
+        double totalWeight = vectorWeight + lengthWeight;
         if (totalWeight > 0) {
             vectorWeight /= totalWeight;
-            keywordWeight /= totalWeight;
             lengthWeight /= totalWeight;
         }
         idealContentLength = Math.max(MINIMUM_IDEAL_CONTENT_LENGTH, idealContentLength);
     }
 
     public static WeightedRerankerSettings defaults() {
-        return new WeightedRerankerSettings(0.6, 0.3, 0.1, 400);
+        return new WeightedRerankerSettings(0.9, 0.1, 400);
     }
 
     private static void requireNonNegativeFinite(String name, double value) {
