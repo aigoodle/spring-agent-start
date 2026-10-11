@@ -25,6 +25,12 @@ CREATE TABLE IF NOT EXISTS goodle_dataset (
 );
 ALTER TABLE goodle_dataset ADD COLUMN IF NOT EXISTS active_index_version_id VARCHAR(64);
 
+-- Compatibility migration: ECONOMY depended on the removed in-JVM keyword index.
+-- Existing datasets remain valid and now use the supported vector indexing path.
+UPDATE goodle_dataset
+SET indexing_technique = 'HIGH_QUALITY'
+WHERE indexing_technique = 'ECONOMY';
+
 CREATE TABLE IF NOT EXISTS goodle_index_versions (
     id VARCHAR(64) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL DEFAULT 'default',
@@ -123,7 +129,6 @@ CREATE TABLE IF NOT EXISTS goodle_document_segments (
     position      INT,
     content       TEXT,
     token_count   INT,
-    keywords      TEXT,
     metadata_json TEXT,
     parent_id     VARCHAR(64),
     vector_id     VARCHAR(64),

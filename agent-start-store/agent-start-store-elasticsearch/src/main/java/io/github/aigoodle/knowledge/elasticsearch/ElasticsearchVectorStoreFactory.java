@@ -28,7 +28,7 @@ public class ElasticsearchVectorStoreFactory implements VectorStoreFactory {
     @Override
     public VectorStore create(DatasetEntity dataset, EmbeddingModel embeddingModel) {
         ElasticsearchVectorStoreOptions options = new ElasticsearchVectorStoreOptions();
-        options.setIndexName(indexName(dataset));
+        options.setIndexName(indexName(dataset, properties));
         options.setSimilarity(properties.getSimilarity());
         if (properties.getDimensions() > 0) {
             options.setDimensions(properties.getDimensions());
@@ -47,7 +47,7 @@ public class ElasticsearchVectorStoreFactory implements VectorStoreFactory {
         return store;
     }
 
-    private String indexName(DatasetEntity dataset) {
+    static String indexName(DatasetEntity dataset, ElasticsearchStoreProperties properties) {
         String id = dataset.getId() == null ? "default" : dataset.getId();
         return properties.getIndexPrefix() + id.replaceAll("[^A-Za-z0-9_-]", "-").toLowerCase();
     }

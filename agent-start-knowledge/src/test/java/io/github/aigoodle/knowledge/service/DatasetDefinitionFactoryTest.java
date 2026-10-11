@@ -26,21 +26,22 @@ class DatasetDefinitionFactoryTest {
     }
 
     @Test
-    void createsAnEconomyDatasetWithoutAnEmbeddingModel() {
+    void createsVectorDatasetWithAnEmbeddingModel() {
         CreateDatasetRequest request = CreateDatasetRequest.builder()
                 .tenantId(" ")
                 .name("FAQ")
-                .indexingTechnique(IndexingTechnique.ECONOMY)
+                .indexingTechnique(IndexingTechnique.HIGH_QUALITY)
+                .embeddingModelId("test-embedding")
                 .build();
 
         DatasetEntity dataset = DatasetDefinitionFactory.create(request);
 
         assertThat(dataset.getTenantId()).isEqualTo("default");
-        assertThat(dataset.getIndexingTechnique()).isEqualTo(IndexingTechnique.ECONOMY);
+        assertThat(dataset.getIndexingTechnique()).isEqualTo(IndexingTechnique.HIGH_QUALITY);
         assertThat(dataset.getDocumentCount()).isZero();
         assertThat(dataset.getSegmentCount()).isZero();
         assertThat(dataset.getProcessRuleJson()).isEqualTo(JsonUtils.toJson(ProcessRule.naive()));
         assertThat(dataset.getRetrievalConfigJson())
-                .isEqualTo(JsonUtils.toJson(RetrievalConfig.hybrid()));
+                .isEqualTo(JsonUtils.toJson(RetrievalConfig.vector()));
     }
 }

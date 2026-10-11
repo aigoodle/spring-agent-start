@@ -8,10 +8,17 @@ runtime in a Spring application.
 
 - `STRUCTURE_AWARE` chunking tracks Markdown heading paths, protects fenced code and
   tables, labels block types, and recursively splits only oversized semantic blocks.
-- Keyword recall uses CJK bigrams plus IDF-like rare-term weighting. Matches in the
-  document title and heading receive higher weights than ordinary body matches.
-- Hybrid recall supports `RECIPROCAL_RANK` (the default) and `WEIGHTED_SCORE` fusion.
-  RRF is recommended when vector-store and sparse-search scores are not calibrated.
+- Retrieval is vector-only. The module deliberately does not build persisted keyword
+  tokens or scan all chunks in the JVM for sparse recall. Applications that need BM25
+  use `agent-start-store-elasticsearch`, whose BM25 and dense channels share one index.
+- `agent-start-rag-api` owns the stable policy/result models and query/retrieval/fusion/
+  rerank/context SPIs. `agent-start-rag-query`, `agent-start-rag-rerank`, and
+  `agent-start-rag-agent` are optional implementations rather than dependencies of the
+  storage-neutral knowledge core.
+- Query planning supports direct, multi-query, HyDE, step-back and decomposition modes;
+  multiple query/channel result lists can be fused with RRF. The agent module publishes
+  a `knowledge_search` tool so an agent can decide whether to retrieve and retry after
+  inspecting weak evidence.
 - The recall pool is configurable with `recallMultiplier`; optional reranking is
   applied to the expanded pool. `maxChunksPerDocument` can improve source diversity.
 - Existing chunkers, vector stores and reranker SPIs remain replaceable Spring beans.
@@ -37,15 +44,20 @@ runtime in a Spring application.
     "includeHeadingContext": true
   },
   "retrievalConfig": {
-    "method": "HYBRID",
+    "method": "VECTOR",
     "topK": 8,
-    "fusionMethod": "RECIPROCAL_RANK",
-    "vectorWeight": 0.7,
-    "rrfK": 60,
     "recallMultiplier": 6,
     "maxChunksPerDocument": 3,
     "rerankEnabled": true,
-    "rerankPoolSize": 40
+    "rerankPoolSize": 40,
+    "ragPolicy": {
+      "queryPlanning": { "strategy": "MULTI_QUERY", "maxQueries": 4, "includeOriginal": true },
+      "retrieval": { "channels": ["VECTOR", "SPARSE"], "candidateLimitPerQuery": 50, "parallelism": 4 },
+      "fusion": { "method": "RRF", "rrfK": 60 },
+      "rerank": { "enabled": true, "provider": "score", "candidateLimit": 30, "topN": 8, "failOpen": true },
+      "context": { "parentExpansion": true, "neighborWindow": 1, "deduplicate": true, "compression": false, "maxTokens": 6000 },
+      "budget": { "maxQueries": 4, "maxRetrievalRounds": 1, "maxLlmCalls": 2, "maxCandidates": 100, "maxEvidenceItems": 12 }
+    }
   }
 }
 ```
@@ -53,9 +65,9 @@ runtime in a Spring application.
 ## Next stages
 
 1. Add format-specific structured readers for DOCX/PDF tables and page/heading metadata.
-2. Add optional query expansion and synonym dictionaries through a new query-transform SPI.
+2. Add synonym dictionaries as an optional query-planner implementation.
 3. Persist evaluation datasets/reports and expose experiment comparison in the admin UI.
-4. Add optional adjacent-chunk context expansion and a remote OCR/layout-parser adapter.
+4. Add a remote OCR/layout-parser adapter and LLM contextual-compression implementation.
 5. Add optional GraphRAG/RAPTOR indexing as separate starters after the retrieval baseline
    has measurable evaluation coverage.
 

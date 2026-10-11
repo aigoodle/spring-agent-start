@@ -1,7 +1,6 @@
 package io.github.aigoodle.knowledge.index;
 
 import io.github.aigoodle.knowledge.entity.DatasetEntity;
-import io.github.aigoodle.knowledge.enums.IndexingTechnique;
 import io.github.aigoodle.model.service.ModelService;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.vectorstore.SimpleVectorStore;
@@ -36,8 +35,7 @@ public class VectorStoreManager {
     }
 
     public boolean hasVectorIndex(DatasetEntity dataset) {
-        return dataset.getIndexingTechnique() != IndexingTechnique.ECONOMY
-                && dataset.getEmbeddingModelId() != null;
+        return dataset.getEmbeddingModelId() != null && !dataset.getEmbeddingModelId().isBlank();
     }
 
     public VectorStore getStore(DatasetEntity dataset) {

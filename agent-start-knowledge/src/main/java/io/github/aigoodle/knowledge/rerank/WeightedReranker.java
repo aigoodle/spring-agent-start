@@ -7,12 +7,12 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Rescores candidates by blending vector score, keyword score and content-length prior.
+ * Rescores candidates by blending vector score and content-length prior.
  * The prior mildly penalises very short / very long chunks, which is the same heuristic
  * Dify's "weighted score" reranker applies.
  * <p>
  * Weights are configured via {@code spring-agent.knowledge.reranker.weighted.*}:
- * {@code vectorWeight} + {@code keywordWeight} + {@code lengthWeight} should sum to 1
+ * {@code vectorWeight} + {@code lengthWeight} should sum to 1
  * (they are renormalised if they don't).
  */
 public class WeightedReranker implements Reranker {
@@ -23,13 +23,6 @@ public class WeightedReranker implements Reranker {
 
     public WeightedReranker() {
         this(WeightedRerankerSettings.defaults());
-    }
-
-    /** @deprecated Use {@link #WeightedReranker(WeightedRerankerSettings)}. */
-    @Deprecated(forRemoval = false)
-    public WeightedReranker(double vectorWeight, double keywordWeight, double lengthWeight, int idealLength) {
-        this(new WeightedRerankerSettings(
-                vectorWeight, keywordWeight, lengthWeight, idealLength));
     }
 
     public WeightedReranker(WeightedRerankerSettings settings) {
@@ -50,7 +43,6 @@ public class WeightedReranker implements Reranker {
         for (RetrievedSegment candidate : candidates) {
             double contentLengthScore = contentLengthPrior(candidate.getContent());
             double combinedScore = settings.vectorWeight() * candidate.getVectorScore()
-                    + settings.keywordWeight() * candidate.getKeywordScore()
                     + settings.lengthWeight() * contentLengthScore;
             candidate.setScore(combinedScore);
             rescoredCandidates.add(candidate);

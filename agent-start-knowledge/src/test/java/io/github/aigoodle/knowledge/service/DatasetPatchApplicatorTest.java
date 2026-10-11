@@ -12,7 +12,7 @@ class DatasetPatchApplicatorTest {
 
     @Test
     void appliesOnlyFieldsSuppliedByThePatch() {
-        DatasetEntity dataset = dataset(IndexingTechnique.ECONOMY, null);
+        DatasetEntity dataset = dataset(IndexingTechnique.HIGH_QUALITY, "test-embedding");
         dataset.setName("Existing name");
         dataset.setDescription("Existing description");
         UpdateDatasetRequest patch = new UpdateDatasetRequest();
@@ -25,15 +25,15 @@ class DatasetPatchApplicatorTest {
     }
 
     @Test
-    void preventsSwitchingToHighQualityWithoutAnEmbeddingModel() {
-        DatasetEntity dataset = dataset(IndexingTechnique.ECONOMY, null);
+    void preventsClearingTheEmbeddingModel() {
+        DatasetEntity dataset = dataset(IndexingTechnique.HIGH_QUALITY, "test-embedding");
         UpdateDatasetRequest patch = new UpdateDatasetRequest();
-        patch.setIndexingTechnique(IndexingTechnique.HIGH_QUALITY);
+        patch.setEmbeddingModelId(" ");
 
         assertThatThrownBy(() -> DatasetPatchApplicator.apply(dataset, patch))
                 .isInstanceOf(PlatformException.class)
                 .hasMessageContaining("embedding model id");
-        assertThat(dataset.getIndexingTechnique()).isEqualTo(IndexingTechnique.ECONOMY);
+        assertThat(dataset.getEmbeddingModelId()).isEqualTo("test-embedding");
     }
 
     private static DatasetEntity dataset(IndexingTechnique technique, String embeddingModelId) {

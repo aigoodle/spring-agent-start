@@ -12,8 +12,8 @@
 
     <artifactId>agent-start-store-elasticsearch</artifactId>
     <name>agent-start-store-elasticsearch</name>
-    <description>Elasticsearch-backed VectorStoreFactory for agent-start-knowledge.
-        One index per dataset. Activated by
+    <description>Elasticsearch-backed vector and BM25 sparse retrieval for agent-start-knowledge.
+        Both channels share one index per dataset. Activated by
         spring-agent.knowledge.vector-store=elasticsearch.</description>
 
     <dependencies>

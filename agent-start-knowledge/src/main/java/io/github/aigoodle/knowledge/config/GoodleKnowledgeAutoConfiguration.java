@@ -39,6 +39,9 @@ import io.github.aigoodle.knowledge.rerank.Reranker;
 import io.github.aigoodle.knowledge.rerank.RerankerRegistry;
 import io.github.aigoodle.knowledge.rerank.WeightedReranker;
 import io.github.aigoodle.knowledge.rerank.WeightedRerankerSettings;
+import io.github.aigoodle.knowledge.rag.DefaultRagPipeline;
+import io.github.aigoodle.knowledge.rag.KnowledgeVectorRetriever;
+import io.github.aigoodle.knowledge.rag.ReciprocalRankFusion;
 import io.github.aigoodle.knowledge.retrieve.HybridRetriever;
 import io.github.aigoodle.knowledge.retrieve.DefaultQueryTransformer;
 import io.github.aigoodle.knowledge.retrieve.QueryTransformer;
@@ -48,6 +51,14 @@ import io.github.aigoodle.knowledge.service.DatasetService;
 import io.github.aigoodle.knowledge.service.KnowledgeService;
 import io.github.aigoodle.model.config.GoodleModelAutoConfiguration;
 import io.github.aigoodle.model.service.ModelService;
+import io.github.aigoodle.rag.api.PlannedQuery;
+import io.github.aigoodle.rag.api.QueryPlan;
+import io.github.aigoodle.rag.spi.ContextProcessor;
+import io.github.aigoodle.rag.spi.FusionStrategy;
+import io.github.aigoodle.rag.spi.QueryPlanner;
+import io.github.aigoodle.rag.spi.RagPipeline;
+import io.github.aigoodle.rag.spi.RagReranker;
+import io.github.aigoodle.rag.spi.Retriever;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
@@ -156,11 +167,10 @@ public class GoodleKnowledgeAutoConfiguration {
     @ConditionalOnMissingBean(name = "weightedReranker")
     public WeightedReranker weightedReranker(
             @Value("${spring-agent.knowledge.reranker.weighted.vector-weight:0.6}") double vectorWeight,
-            @Value("${spring-agent.knowledge.reranker.weighted.keyword-weight:0.3}") double keywordWeight,
             @Value("${spring-agent.knowledge.reranker.weighted.length-weight:0.1}") double lengthWeight,
             @Value("${spring-agent.knowledge.reranker.weighted.ideal-length:400}") int idealLength) {
         return new WeightedReranker(new WeightedRerankerSettings(
-                vectorWeight, keywordWeight, lengthWeight, idealLength));
+                vectorWeight, lengthWeight, idealLength));
     }
 
     @Bean
@@ -226,6 +236,41 @@ public class GoodleKnowledgeAutoConfiguration {
                                            ObjectProvider<QueryTransformer> queryTransformers) {
         return new HybridRetriever(segmentMapper, vectorStoreManager, rerankerRegistry,
                 queryTransformers.orderedStream().toList());
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(QueryPlanner.class)
+    public QueryPlanner directRagQueryPlanner() {
+        return new QueryPlanner() {
+            @Override public String getName() { return "DIRECT"; }
+            @Override public QueryPlan plan(io.github.aigoodle.rag.api.RagRequest request) {
+                return new QueryPlan(request.query(), List.of(
+                        new PlannedQuery("q0", request.query(), PlannedQuery.Type.ORIGINAL, 1.0, null)));
+            }
+        };
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(KnowledgeVectorRetriever.class)
+    public KnowledgeVectorRetriever knowledgeVectorRetriever(DatasetService datasetService,
+                                                              HybridRetriever hybridRetriever) {
+        return new KnowledgeVectorRetriever(datasetService, hybridRetriever);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(ReciprocalRankFusion.class)
+    public ReciprocalRankFusion reciprocalRankFusion() { return new ReciprocalRankFusion(); }
+
+    @Bean
+    @ConditionalOnMissingBean(RagPipeline.class)
+    public RagPipeline ragPipeline(ObjectProvider<QueryPlanner> planners,
+                                   ObjectProvider<Retriever> retrievers,
+                                   ObjectProvider<FusionStrategy> fusionStrategies,
+                                   ObjectProvider<RagReranker> rerankers,
+                                   ObjectProvider<ContextProcessor> contextProcessors) {
+        return new DefaultRagPipeline(planners.orderedStream().toList(), retrievers.orderedStream().toList(),
+                fusionStrategies.orderedStream().toList(), rerankers.orderedStream().toList(),
+                contextProcessors.orderedStream().toList());
     }
 
     @Bean

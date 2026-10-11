@@ -4,12 +4,21 @@ import io.github.aigoodle.knowledge.entity.DatasetEntity;
 import io.github.aigoodle.knowledge.entity.HitTestingLogEntity;
 import io.github.aigoodle.knowledge.retrieve.RetrievedSegment;
 import io.github.aigoodle.knowledge.service.CreateDatasetRequest;
-import io.github.aigoodle.knowledge.service.KnowledgeService.KnowledgeGraph;
 import io.github.aigoodle.knowledge.service.DatasetService;
 import io.github.aigoodle.knowledge.service.KnowledgeService;
 import io.github.aigoodle.knowledge.service.UpdateDatasetRequest;
 import io.github.aigoodle.web.common.ApiResponse;
 import io.github.aigoodle.web.dto.RetrieveRequestDto;
+import io.github.aigoodle.web.dto.RagRetrieveRequestDto;
+import io.github.aigoodle.rag.api.RagPolicy;
+import io.github.aigoodle.rag.api.RagRequest;
+import io.github.aigoodle.rag.api.RagResult;
+import io.github.aigoodle.rag.spi.RagPipeline;
+import io.github.aigoodle.rag.spi.QueryPlanner;
+import io.github.aigoodle.rag.spi.Retriever;
+import io.github.aigoodle.rag.spi.FusionStrategy;
+import io.github.aigoodle.rag.spi.RagReranker;
+import org.springframework.beans.factory.ObjectProvider;
 import io.github.aigoodle.web.support.RetrievalRequestMapper;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -23,6 +32,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 
 import static io.github.aigoodle.common.context.UserContextHolder.currentTenantId;
 
@@ -34,10 +44,24 @@ public class DatasetController {
 
     private final DatasetService datasetService;
     private final KnowledgeService knowledgeService;
+    private final RagPipeline ragPipeline;
+    private final List<QueryPlanner> queryPlanners;
+    private final List<Retriever> ragRetrievers;
+    private final List<FusionStrategy> fusionStrategies;
+    private final List<RagReranker> ragRerankers;
 
-    public DatasetController(DatasetService datasetService, KnowledgeService knowledgeService) {
+    public DatasetController(DatasetService datasetService, KnowledgeService knowledgeService,
+                             RagPipeline ragPipeline, ObjectProvider<QueryPlanner> queryPlanners,
+                             ObjectProvider<Retriever> ragRetrievers,
+                             ObjectProvider<FusionStrategy> fusionStrategies,
+                             ObjectProvider<RagReranker> ragRerankers) {
         this.datasetService = datasetService;
         this.knowledgeService = knowledgeService;
+        this.ragPipeline = ragPipeline;
+        this.queryPlanners = queryPlanners.orderedStream().toList();
+        this.ragRetrievers = ragRetrievers.orderedStream().toList();
+        this.fusionStrategies = fusionStrategies.orderedStream().toList();
+        this.ragRerankers = ragRerankers.orderedStream().toList();
     }
 
     @GetMapping
@@ -81,8 +105,28 @@ public class DatasetController {
                 currentTenantId(), id, RetrievalRequestMapper.from(request)));
     }
 
-    @GetMapping("/{id}/knowledge-graph")
-    public ApiResponse<KnowledgeGraph> knowledgeGraph(@PathVariable String id) {
-        return ApiResponse.ok(knowledgeService.buildKnowledgeGraph(currentTenantId(), id));
+    @PostMapping("/{id}/rag/retrieve")
+    public ApiResponse<RagResult> ragRetrieve(@PathVariable String id,
+                                             @RequestBody RagRetrieveRequestDto request) {
+        DatasetEntity dataset = datasetService.require(currentTenantId(), id);
+        RagPolicy policy = request.policy() != null ? request.policy()
+                : datasetService.retrievalConfig(dataset).getRagPolicy();
+        return ApiResponse.ok(ragPipeline.retrieve(new RagRequest(currentTenantId(), List.of(id), request.query(),
+                request.conversationId(), policy, request.metadataFilter())));
     }
+
+    @GetMapping("/rag/capabilities")
+    public ApiResponse<Map<String, Object>> ragCapabilities() {
+        List<RagPolicy.FusionMethod> fusionMethods = new java.util.ArrayList<>();
+        fusionMethods.add(RagPolicy.FusionMethod.NONE);
+        fusionStrategies.stream().map(FusionStrategy::getMethod).distinct()
+                .filter(method -> method != RagPolicy.FusionMethod.NONE).forEach(fusionMethods::add);
+        return ApiResponse.ok(Map.of(
+                "queryStrategies", queryPlanners.stream().anyMatch(p -> p.getName().equalsIgnoreCase("MODEL"))
+                        ? RagPolicy.QueryStrategy.values() : new RagPolicy.QueryStrategy[]{RagPolicy.QueryStrategy.DIRECT},
+                "retrievalChannels", ragRetrievers.stream().map(Retriever::getChannel).distinct().toList(),
+                "fusionMethods", fusionMethods,
+                "rerankers", ragRerankers.stream().map(RagReranker::getName).toList()));
+    }
+
 }

@@ -3,9 +3,13 @@ package io.github.aigoodle.workflow.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.aigoodle.common.exception.PlatformException;
 import io.github.aigoodle.common.util.JsonUtils;
+import io.github.aigoodle.workflow.graph.EdgeDef;
 import io.github.aigoodle.workflow.graph.WorkflowGraph;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Objects;
+import java.util.Set;
 
 /** Converts persisted designer JSON into the typed graph used by the runtime. */
 final class WorkflowGraphCodec {
@@ -16,6 +20,7 @@ final class WorkflowGraphCodec {
         }
         try {
             WorkflowGraph graph = JsonUtils.parse(graphDefinition.toString(), WorkflowGraph.class);
+            removeDuplicateEdges(graph);
             graph.reindex();
             return graph;
         } catch (Exception exception) {
@@ -24,6 +29,23 @@ final class WorkflowGraphCodec {
                     "Could not parse graph: " + exception.getMessage(),
                     exception);
         }
+    }
+
+    /** Normalizes exact duplicate edges left by older designers. */
+    private static void removeDuplicateEdges(WorkflowGraph graph) {
+        if (graph.getEdges() == null || graph.getEdges().isEmpty()) return;
+        Set<String> seen = new HashSet<>();
+        var unique = new ArrayList<EdgeDef>();
+        for (EdgeDef edge : graph.getEdges()) {
+            if (edge == null) {
+                unique.add(null);
+                continue;
+            }
+            String key = edge.getSource() + "\u0000" + edge.getTarget() + "\u0000"
+                    + Objects.toString(edge.getSourceHandle(), "");
+            if (seen.add(key)) unique.add(edge);
+        }
+        graph.setEdges(unique);
     }
 
     JsonNode write(WorkflowGraph graph) {

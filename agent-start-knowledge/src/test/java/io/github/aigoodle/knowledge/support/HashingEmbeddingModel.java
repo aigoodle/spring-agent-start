@@ -1,6 +1,5 @@
 package io.github.aigoodle.knowledge.support;
 
-import io.github.aigoodle.knowledge.nlp.KeywordTokenizer;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.Embedding;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -9,6 +8,7 @@ import org.springframework.ai.embedding.EmbeddingResponse;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Deterministic bag-of-words hashing embedding for offline tests: shared tokens
@@ -41,7 +41,8 @@ public class HashingEmbeddingModel implements EmbeddingModel {
     @Override
     public float[] embed(String text) {
         float[] vec = new float[dim];
-        for (String token : KeywordTokenizer.tokenize(text)) {
+        for (String token : text.toLowerCase(Locale.ROOT).split("[^\\p{L}\\p{N}]+")) {
+            if (token.isBlank()) continue;
             int h = Math.floorMod(token.hashCode(), dim);
             vec[h] += 1.0f;
         }

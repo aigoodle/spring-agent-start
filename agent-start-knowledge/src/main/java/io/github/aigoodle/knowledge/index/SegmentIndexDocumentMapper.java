@@ -5,7 +5,6 @@ import io.github.aigoodle.knowledge.chunk.Chunk;
 import io.github.aigoodle.knowledge.entity.DatasetEntity;
 import io.github.aigoodle.knowledge.entity.KnowledgeDocumentEntity;
 import io.github.aigoodle.knowledge.entity.SegmentEntity;
-import io.github.aigoodle.knowledge.nlp.KeywordTokenizer;
 import org.springframework.ai.document.Document;
 
 import java.util.HashMap;
@@ -48,7 +47,6 @@ final class SegmentIndexDocumentMapper {
 
     void updateContent(SegmentEntity segment, String content) {
         segment.setContent(content);
-        segment.setKeywords(KeywordTokenizer.join(content));
         segment.setHash(contentHash(content));
         segment.setTokenCount(estimateTokenCount(content));
     }
@@ -90,7 +88,6 @@ final class SegmentIndexDocumentMapper {
         segment.setDocumentId(document.getId());
         segment.setPosition(position);
         segment.setContent(content);
-        segment.setKeywords(KeywordTokenizer.join(content));
         segment.setVectorId(UUID.randomUUID().toString());
         segment.setEnabled(Boolean.TRUE);
         segment.setHash(contentHash(content));

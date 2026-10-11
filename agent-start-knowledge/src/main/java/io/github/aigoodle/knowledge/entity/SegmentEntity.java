@@ -7,8 +7,7 @@ import lombok.EqualsAndHashCode;
 
 /**
  * A single chunk: the unit that gets embedded, stored in the vector store and
- * returned by retrieval. Keyword tokens and metadata are persisted so keyword
- * retrieval and metadata filtering work without an external search engine.
+ * returned by vector retrieval. Metadata is persisted for attribution and filtering.
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -25,9 +24,6 @@ public class SegmentEntity extends BaseEntity {
     private String content;
 
     private Integer tokenCount;
-
-    /** Space-joined keyword tokens used by the keyword retriever. */
-    private String keywords;
 
     /** JSON metadata (heading path, page, source name, custom fields). */
     private String metadataJson;

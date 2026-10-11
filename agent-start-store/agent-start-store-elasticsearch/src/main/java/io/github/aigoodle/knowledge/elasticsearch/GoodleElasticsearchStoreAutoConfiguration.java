@@ -2,6 +2,7 @@ package io.github.aigoodle.knowledge.elasticsearch;
 
 import io.github.aigoodle.knowledge.config.GoodleKnowledgeAutoConfiguration;
 import io.github.aigoodle.knowledge.index.VectorStoreFactory;
+import io.github.aigoodle.knowledge.service.DatasetService;
 import co.elastic.clients.transport.rest5_client.low_level.Rest5Client;
 import co.elastic.clients.transport.rest5_client.low_level.Rest5ClientBuilder;
 import org.apache.hc.client5.http.auth.AuthScope;
@@ -51,5 +52,13 @@ public class GoodleElasticsearchStoreAutoConfiguration {
     public VectorStoreFactory elasticsearchVectorStoreFactory(Rest5Client restClient,
                                                               ElasticsearchStoreProperties properties) {
         return new ElasticsearchVectorStoreFactory(restClient, properties);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(ElasticsearchSparseRetriever.class)
+    public ElasticsearchSparseRetriever elasticsearchSparseRetriever(Rest5Client restClient,
+                                                                      ElasticsearchStoreProperties properties,
+                                                                      DatasetService datasetService) {
+        return new ElasticsearchSparseRetriever(restClient, properties, datasetService);
     }
 }

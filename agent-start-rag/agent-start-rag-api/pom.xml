@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+    <parent><groupId>io.github.aigoodle</groupId><artifactId>agent-start-rag</artifactId><version>0.1.0</version></parent>
+    <artifactId>agent-start-rag-api</artifactId>
+    <name>agent-start-rag-api</name>
+    <description>Stable contracts and SPIs for composable RAG pipelines.</description>
+</project>
