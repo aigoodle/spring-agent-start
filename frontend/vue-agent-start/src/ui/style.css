@@ -202,7 +202,35 @@
   .as-modal__mask { @apply absolute inset-0 bg-black/45; }
   .as-modal { @apply relative flex max-h-[calc(100vh-124px)] max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-xl shadow-[var(--as-shadow)]; background: var(--as-bg); outline: none; }
   .as-modal__head { @apply relative flex items-center justify-between border-b px-6 py-4; border-color: var(--as-border-secondary); }
-  .as-modal__title { @apply text-base font-semibold; }
+  .as-modal__title { @apply min-w-0 text-base font-semibold; }
+  .as-modal__title-text {
+    display: block;
+    min-width: 0;
+    line-height: 1.15;
+  }
+  .as-modal-heading { padding: 1px 0; }
+  .as-modal-heading--with-extra { position: relative; }
+  .as-modal-heading__extra {
+    position: absolute;
+    top: 4px;
+    left: calc(100% + 12px);
+    white-space: nowrap;
+  }
+  .as-modal-title {
+    color: var(--as-text);
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 26px;
+    letter-spacing: 0;
+  }
+  .as-modal-subtitle {
+    margin-top: 3px;
+    color: var(--as-text-secondary);
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 18px;
+    letter-spacing: 0;
+  }
   .as-modal__close {
     @apply absolute right-6 grid size-8 cursor-pointer place-items-center rounded-md border bg-transparent p-0 text-[22px] transition-[color,text-shadow,opacity] duration-150;
     top: 0;
@@ -648,18 +676,70 @@
 .as-hud-frame--modal .as-modal__head {
   justify-content: center;
   min-height: 56px;
-  padding: 16px 56px;
+  padding: 0 56px;
   overflow: hidden;
   border-color: var(--as-hud-modal-line);
   background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--as-theme-primary) 12%, transparent) 24% 76%, transparent);
 }
 .as-hud-frame--modal .as-modal__title {
+  position: absolute;
+  inset-block: 0;
+  left: 50%;
+  display: flex;
+  align-items: flex-start;
+  isolation: isolate;
+  width: fit-content;
+  max-width: calc(100% - 136px);
+  min-width: 0;
+  transform: translateX(-50%);
   color: var(--as-hud-modal-hot);
   font-size: 18px;
   font-weight: 700;
   letter-spacing: .06em;
   text-align: center;
   text-shadow: 0 0 14px var(--as-hud-modal-glow);
+}
+.as-hud-frame--modal .as-modal__title-text {
+  position: relative;
+  z-index: 1;
+  display: block;
+  max-width: 100%;
+  padding: 3px 18px 0;
+  overflow: visible;
+  line-height: 1.1;
+}
+.as-hud-frame--modal .as-modal-title {
+  position: relative;
+  isolation: isolate;
+  width: fit-content;
+  min-width: 160px;
+  margin-inline: auto;
+  text-align: center;
+}
+.as-hud-frame--modal .as-modal-subtitle { margin-top: 7px; }
+.as-hud-frame--modal .as-modal-title::before,
+.as-hud-frame--modal .as-modal-title::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 14px 100%);
+}
+.as-hud-frame--modal .as-modal-title::before {
+  top: -3px;
+  right: -28px;
+  left: -28px;
+  height: 32px;
+  z-index: -2;
+  background: var(--as-hud-modal-hot);
+  filter: drop-shadow(0 0 5px var(--as-hud-modal-glow));
+}
+.as-hud-frame--modal .as-modal-title::after {
+  top: -2px;
+  right: -27px;
+  left: -27px;
+  height: 30px;
+  z-index: -1;
+  background: color-mix(in srgb, var(--as-hud-surface, var(--as-bg)) 94%, transparent);
 }
 .as-hud-frame--modal .as-modal__close { color: var(--as-hud-modal-hot); }
 .as-hud-frame--modal .as-modal__footer {
@@ -695,12 +775,31 @@
   border-color: var(--as-border-secondary);
 }
 [data-visual='normal'] .as-hud-frame--modal .as-modal__title {
+  position: static;
+  display: block;
+  transform: none;
+  width: auto;
+  max-width: none;
   color: var(--as-text);
   font-size: 16px;
   letter-spacing: 0;
   text-align: start;
   text-shadow: none;
 }
+[data-visual='normal'] .as-hud-frame--modal .as-modal__title-text {
+  padding: 0;
+  overflow: visible;
+  line-height: inherit;
+}
+[data-visual='normal'] .as-hud-frame--modal .as-modal-title {
+  width: auto;
+  min-width: 0;
+  margin-inline: 0;
+  text-align: inherit;
+}
+[data-visual='normal'] .as-hud-frame--modal .as-modal-subtitle { margin-top: 3px; }
+[data-visual='normal'] .as-hud-frame--modal .as-modal-title::before,
+[data-visual='normal'] .as-hud-frame--modal .as-modal-title::after { display: none; }
 [data-visual='normal'] .as-hud-frame--modal .as-modal__footer {
   justify-content: flex-end;
   gap: 8px;

@@ -87,7 +87,9 @@ export const Modal = defineComponent({
         ]),
         h('header', { class: 'as-modal__head' }, [
           h('div', { class: 'as-modal__title' }, [
-            h('span', { class: 'as-modal__title-text' }, slots.title?.() ?? props.title),
+            h('span', { class: 'as-modal__title-text' }, slots.title?.() ?? [
+              h('span', { class: 'as-modal-title' }, props.title),
+            ]),
           ]),
           props.closable ? h('button', { type: 'button', class: 'as-modal__close', 'aria-label': '关闭', onClick: close }, '×') : null,
         ]),

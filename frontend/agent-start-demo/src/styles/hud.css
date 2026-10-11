@@ -1588,67 +1588,6 @@ html[data-theme='light'] .as-drawer__mask {
 .as-hud-modal__rail--left { left: 0; }
 .as-hud-modal__rail--right { right: 0; transform: rotate(180deg); }
 
-.as-hud-frame--modal .as-modal__head {
-  justify-content: center;
-  min-height: 56px;
-  padding: 16px 56px;
-  overflow: hidden;
-  border-color: rgba(38, 190, 230, 0.28);
-  background: linear-gradient(90deg, transparent, rgba(10, 76, 112, 0.24) 24% 76%, transparent);
-}
-.as-hud-frame--modal .as-modal__title {
-  position: absolute;
-  top: 5px;
-  left: 50%;
-  transform: translateX(-50%);
-  isolation: isolate;
-  width: fit-content;
-  height: 32px;
-  max-width: calc(100% - 136px);
-  box-sizing: border-box;
-  padding: 0;
-  color: #9eeeff;
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-align: center;
-  text-shadow: 0 0 16px rgba(47, 218, 255, 0.45);
-}
-.as-hud-frame--modal .as-modal__title-text {
-  position: relative;
-  z-index: 1;
-  display: block;
-  max-width: 100%;
-  padding: 3px 18px;
-  overflow: hidden;
-  line-height: 26px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.as-hud-frame--modal .as-modal__title-text:empty { width: min(200px, 52vw); }
-
-/* Closed title capsule with clipped 45° ends. The outer hot layer is only
-   one pixel larger than the inner surface, so it reads as linework. */
-.as-hud-frame--modal .as-modal__title::before {
-  content: '';
-  position: absolute;
-  inset: -5px -28px;
-  z-index: -2;
-  background: var(--as-hud-modal-hot);
-  clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 14px 100%);
-  filter: drop-shadow(0 0 5px var(--as-hud-modal-glow));
-}
-.as-hud-frame--modal .as-modal__title::after {
-  content: '';
-  position: absolute;
-  inset: -4px -27px;
-  z-index: -1;
-  background: color-mix(in srgb, var(--as-bg) 91%, transparent);
-  clip-path: polygon(0 0, 100% 0, calc(100% - 13px) 100%, 13px 100%);
-  box-shadow: inset 0 -3px 0 color-mix(in srgb, var(--as-hud-modal-line) 30%, transparent);
-  pointer-events: none;
-}
-.as-hud-frame--modal .as-modal__close { color: #8adff4; }
 .as-hud-frame--modal .as-modal__body { padding: 24px; }
 .as-hud-frame--modal .as-modal__footer {
   justify-content: center;
@@ -1894,10 +1833,6 @@ html[data-theme='light'] .as-hud-frame--drawer .as-drawer__title { color: #087ca
   .as-hud-modal__corner--tr { transform: scale(-0.82, 0.82); transform-origin: top right; }
   .as-hud-modal__corner--bl { transform: scale(0.82, -0.82); transform-origin: bottom left; }
   .as-hud-modal__corner--br { transform: scale(-0.82); transform-origin: bottom right; }
-  .as-hud-frame--modal .as-modal__head { padding: 14px 48px; }
-  .as-hud-frame--modal .as-modal__title { top: 4px; }
-  .as-hud-frame--modal .as-modal__title::before { inset: -4px -20px; }
-  .as-hud-frame--modal .as-modal__title::after { inset: -3px -19px; }
   .as-hud-frame--modal .as-modal__body { padding: 20px; }
   .as-hud-frame--modal .as-modal__footer { gap: 12px; }
   .as-hud-frame--modal .as-modal__footer .as-btn { min-width: 0; flex: 1; }

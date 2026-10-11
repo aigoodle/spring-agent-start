@@ -564,9 +564,9 @@ const formatTime = (value?: string) => (value ? new Date(value).toLocaleString()
 
       <Modal :open="replyOpen" class="cmd-dialog" centered :width="560" :mask-closable="!replySaving" :keyboard="!replySaving" :closable="!replySaving" @cancel="closeReply">
             <template #title>
-              <div>
-                <h3 id="reply-title">回复外部用户</h3>
-                <p>通过 {{ channel?.name }} 账号发送给 {{ replyTarget?.senderId }}</p>
+              <div class="as-modal-heading">
+                <div id="reply-title" class="as-modal-title">回复外部用户</div>
+                <div class="as-modal-subtitle">通过 {{ channel?.name }} 账号发送给 {{ replyTarget?.senderId }}</div>
               </div>
             </template>
             <main>
@@ -609,9 +609,9 @@ const formatTime = (value?: string) => (value ? new Date(value).toLocaleString()
 
       <Modal :open="handoffOpen" class="cmd-dialog" centered :width="560" :mask-closable="!handoffSaving" :keyboard="!handoffSaving" :closable="!handoffSaving" @cancel="closeHandoff">
             <template #title>
-              <div>
-                <h3 id="handoff-title">转人工处理</h3>
-                <p>{{ handoffTarget?.ownerId || handoffTarget?.accountId }} · {{ channel?.name }}</p>
+              <div class="as-modal-heading">
+                <div id="handoff-title" class="as-modal-title">转人工处理</div>
+                <div class="as-modal-subtitle">{{ handoffTarget?.ownerId || handoffTarget?.accountId }} · {{ channel?.name }}</div>
               </div>
             </template>
             <main>
@@ -642,7 +642,12 @@ const formatTime = (value?: string) => (value ? new Date(value).toLocaleString()
       </Modal>
 
       <Modal v-model:open="noteOpen" class="cmd-dialog" centered :width="560" :mask-closable="!noteSaving" :keyboard="!noteSaving" :closable="!noteSaving">
-            <template #title><div><h3>添加内部备注</h3><p>仅企业内部可见，不会发送给外部用户</p></div></template>
+            <template #title>
+              <div class="as-modal-heading">
+                <div class="as-modal-title">添加内部备注</div>
+                <div class="as-modal-subtitle">仅企业内部可见，不会发送给外部用户</div>
+              </div>
+            </template>
             <main><label class="cmd-form-field">备注内容<textarea v-model="noteContent" rows="5" maxlength="2000" placeholder="记录处理过程、判断或交接信息"></textarea></label></main>
             <template #footer><div class="cmd-dialog-footer"><Button :disabled="noteSaving" @click="noteOpen = false">取消</Button><Button type="primary" :loading="noteSaving" :disabled="!noteContent.trim()" @click="submitNote">保存内部备注</Button></div></template>
       </Modal>
@@ -960,8 +965,6 @@ const formatTime = (value?: string) => (value ? new Date(value).toLocaleString()
   padding: 16px 20px;
 }
 .cmd-dialog > header { border-bottom: 1px solid #e5e7eb; }
-.cmd-dialog h3 { margin: 0; font-size: 16px; color: #111827; }
-.cmd-dialog .as-modal__title p { margin: 4px 0 0; font-size: 12px; color: #9ca3af; }
 .cmd-dialog main { display: grid; gap: 16px; }
 .cmd-dialog-footer { display: flex; justify-content: flex-end; gap: 12px; width: 100%; }
 .cmd-dialog > footer { justify-content: flex-end; border-top: 1px solid #e5e7eb; }
@@ -1006,7 +1009,6 @@ const formatTime = (value?: string) => (value ? new Date(value).toLocaleString()
 :global(.dark) .cmd-dialog { background: #1f1f1f; }
 :global(.dark) .cmd-dialog > header,
 :global(.dark) .cmd-dialog > footer { border-color: #2d2d2d; }
-:global(.dark) .cmd-dialog h3 { color: #f3f4f6; }
 :global(.dark) .cmd-form-field { color: #d1d5db; }
 :global(.dark) .cmd-form-field textarea { color: #f3f4f6; background: #2d2d2d; border-color: #3d3d3d; }
 :global(.dark) .cmd-handoff-notice { color: #fbbf24; background: rgba(245, 158, 11, 0.12); border-color: rgba(245, 158, 11, 0.3); }

@@ -332,9 +332,9 @@ onMounted(load);
     <Modal v-model:open="editing" :width="640" :mask-closable="false" :keyboard="!saving"
            :closable="!saving" :destroy-on-close="true" @cancel="closeEditor">
       <template #title>
-        <div class="mcp-modal-heading">
-          <div class="mcp-modal-title">{{ form.id ? '编辑 MCP 服务' : '新增 MCP 服务' }}</div>
-          <div class="mcp-modal-subtitle">配置连接方式和运行参数，保存后即可在 Agent 与工作流中使用。</div>
+        <div class="as-modal-heading">
+          <div class="as-modal-title">{{ form.id ? '编辑 MCP 服务' : '新增 MCP 服务' }}</div>
+          <div class="as-modal-subtitle">配置连接方式和运行参数，保存后即可在 Agent 与工作流中使用。</div>
         </div>
       </template>
       <Form layout="vertical" class="mcp-form" @submit.prevent="save">
@@ -580,25 +580,6 @@ h2, h3, p {
 
 .mcp-actions :deep(.as-btn) {
   gap: 4px;
-}
-
-.mcp-modal-heading {
-  padding: 1px 0;
-}
-
-.mcp-modal-title {
-  color: #0f172a;
-  font-size: 18px;
-  font-weight: 600;
-  line-height: 26px;
-}
-
-.mcp-modal-subtitle {
-  margin-top: 3px;
-  color: #94a3b8;
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 18px;
 }
 
 .mcp-form {

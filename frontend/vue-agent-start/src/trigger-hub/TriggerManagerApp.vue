@@ -284,8 +284,10 @@ onMounted(load);
     <Modal v-model:open="editorOpen" class="th-modal" centered :width="620" :footer="false" :mask-closable="!saving"
            :keyboard="!saving" :closable="!saving">
       <template #title>
-        <div><h3>创建触发器</h3>
-          <p>保存后即可接收事件或按计划调度。</p></div>
+        <div class="as-modal-heading">
+          <div class="as-modal-title">创建触发器</div>
+          <div class="as-modal-subtitle">保存后即可接收事件或按计划调度。</div>
+        </div>
       </template>
       <form @submit.prevent="save">
         <label>名称<input v-model="form.name" required placeholder="订单创建后处理"/></label>
@@ -306,7 +308,12 @@ onMounted(load);
       </form>
     </Modal>
     <Drawer v-model:open="historyOpen" width="min(760px, 92vw)">
-      <template #title><div><h3>{{ current?.name }} · 执行历史</h3><p>失败任务可以使用原始参数重新执行。</p></div></template>
+      <template #title>
+        <div class="as-modal-heading">
+          <div class="as-modal-title">{{ current?.name }} · 执行历史</div>
+          <div class="as-modal-subtitle">失败任务可以使用原始参数重新执行。</div>
+        </div>
+      </template>
       <template #extra><Button size="small" :loading="historyLoading" @click="loadHistory">↻ 刷新</Button></template>
         <div v-if="historyLoading" class="th-empty">加载中…</div>
         <div v-else-if="!invocations.length" class="th-empty">尚无调用记录</div>
@@ -650,11 +657,7 @@ onMounted(load);
   border-bottom: 1px solid var(--line)
 }
 
-.th-modal header p, .th-drawer header p {
-  margin-top: 4px;
-  color: var(--muted);
-  font-size: 12px
-}
+.th-drawer header p { margin-top: 4px; color: var(--muted); font-size: 12px }
 
 .th-modal header button, .th-drawer header button {
   border: 0;

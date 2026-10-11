@@ -82,7 +82,13 @@ onMounted(load);
     </Spin>
 
     <Modal v-model:open="editing" :width="720" :footer="false" :mask-closable="!saving" :keyboard="!saving" :closable="!saving">
-      <template #title><div class="skill-editor__head"><div><strong>{{ selected ? '编辑 Skill' : '创建 Skill' }}</strong><small>定义明确的使用场景、执行步骤和输出规范</small></div><Tag v-if="selected">v{{ selected.version }}</Tag></div></template>
+      <template #title>
+        <div class="as-modal-heading as-modal-heading--with-extra">
+          <div class="as-modal-title">{{ selected ? '编辑 Skill' : '创建 Skill' }}</div>
+          <div class="as-modal-subtitle">定义明确的使用场景、执行步骤和输出规范</div>
+          <Tag v-if="selected" class="as-modal-heading__extra">v{{ selected.version }}</Tag>
+        </div>
+      </template>
         <Form class="skill-editor" layout="vertical" @submit.prevent="save">
           <div class="skill-form-row"><FormItem label="编码" required><Input v-model:value="form.code" placeholder="sales_weekly_report" /></FormItem><FormItem label="状态"><Select v-model:value="form.status" :options="[{label:'草稿',value:'DRAFT'},{label:'已发布',value:'PUBLISHED'},{label:'已停用',value:'DISABLED'}]" /></FormItem></div>
           <FormItem label="名称" required><Input v-model:value="form.name" placeholder="销售周报生成规范" /></FormItem>
@@ -95,5 +101,110 @@ onMounted(load);
   </section>
 </template>
 <style scoped>
-.skill-grid{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}.skill-card{position:relative;display:flex;min-height:164px;flex-direction:column;padding:14px;overflow:hidden;cursor:pointer}.skill-card:hover,.skill-card:focus-visible{z-index:1}.skill-card .as-management-card__description{min-height:36px;margin:8px 0;line-height:18px}.skill-card footer{gap:8px;margin:6px -14px -14px;padding:7px 14px;border-top:1px solid var(--as-mgmt-line);color:var(--as-mgmt-muted);font-size:11px}.skill-meta,.skill-card-actions,.skill-editor__head,.skill-actions,.skill-form-row{display:flex;align-items:center}.skill-meta{min-width:0;gap:8px}.skill-meta span+span::before{margin-right:8px;color:var(--as-mgmt-line);content:'·'}.skill-card-actions{flex:0 0 auto;gap:5px}.skill-card-actions :deep(.as-btn){gap:4px}.skill-editor{padding-top:8px}.skill-editor__head{justify-content:space-between;gap:12px}.skill-editor__head strong,.skill-editor__head small{display:block}.skill-editor__head small{margin-top:3px;color:var(--as-mgmt-muted);font-size:11px;font-weight:400}.skill-form-row{align-items:flex-start;gap:12px}.skill-form-row>*{flex:1}.skill-form-row>*:last-child{max-width:150px}.skill-actions{gap:8px;padding-top:4px}.skill-actions span{flex:1}@media(max-width:600px){.skill-form-row{display:block}.skill-form-row>*:last-child{max-width:none}.skill-card footer{align-items:flex-start;flex-direction:column}.skill-card-actions{align-self:flex-end}}
+.skill-grid {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
+.skill-card {
+  position: relative;
+  display: flex;
+  min-height: 164px;
+  flex-direction: column;
+  padding: 14px;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.skill-card:hover,
+.skill-card:focus-visible {
+  z-index: 1;
+}
+
+.skill-card .as-management-card__description {
+  min-height: 36px;
+  margin: 8px 0;
+  line-height: 18px;
+}
+
+.skill-card footer {
+  gap: 8px;
+  margin: 6px -14px -14px;
+  padding: 7px 14px;
+  border-top: 1px solid var(--as-mgmt-line);
+  color: var(--as-mgmt-muted);
+  font-size: 11px;
+}
+
+.skill-meta,
+.skill-card-actions,
+.skill-actions,
+.skill-form-row {
+  display: flex;
+  align-items: center;
+}
+
+.skill-meta {
+  min-width: 0;
+  gap: 8px;
+}
+
+.skill-meta span + span::before {
+  margin-right: 8px;
+  color: var(--as-mgmt-line);
+  content: '·';
+}
+
+.skill-card-actions {
+  flex: 0 0 auto;
+  gap: 5px;
+}
+
+.skill-card-actions :deep(.as-btn) {
+  gap: 4px;
+}
+
+.skill-editor {
+  padding-top: 8px;
+}
+
+.skill-form-row {
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.skill-form-row > * {
+  flex: 1;
+}
+
+.skill-form-row > *:last-child {
+  max-width: 150px;
+}
+
+.skill-actions {
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.skill-actions span {
+  flex: 1;
+}
+
+@media (max-width: 600px) {
+  .skill-form-row {
+    display: block;
+  }
+
+  .skill-form-row > *:last-child {
+    max-width: none;
+  }
+
+  .skill-card footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .skill-card-actions {
+    align-self: flex-end;
+  }
+}
 </style>

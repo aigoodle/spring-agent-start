@@ -282,7 +282,10 @@ onMounted(load);
     <Modal :open="!!detailTool" :width="820" :footer="false" @cancel="detailTool = undefined">
       <template #title>
         <div class="detail-title"><span class="tool-icon">⌘</span>
-          <div><strong>{{ detailTool?.label || detailTool?.name }}</strong><code>{{ detailTool?.name }}</code></div>
+          <div class="as-modal-heading">
+            <div class="as-modal-title">{{ detailTool?.label || detailTool?.name }}</div>
+            <code class="as-modal-subtitle">{{ detailTool?.name }}</code>
+          </div>
         </div>
       </template>
       <div v-if="detailTool" class="tool-detail">
@@ -474,17 +477,6 @@ onMounted(load);
 
 .detail-title {
   @apply gap-2.5;
-}
-
-.detail-title strong, .detail-title code {
-  @apply block;
-}
-
-.detail-title code {
-  margin-top: 2px;
-  color: #98a2b3;
-  font-size: 11px;
-  font-weight: 400
 }
 
 .detail-description {

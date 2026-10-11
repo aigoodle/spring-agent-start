@@ -155,12 +155,12 @@ function onKeydown(e: KeyboardEvent) {
     @cancel="close"
     @keydown="onKeydown"
   >
-        <template #title>
-          <div>
-            <div class="as-modal-title">创建应用</div>
-            <div class="as-modal-subtitle">从空白开始配置一个 AI 应用</div>
-          </div>
-        </template>
+    <template #title>
+      <div class="as-modal-heading">
+        <div class="as-modal-title">创建应用</div>
+        <div class="as-modal-subtitle">从空白开始配置一个 AI 应用</div>
+      </div>
+    </template>
 
         <!-- Two-pane body -->
         <div class="as-body">
@@ -331,17 +331,6 @@ function onKeydown(e: KeyboardEvent) {
   justify-content: space-between;
   padding: 20px 24px 12px;
   border-bottom: 1px solid #f1f5f9;
-}
-.as-modal-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #0f172a;
-  letter-spacing: 0;
-}
-.as-modal-subtitle {
-  margin-top: 4px;
-  font-size: 12px;
-  color: #94a3b8;
 }
 .as-close {
   width: 32px;

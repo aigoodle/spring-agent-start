@@ -92,7 +92,7 @@ async function save() {
       <template #title>
         <div class="pcm-title">
           <span class="pcm-title-icon">🔑</span>
-          <span v-if="provider">
+          <span v-if="provider" class="as-modal-title">
             {{ editMode ? '编辑凭证' : '添加 API 密钥' }} · {{ provider.label }}
           </span>
         </div>
@@ -192,15 +192,9 @@ async function save() {
   border-bottom-color: #2d2d2d;
 }
 .pcm-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #111827;
   display: flex;
   align-items: center;
   gap: 8px;
-}
-:global(.dark) .pcm-title {
-  color: #f3f4f6;
 }
 .pcm-title-icon {
   font-size: 18px;

@@ -314,7 +314,10 @@ async function copyCallbackPath(row: ChannelConnection) {
               @cancel="closeForm"
             >
                   <template #title>
-                    <div><h3>{{ editingId ? '编辑账号' : '添加账号' }}</h3><p>{{ channel?.name }} · {{ channel?.provider }}</p></div>
+                    <div class="as-modal-heading">
+                      <div class="as-modal-title">{{ editingId ? '编辑账号' : '添加账号' }}</div>
+                      <div class="as-modal-subtitle">{{ channel?.name }} · {{ channel?.provider }}</div>
+                    </div>
                   </template>
                   <div class="cad-form-body">
                     <div v-if="error" class="cad-alert">{{ error }}</div>
@@ -693,12 +696,9 @@ async function copyCallbackPath(row: ChannelConnection) {
   padding: 18px 20px;
   border-bottom: 1px solid #e5e7eb;
 }
-.cad-form-dialog h3 { margin: 0; font-size: 16px; color: #111827; }
-.cad-form-dialog :deep(.as-modal__title p) { margin: 4px 0 0; font-size: 12px; color: #9ca3af; }
 .cad-form-body { display: grid; gap: 18px; padding: 20px; overflow: auto; }
 :global(.dark) .cad-form-dialog { background: #1f1f1f; }
 :global(.dark) .cad-form-header { border-color: #2d2d2d; }
-:global(.dark) .cad-form-dialog h3 { color: #f3f4f6; }
 .cad-fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
